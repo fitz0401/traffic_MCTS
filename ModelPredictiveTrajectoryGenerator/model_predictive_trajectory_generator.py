@@ -1,9 +1,14 @@
 """
-
+Author: Atsushi Sakai
+Modified by Licheng Wen
+Date: 2022-06-10 14:53:28
+Description: 
 Model trajectory generator
 
-author: Atsushi Sakai(@Atsushi_twi)
+Ref:
+Howard, T. M., & Kelly, A. (2007). Optimal Rough Terrain Trajectory Generation for Wheeled Mobile Robots. The International Journal of Robotics Research, 26(2), 141–166. https://doi.org/10.1177/0278364906075328
 
+Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
 
 import math
@@ -15,7 +20,7 @@ import motion_model
 
 # optimization parameter
 max_iter = 100
-h = np.array([0.5, 0.02, 0.02]).T  # parameter sampling distance
+h = np.array([0.5, 0.01, 0.01]).T  # parameter sampling distance
 cost_th = 0.1
 
 show_animation = True
@@ -25,42 +30,56 @@ def plot_arrow(x, y, yaw, length=1.0, width=0.5, fc="r", ec="k"):  # pragma: no 
     """
     Plot arrow
     """
-    plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw),
-              fc=fc, ec=ec, head_width=width, head_length=width)
+    plt.arrow(
+        x,
+        y,
+        length * math.cos(yaw),
+        length * math.sin(yaw),
+        fc=fc,
+        ec=ec,
+        head_width=width,
+        head_length=width,
+    )
     plt.plot(x, y)
     plt.plot(0, 0)
 
 
 def calc_diff(target, x, y, yaw):
-    d = np.array([target.x - x[-1],
-                  target.y - y[-1],
-                  motion_model.pi_2_pi(target.yaw - yaw[-1])])
+    d = np.array(
+        [target.x - x[-1], target.y - y[-1], motion_model.pi_2_pi(target.yaw - yaw[-1])]
+    )
 
     return d
 
 
 def calc_j(target, p, h, k0):
     xp, yp, yawp = motion_model.generate_last_state(
-        p[0, 0] + h[0], p[1, 0], p[2, 0], k0)
+        p[0, 0] + h[0], p[1, 0], p[2, 0], k0
+    )
     dp = calc_diff(target, [xp], [yp], [yawp])
     xn, yn, yawn = motion_model.generate_last_state(
-        p[0, 0] - h[0], p[1, 0], p[2, 0], k0)
+        p[0, 0] - h[0], p[1, 0], p[2, 0], k0
+    )
     dn = calc_diff(target, [xn], [yn], [yawn])
     d1 = np.array((dp - dn) / (2.0 * h[0])).reshape(3, 1)
 
     xp, yp, yawp = motion_model.generate_last_state(
-        p[0, 0], p[1, 0] + h[1], p[2, 0], k0)
+        p[0, 0], p[1, 0] + h[1], p[2, 0], k0
+    )
     dp = calc_diff(target, [xp], [yp], [yawp])
     xn, yn, yawn = motion_model.generate_last_state(
-        p[0, 0], p[1, 0] - h[1], p[2, 0], k0)
+        p[0, 0], p[1, 0] - h[1], p[2, 0], k0
+    )
     dn = calc_diff(target, [xn], [yn], [yawn])
     d2 = np.array((dp - dn) / (2.0 * h[1])).reshape(3, 1)
 
     xp, yp, yawp = motion_model.generate_last_state(
-        p[0, 0], p[1, 0], p[2, 0] + h[2], k0)
+        p[0, 0], p[1, 0], p[2, 0] + h[2], k0
+    )
     dp = calc_diff(target, [xp], [yp], [yawp])
     xn, yn, yawn = motion_model.generate_last_state(
-        p[0, 0], p[1, 0], p[2, 0] - h[2], k0)
+        p[0, 0], p[1, 0], p[2, 0] - h[2], k0
+    )
     dn = calc_diff(target, [xn], [yn], [yawn])
     d3 = np.array((dp - dn) / (2.0 * h[2])).reshape(3, 1)
 
@@ -77,8 +96,7 @@ def selection_learning_param(dp, p, k0, target):
 
     for a in np.arange(mina, maxa, da):
         tp = p + a * dp
-        xc, yc, yawc = motion_model.generate_last_state(
-            tp[0], tp[1], tp[2], k0)
+        xc, yc, yawc = motion_model.generate_last_state(tp[0], tp[1], tp[2], k0)
         dc = calc_diff(target, [xc], [yc], [yawc])
         cost = np.linalg.norm(dc)
 
@@ -101,9 +119,9 @@ def show_trajectory(target, xc, yc):  # pragma: no cover
     plt.pause(0.1)
 
 
-def optimize_trajectory(target, k0, p):
+def optimize_trajectory(yaw0, target, k0, p):
     for i in range(max_iter):
-        xc, yc, yawc = motion_model.generate_trajectory(p[0], p[1], p[2], k0)
+        xc, yc, yawc = motion_model.generate_trajectory(yaw0, p[0], p[1], p[2], k0)
         dc = np.array(calc_diff(target, xc, yc, yawc)).reshape(3, 1)
 
         cost = np.linalg.norm(dc)
@@ -113,7 +131,7 @@ def optimize_trajectory(target, k0, p):
 
         J = calc_j(target, p, h, k0)
         try:
-            dp = - np.linalg.inv(J) @ dc
+            dp = -np.linalg.inv(J) @ dc
         except np.linalg.linalg.LinAlgError:
             print("cannot calc path LinAlgError")
             xc, yc, yawc, p = None, None, None, None
@@ -155,5 +173,5 @@ def main():  # pragma: no cover
     test_optimize_trajectory()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

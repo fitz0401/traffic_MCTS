@@ -1,15 +1,26 @@
+"""
+Author: Licheng Wen
+Date: 2022-06-10 14:53:28
+Description: 
+Vehicle motion Model
+
+Copyright (c) 2022 by PJLab, All Rights Reserved. 
+"""
 import math
 import numpy as np
 import scipy.interpolate
 
+
 # motion parameter
-L = 1.0  # wheel base 轴距
+L = 1  # wheel base 轴距
+R = 1.5  # minimum turning radius 最小转弯半径
 ds = 0.1  # course distanse
 v = 10.0 / 3.6  # velocity [m/s]
+delta_max = math.atan(L / R)  # TODO: add delta boundary R=L/tan(delta)
+# TODO: add custom motion planner as a param
 
 
 class State:
-
     def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
         self.x = x
         self.y = y
@@ -22,6 +33,9 @@ def pi_2_pi(angle):
 
 
 def update(state, v, delta, dt, L):
+    # turning radius boundary
+    if abs(delta) > delta_max:
+        delta = delta / abs(delta) * delta_max
 
     state.v = v
     state.x = state.x + state.v * math.cos(state.yaw) * dt
@@ -32,15 +46,18 @@ def update(state, v, delta, dt, L):
     return state
 
 
-def generate_trajectory(s, km, kf, k0):
+def generate_trajectory(yaw0, s, km, kf, k0):
 
     n = s / ds
     time = s / v  # [s]
-    
-    if isinstance(time, type(np.array([]))): time = time[0]
-    if isinstance(km, type(np.array([]))): km = km[0]
-    if isinstance(kf, type(np.array([]))): kf = kf[0]
-    
+
+    if isinstance(time, type(np.array([]))):
+        time = time[0]
+    if isinstance(km, type(np.array([]))):
+        km = km[0]
+    if isinstance(kf, type(np.array([]))):
+        kf = kf[0]
+
     tk = np.array([0.0, time / 2.0, time])
     kk = np.array([k0, km, kf])
     t = np.arange(0.0, time, time / n)
@@ -52,7 +69,7 @@ def generate_trajectory(s, km, kf, k0):
     #  plt.plot(t, kp)
     #  plt.show()
 
-    state = State()
+    state = State(yaw=yaw0)
     x, y, yaw = [state.x], [state.y], [state.yaw]
 
     for ikp in kp:
@@ -68,11 +85,14 @@ def generate_last_state(s, km, kf, k0):
 
     n = s / ds
     time = s / v  # [s]
-    
-    if isinstance(time,  type(np.array([]))): time = time[0]
-    if isinstance(km, type(np.array([]))): km = km[0]
-    if isinstance(kf, type(np.array([]))): kf = kf[0]
-    
+
+    if isinstance(time, type(np.array([]))):
+        time = time[0]
+    if isinstance(km, type(np.array([]))):
+        km = km[0]
+    if isinstance(kf, type(np.array([]))):
+        kf = kf[0]
+
     tk = np.array([0.0, time / 2.0, time])
     kk = np.array([k0, km, kf])
     t = np.arange(0.0, time, time / n)
