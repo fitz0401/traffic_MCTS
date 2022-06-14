@@ -16,7 +16,7 @@ L = 1  # wheel base 轴距
 R = 1.5  # minimum turning radius 最小转弯半径
 ds = 0.1  # course distanse
 v = 10.0 / 3.6  # velocity [m/s]
-delta_max = math.atan(L / R)  # TODO: add delta boundary R=L/tan(delta)
+delta_max = math.atan(L / R)  # delta boundary R=L/tan(delta)
 # TODO: add custom motion planner as a param
 
 
