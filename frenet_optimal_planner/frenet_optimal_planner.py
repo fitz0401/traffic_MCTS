@@ -19,8 +19,8 @@ import math
 import time
 
 try:
-    from Splines.polynomial_curve import QuarticPolynomial, QuinticPolynomial
-    from Splines.cubic_spline import Spline2D
+    from splines.polynomial_curve import QuarticPolynomial, QuinticPolynomial
+    from splines.cubic_spline import Spline2D
 except ImportError:
     raise
 

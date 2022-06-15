@@ -15,7 +15,7 @@ import model_predictive_trajectory_generator as planner
 import motion_model
 import pandas as pd
 
-table_path = os.path.dirname(os.path.abspath(__file__)) + "/../Data/lookuptable.csv"
+table_path = os.path.dirname(os.path.abspath(__file__)) + "/../data/lookuptable.csv"
 
 
 def calc_states_list():

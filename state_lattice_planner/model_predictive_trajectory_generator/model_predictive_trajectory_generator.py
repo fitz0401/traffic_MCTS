@@ -15,8 +15,9 @@ import math
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 import motion_model
+
+# import motion_model
 
 # optimization parameter
 max_iter = 100
@@ -158,7 +159,7 @@ def test_optimize_trajectory():  # pragma: no cover
 
     init_p = np.array([6.0, 0.0, 0.0]).reshape(3, 1)
 
-    x, y, yaw, p = optimize_trajectory(target, k0, init_p)
+    x, y, yaw, p = optimize_trajectory(0.0, target, k0, init_p)
 
     if show_animation:
         show_trajectory(target, x, y)

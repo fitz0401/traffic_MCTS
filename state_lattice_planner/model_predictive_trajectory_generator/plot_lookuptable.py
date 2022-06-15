@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 import pandas as pd
 import motion_model
 
-table_path = os.path.dirname(os.path.abspath(__file__)) + "/../Data/lookuptable_325.csv"
+table_path = os.path.dirname(os.path.abspath(__file__)) + "/../data/lookuptable_325.csv"
 
 
 def main():

@@ -10,7 +10,6 @@ Ref:
 
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
-import sys
 import os
 from matplotlib import pyplot as plt
 import numpy as np
@@ -18,20 +17,17 @@ import math
 import pandas as pd
 import time
 
-sys.path.append(
-    os.path.dirname(os.path.abspath(__file__))
-    + "/../ModelPredictiveTrajectoryGenerator/"
-)
-
 
 try:
-    import model_predictive_trajectory_generator as planner
-    import motion_model
+    from model_predictive_trajectory_generator import (
+        model_predictive_trajectory_generator as planner,
+        motion_model,
+    )
 except ImportError:
     raise
 
 
-table_path = os.path.dirname(os.path.abspath(__file__)) + "/../Data/lookuptable_325.csv"
+table_path = os.path.dirname(os.path.abspath(__file__)) + "/data/lookuptable_325.csv"
 
 show_animation = True
 
