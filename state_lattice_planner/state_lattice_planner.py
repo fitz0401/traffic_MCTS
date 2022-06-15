@@ -126,6 +126,20 @@ def calc_lane_states(l_center, l_heading, l_width, v_width, d, nxy):
     return states
 
 
+def speed_allocation(v0, vf, s, T, n):
+    # Assume vehicle drive from v0 to vf with CONSTANT acc and keep it
+    # TODO: discuss a more complex speed planning
+    t_acc = 2 * (vf * T - s) / (vf - v0)
+    acc = float((vf - v0) / t_acc)
+    dt = float(T / n)
+
+    v = np.arange(v0, vf, acc * dt).tolist()
+    while len(v) < n:
+        v.append(vf)
+
+    return v
+
+
 def lane_state_sampling_test():
     k0 = 0.0
 
@@ -145,6 +159,15 @@ def lane_state_sampling_test():
         xc, yc, yawc = motion_model.generate_trajectory(
             table[0], table[4], table[5], table[6], k0
         )
+        print("xc", len(xc), len(yc), len(yawc), table[4] / 10 * 3.6)
+
+        v0 = 10 / 3.6  # initial linear speed
+        vf = 20 / 3.6  # target linear speed
+        T = np.arange(2, 2.8, 0.1)
+        for Ti in T:
+            vc = speed_allocation(v0, vf, table[4], Ti, len(xc))
+            print([vc[i] * 3.6 for i in range(0, len(vc), 5)])
+        break
 
         if show_animation:
             plt.plot(xc, yc, "-b", linewidth=1)

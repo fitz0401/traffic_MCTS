@@ -220,7 +220,6 @@ def frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob):
 
 
 def main():
-    # Step 1. Building Frenet Cord
     # way points
     wx = [0.0, 10.0, 20.5, 35.0, 70.5]
     wy = [0.0, -6.0, 5.0, 6.5, 0.0]
