@@ -17,8 +17,11 @@ import matplotlib.pyplot as plt
 import copy
 import math
 import time
+import os, sys
 
+sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../")
 try:
+    from path_utils import FrenetPath
     from splines.polynomial_curve import QuarticPolynomial, QuinticPolynomial
     from splines.cubic_spline import Spline2D
 except ImportError:
@@ -48,37 +51,26 @@ K_LON = 1.0
 ANIMATION = True
 
 
-class FrenetPath:
-    def __init__(self):
-        self.t = []
-        self.d = []
-        self.d_d = []
-        self.d_dd = []
-        self.d_ddd = []
-        self.s = []
-        self.s_d = []
-        self.s_dd = []
-        self.s_ddd = []
-        self.cd = 0.0
-        self.cv = 0.0
-        self.cf = 0.0
-
-        self.x = []
-        self.y = []
-        self.yaw = []
-        self.ds = []
-        self.c = []
-
-
-def calc_frenet_paths(c_speed, c_d, c_d_d, c_d_dd, s0):
+def calc_frenet_paths(
+    s0,
+    c_speed,
+    c_d,
+    c_d_d,
+    c_d_dd,
+    sample_d=np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W),
+    sample_t=np.arange(MIN_T, MAX_T, DT),
+    sample_v=np.arange(
+        TARGET_SPEED - D_T_S * N_S_SAMPLE, TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S
+    ),
+):
     frenet_paths = []
 
     start = time.process_time()
     # generate path to each offset goal
-    for di in np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W):
+    for di in sample_d:
 
         # Lateral motion planning
-        for Ti in np.arange(MIN_T, MAX_T, DT):
+        for Ti in sample_t:
             fp = FrenetPath()
 
             # lat_qp = quintic_polynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
@@ -91,11 +83,7 @@ def calc_frenet_paths(c_speed, c_d, c_d_d, c_d_dd, s0):
             fp.d_ddd = [lat_qp.calc_third_derivative(t) for t in fp.t]
 
             # Longitudinal motion planning (Velocity keeping)
-            for tv in np.arange(
-                TARGET_SPEED - D_T_S * N_S_SAMPLE,
-                TARGET_SPEED + D_T_S * N_S_SAMPLE,
-                D_T_S,
-            ):
+            for tv in sample_v:
                 tfp = copy.deepcopy(fp)
                 lon_qp = QuarticPolynomial(s0, c_speed, 0.0, tv, 0.0, Ti)
 
@@ -140,32 +128,7 @@ def calc_frenet_paths(c_speed, c_d, c_d_d, c_d_dd, s0):
 
 def calc_global_paths(fplist, csp):
     for fp in fplist:
-
-        # calc global positions
-        for i in range(len(fp.s)):
-            ix, iy = csp.calc_position(fp.s[i])
-            if ix is None:
-                break
-            i_yaw = csp.calc_yaw(fp.s[i])
-            di = fp.d[i]
-            fx = ix + di * math.cos(i_yaw + math.pi / 2.0)
-            fy = iy + di * math.sin(i_yaw + math.pi / 2.0)
-            fp.x.append(fx)
-            fp.y.append(fy)
-
-        # calc yaw and ds
-        for i in range(len(fp.x) - 1):
-            dx = fp.x[i + 1] - fp.x[i]
-            dy = fp.y[i + 1] - fp.y[i]
-            fp.yaw.append(math.atan2(dy, dx))
-            fp.ds.append(math.hypot(dx, dy))
-
-        fp.yaw.append(fp.yaw[-1])
-        fp.ds.append(fp.ds[-1])
-
-        # calc curvature
-        for i in range(len(fp.yaw) - 1):
-            fp.c.append((fp.yaw[i + 1] - fp.yaw[i]) / fp.ds[i])
+        fp.frenet2D_to_cartesian(csp)
 
     return fplist
 
@@ -203,7 +166,7 @@ def check_paths(fplist, ob):
 
 
 def frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob):
-    fplist = calc_frenet_paths(c_speed, c_d, c_d_d, c_d_dd, s0)
+    fplist = calc_frenet_paths(s0, c_speed, c_d, c_d_d, c_d_dd)
     fplist = calc_global_paths(fplist, csp)
     fplist = check_paths(fplist, ob)
     # FIXME: 可以先排序 再从小到大check轨迹
@@ -224,7 +187,8 @@ def main():
     wx = [0.0, 10.0, 20.5, 35.0, 70.5]
     wy = [0.0, -6.0, 5.0, 6.5, 0.0]
     # obstacle lists
-    ob = np.array([[0, 0]])
+    # ob = np.array([[0, 0]])
+    ob = np.array([[20.0, 10.0], [30.0, 6.0], [30.0, 8.0], [35.0, 8.0], [50.0, 3.0]])
 
     def generate_target_course(x, y):
         csp = Spline2D(x, y)
