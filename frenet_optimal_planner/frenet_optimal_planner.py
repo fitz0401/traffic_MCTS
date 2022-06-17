@@ -31,7 +31,7 @@ except ImportError:
 SIM_LOOP = 500
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
 MAX_ACCEL = 2.0  # maximum acceleration [m/ss]
-MAX_CURVATURE = 1.0  # maximum curvature [1/m]
+MAX_CURVATURE = 3.0  # maximum curvature [1/m]
 MAX_ROAD_WIDTH = 7.0  # maximum road width [m]
 D_ROAD_W = 1.0  # road width sampling length [m]
 DT = 0.2  # time tick [s]
@@ -128,7 +128,7 @@ def calc_frenet_paths(
 
 def calc_global_paths(fplist, csp):
     for fp in fplist:
-        fp.frenet2D_to_cartesian(csp)
+        fp.frenet_to_cartesian(csp)
 
     return fplist
 
@@ -161,7 +161,6 @@ def check_paths(fplist, ob):
             continue
 
         ok_ind.append(i)
-
     return [fplist[i] for i in ok_ind]
 
 
@@ -178,7 +177,8 @@ def frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob):
         if min_cost >= fp.cf:
             min_cost = fp.cf
             best_path = fp
-
+    if best_path == None:
+        print("No good path!!")
     return best_path
 
 
@@ -205,6 +205,22 @@ def main():
         return rx, ry, ryaw, rk, csp
 
     tx, ty, tyaw, tc, csp = generate_target_course(wx, wy)
+    # generate left right boundaries
+    s = np.arange(0, csp.s[-1], 0.1)
+    left_bound, right_bound = [], []
+    for si in s:
+        rx, ry = csp.calc_position(si)
+        ryaw = csp.calc_yaw(si)
+        xi, yi = csp.frenet_to_cartesian1D(
+            rx, ry, ryaw, si, -MAX_ROAD_WIDTH / 2
+        )  # left
+        left_bound.append([xi, yi])
+        xi, yi = csp.frenet_to_cartesian1D(
+            rx, ry, ryaw, si, MAX_ROAD_WIDTH / 2
+        )  # right
+        right_bound.append([xi, yi])
+    left_bound = np.array(left_bound)
+    right_bound = np.array(right_bound)
 
     # initial state
     c_speed = 10.0 / 3.6  # current speed [m/s]
@@ -234,6 +250,8 @@ def main():
                 lambda event: [exit(0) if event.key == "escape" else None],
             )
             plt.plot(tx, ty)
+            plt.plot(left_bound[:, 0], left_bound[:, 1], "g")
+            plt.plot(right_bound[:, 0], right_bound[:, 1], "g")
             plt.plot(ob[:, 0], ob[:, 1], "xk")
             plt.plot(path.x[1:], path.y[1:], "-or")
             plt.plot(path.x[1], path.y[1], "vc")

@@ -94,6 +94,21 @@ class Spline:
         result = 2.0 * self.c[i] + 6.0 * self.d[i] * dx
         return result
 
+    def calcddd(self, t):
+        """
+        Calc third derivative
+        """
+
+        if t < self.x[0]:
+            return None
+        elif t > self.x[-1]:
+            return None
+
+        i = self.__search_index(t)
+        dx = t - self.x[i]
+        result = 6.0 * self.d[i]
+        return result
+
     def __search_index(self, x):
         """
         search data segment index
@@ -170,6 +185,24 @@ class Spline2D:
         k = (ddy * dx - ddx * dy) / ((dx**2 + dy**2) ** (3 / 2))
         return k
 
+    def calc_curvature_derivative(self, s):
+        """
+        calc curvature's derivative
+        """
+        dx = self.sx.calcd(s)
+        ddx = self.sx.calcdd(s)
+        dddx = self.sx.calcddd(s)
+        dy = self.sy.calcd(s)
+        ddy = self.sy.calcdd(s)
+        dddy = self.sy.calcddd(s)
+
+        a = dx * ddy - dy * ddx
+        b = dx * dddy - dy * dddx
+        c = dx * ddx + dy * ddy
+        d = dx * dx + dy * dy
+        kd = (b * d - 3.0 * a * c) / (d * d * d) ** (2.5)
+        return kd
+
     def calc_yaw(self, s):
         """
         calc yaw
@@ -178,6 +211,13 @@ class Spline2D:
         dy = self.sy.calcd(s)
         yaw = math.atan2(dy, dx)
         return yaw
+
+    def frenet_to_cartesian1D(self, rx, ry, ryaw, s, d):
+        cos_theta_r = math.cos(ryaw)
+        sin_theta_r = math.sin(ryaw)
+        x = rx - sin_theta_r * d
+        y = ry + cos_theta_r * d
+        return x, y
 
 
 def main():  # pragma: no cover
