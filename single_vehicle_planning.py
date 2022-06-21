@@ -5,11 +5,13 @@ Description:
 
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
+from copy import deepcopy
 from state_lattice_planner import state_lattice_planner
 from state_lattice_planner.model_predictive_trajectory_generator import motion_model
 from frenet_optimal_planner import frenet_optimal_planner
 import numpy as np
 from frenet_optimal_planner.splines.cubic_spline import Spline2D
+import matplotlib.pyplot as plt
 
 
 # Parameter
@@ -95,8 +97,10 @@ def main():
         Step 3.5: Convert between xy and frenet
         """
         for path in paths:
-            path.frenet2D_to_cartesian(course_spline)
-            
+            path.frenet_to_cartesian(course_spline)
+            path_comp = deepcopy(path)
+            path_comp.cartesian_to_frenet(course_spline)
+
         """
         Step 4: Calculate paths' costs
         """

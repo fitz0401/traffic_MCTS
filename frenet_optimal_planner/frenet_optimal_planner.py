@@ -107,9 +107,7 @@ def calc_frenet_paths(
     end = time.process_time()
     number = (
         np.arange(
-            TARGET_SPEED - D_T_S * N_S_SAMPLE,
-            TARGET_SPEED + D_T_S * N_S_SAMPLE,
-            D_T_S,
+            TARGET_SPEED - D_T_S * N_S_SAMPLE, TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S,
         ).shape[0]
         * np.arange(MIN_T, MAX_T, DT).shape[0]
         * np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W).shape[0]
@@ -140,7 +138,7 @@ def check_collision(fp, ob):
             for (ix, iy) in zip(fp.x, fp.y)
         ]
 
-        collision = any([di <= ROBOT_RADIUS**2 for di in d])
+        collision = any([di <= ROBOT_RADIUS ** 2 for di in d])
 
         if collision:
             return False

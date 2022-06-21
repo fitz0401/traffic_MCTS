@@ -7,6 +7,7 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 """
 
 from math import *
+import numpy as np
 
 
 def normalize_angle(angle):
@@ -64,14 +65,54 @@ class FrenetPath:
         return
 
     def cartesian_to_frenet(self, csp):
+        """
+        此处默认s沿着轨迹方向单调递增
+        """
         self.s, self.s_d, self.s_dd, self.s_ddd = [], [], [], []
         self.d, self.d_d, self.d_dd, self.d_ddd = [], [], [], []
-        """
-        TODO: need implement
-        Step 1: find nearest reference point rs https://windses.blog.csdn.net/article/details/124871737
-        Step 2: cartesian_to_frenet3D
-        Step 3: simple calculate  self.s_ddd & self.d_ddd 
-        """
+
+        refined_s = np.arange(0, csp.s[-1], csp.s[-1] / 1000)
+        print("s_t", csp.s[-1] / 1000)
+        _, ri = self.find_nearest_rs(csp, refined_s, self.x[0], self.y[0])
+        for i in range(len(self.x)):
+            # Step 1: find nearest reference point rs
+            rx, ry = csp.calc_position(refined_s[ri])
+            dist = np.sqrt((self.x[i] - rx) ** 2 + (self.y[i] - ry) ** 2)
+            while ri + 1 < len(refined_s):
+                rx1, ry1 = csp.calc_position(refined_s[ri + 1])
+                dist1 = np.sqrt((self.x[i] - rx1) ** 2 + (self.y[i] - ry1) ** 2)
+                if dist1 > dist:
+                    break
+                rx = rx1
+                ry = ry1
+                dist = dist1
+                ri = ri + 1
+            rs = refined_s[ri]
+
+            # Step 2: cartesian_to_frenet3D
+            ryaw = csp.calc_yaw(rs)
+            rkappa = csp.calc_curvature(rs)
+            rdkappa = csp.calc_curvature_derivative(rs)
+            s, s_d, s_dd, d, d_d, d_dd = self.cartesian_to_frenet3D(
+                rs, rx, ry, ryaw, rkappa, rdkappa, i
+            )
+            self.s.append(s)
+            self.s_d.append(s_d)
+            self.s_dd.append(s_dd)
+            self.d.append(d)
+            self.d_d.append(d_d)
+            self.d_dd.append(d_dd)
+
+        # Step 3: simple calculate  self.s_ddd & self.d_ddd
+        for i in range(0, len(self.s) - 1):
+            self.s_ddd.append(
+                (self.s_dd[i + 1] - self.s_dd[i]) / (self.t[i + 1] - self.t[i])
+            )
+            self.d_ddd.append(
+                (self.d_dd[i + 1] - self.d_dd[i]) / (self.t[i + 1] - self.t[i])
+            )
+        self.s_ddd.append(self.s_ddd[-1])
+        self.d_ddd.append(self.d_ddd[-1])
 
         return
 
@@ -166,3 +207,22 @@ class FrenetPath:
         ) / one_minus_kappa_r_d
 
         return s, s_d, s_dd, d, d_d, d_dd
+
+    """
+    Ref: https://windses.blog.csdn.net/article/details/124871737
+    """
+
+    def find_nearest_rs(self, csp, s_list, x, y):
+        min_dist = float(inf)
+        rs = 0.0
+        ri = -1
+        for index, s in enumerate(s_list):
+            rx, ry = csp.calc_position(s)
+            dx = x - rx
+            dy = y - ry
+            dist = np.sqrt(dx * dx + dy * dy)
+            if min_dist > dist:
+                min_dist = dist
+                rs = s
+                ri = index
+        return rs, ri

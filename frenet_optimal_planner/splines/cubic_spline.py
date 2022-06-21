@@ -57,7 +57,7 @@ class Spline:
         i = self.__search_index(t)
         dx = t - self.x[i]
         result = (
-            self.a[i] + self.b[i] * dx + self.c[i] * dx**2.0 + self.d[i] * dx**3.0
+            self.a[i] + self.b[i] * dx + self.c[i] * dx ** 2.0 + self.d[i] * dx ** 3.0
         )
 
         return result
@@ -76,7 +76,7 @@ class Spline:
 
         i = self.__search_index(t)
         dx = t - self.x[i]
-        result = self.b[i] + 2.0 * self.c[i] * dx + 3.0 * self.d[i] * dx**2.0
+        result = self.b[i] + 2.0 * self.c[i] * dx + 3.0 * self.d[i] * dx ** 2.0
         return result
 
     def calcdd(self, t):
@@ -157,7 +157,11 @@ class Spline2D:
         self.sx = Spline(self.s, x)
         self.sy = Spline(self.s, y)
 
+    def get_s(self):
+        return self.s
+
     def __calc_s(self, x, y):
+        # FIXME: 此处的s使用了两点之间的直线距离做近似
         dx = np.diff(x)
         dy = np.diff(y)
         self.ds = np.hypot(dx, dy)
@@ -182,7 +186,7 @@ class Spline2D:
         ddx = self.sx.calcdd(s)
         dy = self.sy.calcd(s)
         ddy = self.sy.calcdd(s)
-        k = (ddy * dx - ddx * dy) / ((dx**2 + dy**2) ** (3 / 2))
+        k = (ddy * dx - ddx * dy) / ((dx ** 2 + dy ** 2) ** (3 / 2))
         return k
 
     def calc_curvature_derivative(self, s):
