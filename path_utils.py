@@ -34,17 +34,14 @@ class FrenetPath:
         self.x = []
         self.y = []
         self.yaw = []
-        self.ds = []  # FIXME: may not need
-        self.c = []  # curvature
+        self.cur = []  # curvature
         self.vel = []  # linear vel
         self.acc = []  # linear acc
         # costs
-        self.cd = 0.0
-        self.cv = 0.0
-        self.cf = 0.0
+        self.cost = 0.0
 
     def frenet_to_cartesian(self, csp):
-        self.x, self.y, self.yaw, self.ds, self.c = [], [], [], [], []
+        self.x, self.y, self.yaw, self.cur = [], [], [], []
         for i in range(len(self.s)):
             rx, ry = csp.calc_position(self.s[i])
             if rx is None:
@@ -60,7 +57,7 @@ class FrenetPath:
             self.vel.append(v)
             self.acc.append(a)
             self.yaw.append(theta)
-            self.c.append(kappa)
+            self.cur.append(kappa)
 
         return
 
@@ -192,14 +189,14 @@ class FrenetPath:
             + one_minus_kappa_r_d
             / cos_delta_theta
             / cos_delta_theta
-            * (self.c[index] * one_minus_kappa_r_d / cos_delta_theta - rkappa)
+            * (self.cur[index] * one_minus_kappa_r_d / cos_delta_theta - rkappa)
         )
 
         s = rs
         s_d = self.vel[index] * cos_delta_theta / one_minus_kappa_r_d
 
         delta_theta_prime = (
-            one_minus_kappa_r_d / cos_delta_theta * self.c[index] - rkappa
+            one_minus_kappa_r_d / cos_delta_theta * self.cur[index] - rkappa
         )
         s_dd = (
             self.acc[index] * cos_delta_theta

@@ -9,10 +9,10 @@ from copy import deepcopy
 from state_lattice_planner import state_lattice_planner
 from state_lattice_planner.model_predictive_trajectory_generator import motion_model
 from frenet_optimal_planner import frenet_optimal_planner
+import cost
 import numpy as np
 from frenet_optimal_planner.splines.cubic_spline import Spline2D
 import matplotlib.pyplot as plt
-
 
 # Parameter
 SIM_LOOP = 500
@@ -93,17 +93,31 @@ def main():
             sample_s_d,
         )
 
-        """
-        Step 3.5: Convert between xy and frenet
-        """
         for path in paths:
+            """
+            Step 3.5: Convert between xy and frenet
+            """
             path.frenet_to_cartesian(course_spline)
-            path_comp = deepcopy(path)
-            path_comp.cartesian_to_frenet(course_spline)
+            # path_comp = deepcopy(path)
+            # path_comp.cartesian_to_frenet(course_spline)
 
-        """
-        Step 4: Calculate paths' costs
-        """
+            """
+            Step 4: Calculate paths' costs
+            TODO: obstacle cost and time cost to calculate
+            """
+            ref_vel_list = [target_s_d] * len(path.s_d)
+            print("smooth cost", cost.smoothness(path, course_spline) * DT)
+            print("vel_diff cost", cost.vel_diff(path, ref_vel_list) * DT)
+            print("guidance cost", cost.guidance(path) * DT)
+            print("acc cost", cost.acc(path) * DT)
+            print("jerk cost", cost.jerk(path) * DT)
+            path.cost = (
+                cost.smoothness(path, course_spline) * DT
+                + cost.vel_diff(path, ref_vel_list) * DT
+                + cost.guidance(path) * DT
+                + cost.acc(path) * DT
+                + cost.jerk(path) * DT
+            )
 
         """
         Step 5: Check collisions and boundaries

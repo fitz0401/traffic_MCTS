@@ -15,7 +15,7 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
-import math
+import cost
 import time
 import os, sys
 
@@ -92,16 +92,6 @@ def calc_frenet_paths(
                 tfp.s_dd = [lon_qp.calc_second_derivative(t) for t in fp.t]
                 tfp.s_ddd = [lon_qp.calc_third_derivative(t) for t in fp.t]
 
-                Jp = sum(np.power(tfp.d_ddd, 2))  # square of jerk
-                Js = sum(np.power(tfp.s_ddd, 2))  # square of jerk
-
-                # square of diff from target speed
-                ds = (TARGET_SPEED - tfp.s_d[-1]) ** 2
-
-                tfp.cd = K_J * Jp + K_T * Ti + K_D * tfp.d[-1] ** 2
-                tfp.cv = K_J * Js + K_T * Ti + K_D * ds
-                tfp.cf = K_LAT * tfp.cd + K_LON * tfp.cv
-
                 frenet_paths.append(tfp)
 
     end = time.process_time()
@@ -146,38 +136,51 @@ def check_collision(fp, ob):
     return True
 
 
-def check_paths(fplist, ob):
-    ok_ind = []
-    for i, _ in enumerate(fplist):
-        if any([v > MAX_SPEED for v in fplist[i].s_d]):  # Max speed check
-            continue
-        elif any([abs(a) > MAX_ACCEL for a in fplist[i].s_dd]):  # Max accel check
-            continue
-        elif any([abs(c) > MAX_CURVATURE for c in fplist[i].c]):  # Max curvature check
-            continue
-        elif not check_collision(fplist[i], ob):
-            continue
+def cal_cost(fplist, ob, course_spline):
+    for path in fplist:
+        path.cost = 0
+        ref_vel_list = [20.0 / 3.6] * len(path.s_d)
+        # print("smooth cost", cost.smoothness(path, course_spline) * DT)
+        # print("vel_diff cost", cost.vel_diff(path, ref_vel_list) * DT)
+        # print("guidance cost", cost.guidance(path) * DT)
+        # print("acc cost", cost.acc(path) * DT)
+        # print("jerk cost", cost.jerk(path) * DT)
+        path.cost = (
+            cost.smoothness(path, course_spline) * DT
+            + cost.vel_diff(path, ref_vel_list) * DT
+            + cost.guidance(path) * DT
+            + cost.acc(path) * DT
+            + cost.jerk(path) * DT
+            + cost.time(path) * DT
+        )
+    return fplist
 
-        ok_ind.append(i)
-    return [fplist[i] for i in ok_ind]
+
+def check_path(path, ob):
+    if any([v > MAX_SPEED for v in path.s_d]):  # Max speed check
+        return False
+    elif any([abs(a) > MAX_ACCEL for a in path.s_dd]):  # Max accel check
+        return False
+    elif any([abs(c) > MAX_CURVATURE for c in path.cur]):  # Max curvature check
+        return False
+    elif not check_collision(path, ob):
+        return False
+    return True
 
 
 def frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob):
     fplist = calc_frenet_paths(s0, c_speed, c_d, c_d_d, c_d_dd)
     fplist = calc_global_paths(fplist, csp)
-    fplist = check_paths(fplist, ob)
-    # FIXME: 可以先排序 再从小到大check轨迹
+    fplist = cal_cost(fplist, ob, csp)
+    # 先排序 再从小到大check轨迹
+    if fplist != None:
+        fplist.sort(key=lambda x: x.cost)
+        for path in fplist:
+            if check_path(path, ob):
+                return path
 
-    # find minimum cost path
-    min_cost = float("inf")
-    best_path = None
-    for fp in fplist:
-        if min_cost >= fp.cf:
-            min_cost = fp.cf
-            best_path = fp
-    if best_path == None:
-        print("No good path!!")
-    return best_path
+    print("No good path!!")
+    return None
 
 
 def main():
