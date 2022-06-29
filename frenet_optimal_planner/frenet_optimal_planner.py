@@ -58,7 +58,7 @@ def calc_frenet_paths(
     c_d_d,
     c_d_dd,
     sample_d=np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W),
-    sample_t=np.arange(MIN_T, MAX_T, DT),
+    sample_t=np.arange(MIN_T, MAX_T, 0.5),
     sample_v=np.arange(
         TARGET_SPEED - D_T_S * N_S_SAMPLE, TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S
     ),
@@ -75,8 +75,8 @@ def calc_frenet_paths(
 
             # lat_qp = quintic_polynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
             lat_qp = QuinticPolynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
-
-            fp.t = [t for t in np.arange(0.0, Ti, DT)]
+            fp.lat_qp = lat_qp
+            fp.t = [t for t in np.arange(0.0, Ti * 1.01, DT)]
             fp.d = [lat_qp.calc_point(t) for t in fp.t]
             fp.d_d = [lat_qp.calc_first_derivative(t) for t in fp.t]
             fp.d_dd = [lat_qp.calc_second_derivative(t) for t in fp.t]
@@ -86,7 +86,7 @@ def calc_frenet_paths(
             for tv in sample_v:
                 tfp = copy.deepcopy(fp)
                 lon_qp = QuarticPolynomial(s0, c_speed, 0.0, tv, 0.0, Ti)
-
+                tfp.lon_qp = lon_qp
                 tfp.s = [lon_qp.calc_point(t) for t in fp.t]
                 tfp.s_d = [lon_qp.calc_first_derivative(t) for t in fp.t]
                 tfp.s_dd = [lon_qp.calc_second_derivative(t) for t in fp.t]
@@ -104,9 +104,9 @@ def calc_frenet_paths(
     )
     print(
         "finish path generation, planning",
-        number,
+        len(frenet_paths),
         "paths with an average runtime",
-        (end - start) / number,
+        (end - start) / len(frenet_paths),
         "seconds.",
         float(end - start),
     )
