@@ -24,6 +24,9 @@ MIN_T = 4.0  # min prediction time [m]
 DT = 0.1  # time tick [s]
 D_T_S = 5.0 / 3.6  # target longtitude vel sampling length [m/s]
 N_S_SAMPLE = 1  # sampling number of target longtitude vel
+MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
+MAX_ACCEL = 2.0  # maximum acceleration [m/s^2]
+MAX_CURVATURE = 1.0  # maximum curvature [1/m]
 
 
 class State:
@@ -54,7 +57,7 @@ def plot_cost_function(current_state, paths, course_spline, obs_list):
     color_map = plt.get_cmap("gist_rainbow")
     colors = [color_map(i) for i in np.linspace(0, 1, len(paths))]
     linewidths = [i for i in np.linspace(2.5, 0.5, len(paths))]
-    for i in range(0, len(paths), 2):
+    for i in range(len(paths) - 1, 0, -1):
         plt.plot(paths[i].x, paths[i].y, color=colors[i], linewidth=linewidths[i])
     # (best_path,) = plt.plot(paths[0].x, paths[0].y, "r", linewidth=3)
 
@@ -109,6 +112,7 @@ def main():
     # way points
     wx = [0.0, 10.0, 20.5, 35.0, 70.5]
     wy = [0.0, -6.0, 5.0, 6.5, 0.0]
+    # wy = [0.0, 0.0, 0.0, 0.0, 0.0]
     # target course
     course_spline = Spline2D(wx, wy)
 
@@ -205,6 +209,25 @@ def main():
 
         """
         Step 5: Check collisions and boundaries
+        """
+        bestpath = None
+        for path in paths:
+            if any([v > MAX_SPEED for v in path.vel]):  # Max speed check
+                print("Max Vel ", max(path.vel), min(path.vel))
+                continue
+            elif any([abs(a) > MAX_ACCEL for a in path.acc]):  # Max accel check
+                print("Max Acc ", max(path.acc), min(path.acc))
+                continue
+            elif any([abs(c) > MAX_CURVATURE for c in path.cur]):  # Max curvature check
+                print("Max curvature ", max(path.cur), min(path.cur))
+                continue
+            # elif not check_collision(path, ob): #todo: Add collision check
+            #     continue
+            bestpath = path
+            # break
+
+        """
+        Step 5.5: if no path is found, Calculate a stop path
         """
 
         break  # FIXME: for test

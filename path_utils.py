@@ -41,23 +41,41 @@ class FrenetPath:
         self.cost = 0.0
 
     def frenet_to_cartesian(self, csp):
-        self.x, self.y, self.yaw, self.cur = [], [], [], []
+        self.x, self.y, self.yaw, self.cur, self.vel, self.acc = [], [], [], [], [], []
         for i in range(len(self.s)):
             rx, ry = csp.calc_position(self.s[i])
             if rx is None:
                 break
             ryaw = csp.calc_yaw(self.s[i])
             rkappa = csp.calc_curvature(self.s[i])
-            rdkappa = csp.calc_curvature_derivative(self.s[i])
-            x, y, v, a, theta, kappa = self.frenet_to_cartesian3D(
-                rx, ry, ryaw, rkappa, rdkappa, i
-            )
+
+            x, y, v, yaw = self.frenet_to_cartesian2D(rx, ry, ryaw, rkappa, i)
             self.x.append(x)
             self.y.append(y)
             self.vel.append(v)
-            self.acc.append(a)
-            self.yaw.append(theta)
-            self.cur.append(kappa)
+            self.yaw.append(yaw)
+        for i in range(0, len(self.vel) - 1):
+            self.acc.append(
+                (self.vel[i + 1] - self.vel[i]) / (self.t[i + 1] - self.t[i])
+            )
+        self.acc.append(self.acc[-1])
+
+        # https://blog.csdn.net/m0_37454852/article/details/86514444
+        # https://baike.baidu.com/item/%E6%9B%B2%E7%8E%87/9985286
+        for i in range(1, len(self.x) - 1):
+            dy = (
+                (self.y[i + 1] - self.y[i]) / (self.x[i + 1] - self.x[i])
+                + (self.y[i] - self.y[i - 1]) / (self.x[i] - self.x[i - 1])
+            ) / 2
+            ddy = (
+                (self.y[i + 1] - self.y[i]) / (self.x[i + 1] - self.x[i])
+                - (self.y[i] - self.y[i - 1]) / (self.x[i] - self.x[i - 1])
+            ) / ((self.x[i + 1] - self.x[i - 1]) / 2)
+            k = abs(ddy) / (1 + dy ** 2) ** 1.5
+            self.cur.append(k)
+        # insert the first and last point
+        self.cur.insert(0, self.cur[0])
+        self.cur.append(self.cur[-1])
 
         return
 
@@ -69,7 +87,7 @@ class FrenetPath:
         self.d, self.d_d, self.d_dd, self.d_ddd = [], [], [], []
 
         refined_s = np.arange(0, csp.s[-1], csp.s[-1] / 1000)
-        print("s_t", csp.s[-1] / 1000)
+        # print("s_t", csp.s[-1] / 1000)
         _, ri = self.find_nearest_rs(csp, refined_s, self.x[0], self.y[0])
         for i in range(len(self.x)):
             # Step 1: find nearest reference point rs
@@ -89,35 +107,44 @@ class FrenetPath:
             # Step 2: cartesian_to_frenet3D
             ryaw = csp.calc_yaw(rs)
             rkappa = csp.calc_curvature(rs)
-            rdkappa = csp.calc_curvature_derivative(rs)
-            s, s_d, s_dd, d, d_d, d_dd = self.cartesian_to_frenet3D(
-                rs, rx, ry, ryaw, rkappa, rdkappa, i
-            )
+            s, s_d, d, d_d = self.cartesian_to_frenet2D(rs, rx, ry, ryaw, rkappa, i)
             self.s.append(s)
             self.s_d.append(s_d)
-            self.s_dd.append(s_dd)
             self.d.append(d)
             self.d_d.append(d_d)
-            self.d_dd.append(d_dd)
 
-        # Step 3: simple calculate  self.s_ddd & self.d_ddd
+        # Step 3: simple calculate s_dd s_ddd & d_d d_ddd
         for i in range(0, len(self.s) - 1):
+            self.s_dd.append(
+                (self.s_d[i + 1] - self.s_d[i]) / (self.t[i + 1] - self.t[i])
+            )
+            self.d_dd.append(
+                (self.d_d[i + 1] - self.d_d[i]) / (self.t[i + 1] - self.t[i])
+            )
+        self.s_dd.append(self.s_dd[-1])
+        self.d_dd.append(self.d_dd[-1])
+
+        for i in range(1, len(self.s) - 1):
             self.s_ddd.append(
-                (self.s_dd[i + 1] - self.s_dd[i]) / (self.t[i + 1] - self.t[i])
+                (self.s_d[i + 1] - 2 * self.s_d[i] + self.s_d[i - 1])
+                / ((self.t[i + 1] - self.t[i]) ** 2)
             )
             self.d_ddd.append(
-                (self.d_dd[i + 1] - self.d_dd[i]) / (self.t[i + 1] - self.t[i])
+                (self.d_d[i + 1] - 2 * self.d_d[i] + self.d_d[i - 1])
+                / ((self.t[i + 1] - self.t[i]) ** 2)
             )
+        self.s_ddd.insert(0, self.s_ddd[0])
         self.s_ddd.append(self.s_ddd[-1])
+        self.d_ddd.insert(0, self.d_ddd[0])
         self.d_ddd.append(self.d_ddd[-1])
 
         return
 
     """
-    Ref: https://blog.csdn.net/u013468614/article/details/108748016
+    Modified from: https://blog.csdn.net/u013468614/article/details/108748016
     """
 
-    def frenet_to_cartesian3D(self, rx, ry, ryaw, rkappa, rdkappa, index):
+    def frenet_to_cartesian2D(self, rx, ry, ryaw, rkappa, index):
         cos_theta_r = cos(ryaw)
         sin_theta_r = sin(ryaw)
 
@@ -125,85 +152,29 @@ class FrenetPath:
         y = ry + cos_theta_r * self.d[index]
 
         one_minus_kappa_r_d = 1 - rkappa * self.d[index]
-        tan_delta_theta = self.d_d[index] / one_minus_kappa_r_d
-        delta_theta = atan2(self.d_d[index], one_minus_kappa_r_d)
-        cos_delta_theta = cos(delta_theta)
+        v = sqrt(one_minus_kappa_r_d ** 2 * self.s_d[index] ** 2 + self.d_d[index] ** 2)
+        yaw = asin(self.d_d[index] / v) + ryaw
 
-        theta = normalize_angle(delta_theta + ryaw)
-        kappa_r_d_prime = rdkappa * self.d[index] + rkappa * self.d_d[index]
+        return x, y, v, yaw
 
-        kappa = (
-            (
-                (
-                    (self.d_dd[index] + kappa_r_d_prime * tan_delta_theta)
-                    * cos_delta_theta
-                    * cos_delta_theta
-                )
-                / (one_minus_kappa_r_d)
-                + rkappa
-            )
-            * cos_delta_theta
-            / (one_minus_kappa_r_d)
-        )
-
-        d_dot = self.d_d[index] * self.s_d[index]
-
-        v = sqrt(
-            one_minus_kappa_r_d
-            * one_minus_kappa_r_d
-            * self.s_d[index]
-            * self.s_d[index]
-            + d_dot * d_dot
-        )
-
-        delta_theta_prime = one_minus_kappa_r_d / cos_delta_theta * (kappa) - rkappa
-        a = self.s_dd[index] * one_minus_kappa_r_d / cos_delta_theta + self.s_d[
-            index
-        ] * self.s_d[index] / cos_delta_theta * (
-            self.d_d[index] * delta_theta_prime - kappa_r_d_prime
-        )
-        return x, y, v, a, theta, kappa
-
-    def cartesian_to_frenet3D(self, rs, rx, ry, ryaw, rkappa, rdkappa, index):
-
+    def cartesian_to_frenet2D(self, rs, rx, ry, ryaw, rkappa, index):
+        s = rs
         dx = self.x[index] - rx
         dy = self.y[index] - ry
 
         cos_theta_r = cos(ryaw)
         sin_theta_r = sin(ryaw)
-
         cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
         d = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
 
         delta_theta = self.yaw[index] - ryaw
-        tan_delta_theta = tan(delta_theta)
+        sin_delta_theta = sin(delta_theta)
         cos_delta_theta = cos(delta_theta)
-
         one_minus_kappa_r_d = 1 - rkappa * d
-        d_d = one_minus_kappa_r_d * tan_delta_theta
-
-        kappa_r_d_prime = rdkappa * d + rkappa * d_d
-
-        d_dd = (
-            -kappa_r_d_prime * tan_delta_theta
-            + one_minus_kappa_r_d
-            / cos_delta_theta
-            / cos_delta_theta
-            * (self.cur[index] * one_minus_kappa_r_d / cos_delta_theta - rkappa)
-        )
-
-        s = rs
         s_d = self.vel[index] * cos_delta_theta / one_minus_kappa_r_d
+        d_d = self.vel[index] * sin_delta_theta
 
-        delta_theta_prime = (
-            one_minus_kappa_r_d / cos_delta_theta * self.cur[index] - rkappa
-        )
-        s_dd = (
-            self.acc[index] * cos_delta_theta
-            - s_d * s_d * (d_d * delta_theta_prime - kappa_r_d_prime)
-        ) / one_minus_kappa_r_d
-
-        return s, s_d, s_dd, d, d_d, d_dd
+        return s, s_d, d, d_d
 
     """
     Ref: https://windses.blog.csdn.net/article/details/124871737

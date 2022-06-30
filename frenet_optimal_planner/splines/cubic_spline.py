@@ -178,6 +178,7 @@ class Spline2D:
 
         return x, y
 
+    # https://jingyan.baidu.com/article/7c6fb428c8138480642c90f5.html
     def calc_curvature(self, s):
         """
         calc curvature
@@ -186,12 +187,12 @@ class Spline2D:
         ddx = self.sx.calcdd(s)
         dy = self.sy.calcd(s)
         ddy = self.sy.calcdd(s)
-        k = (ddy * dx - ddx * dy) / ((dx ** 2 + dy ** 2) ** (3 / 2))
+        k = abs(ddy * dx - ddx * dy) / ((dx ** 2 + dy ** 2) ** (3 / 2))
         return k
 
     def calc_curvature_derivative(self, s):
         """
-        calc curvature's derivative
+        UNVERIFIED: calc curvature's derivative
         """
         dx = self.sx.calcd(s)
         ddx = self.sx.calcdd(s)

@@ -43,7 +43,8 @@ def time(path):
     return W_T * path.t[-1]
 
 
-def obs(path, obs_list): # obs_list should be a list of Obstacle objects in frenet coordinates
+def obs(path, obs_list):
+    # obs_list should be a list of Obstacle objects in frenet coordinates
     """
     ATTENSION:The simple circular enclosing box is used here in the Cartesian coordinate system; if more refinement is needed, the rectangular enclosing box is used in the Frenet coordinate system
     """
@@ -86,7 +87,7 @@ def ref_waypoints_guidance(path, waypoints):
 def acc(path):
     cost_acc = 0
     for i in range(len(path.acc)):
-        cost_acc += path.s_dd[i] ** 2 + path.d_dd[i] ** 2
+        cost_acc += path.acc[i] ** 2
     return W_ACC * cost_acc
 
 
