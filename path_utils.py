@@ -53,7 +53,12 @@ class FrenetPath:
             self.x.append(x)
             self.y.append(y)
             self.vel.append(v)
-            self.yaw.append(yaw)
+            if isnan(yaw):
+                print("encounter nan yaw because velocity is 0")
+                self.yaw.append(self.yaw[-1])
+            else:
+                self.yaw.append(yaw)
+
         for i in range(0, len(self.vel) - 1):
             self.acc.append(
                 (self.vel[i + 1] - self.vel[i]) / (self.t[i + 1] - self.t[i])

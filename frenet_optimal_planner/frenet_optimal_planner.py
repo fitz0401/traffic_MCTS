@@ -12,12 +12,14 @@ Ref:
 
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
 import cost
 import time
 import os, sys
+import yaml
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../")
 try:
@@ -27,41 +29,36 @@ try:
 except ImportError:
     raise
 
-# Parameter
-SIM_LOOP = 500
-MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
-MAX_ACCEL = 2.0  # maximum acceleration [m/ss]
-MAX_CURVATURE = 3.0  # maximum curvature [1/m]
-MAX_ROAD_WIDTH = 7.0  # maximum road width [m]
-D_ROAD_W = 1.0  # road width sampling length [m]
-DT = 0.1  # time tick [s]
-MAX_T = 5.0  # max prediction time [m]
-MIN_T = 4.0  # min prediction time [m]
-TARGET_SPEED = 30.0 / 3.6  # target speed [m/s]
-D_T_S = 5.0 / 3.6  # target speed sampling length [m/s]
-N_S_SAMPLE = 1  # sampling number of target speed
-ROBOT_RADIUS = 2.0  # robot radius [m] for collision
 
-# cost weights
-K_J = 0.1
-K_T = 0.1
-K_D = 1.0
-K_LAT = 1.0
-K_LON = 1.0
-ANIMATION = True
+config_file_path = os.path.dirname(os.path.realpath(__file__)) + "/../config.yaml"
+
+
+def load_config(config_file_path):
+    with open(config_file_path, "r") as f:
+        global config
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    print(config)
+    global SIM_LOOP, MAX_ROAD_WIDTH, D_ROAD_W, MAX_T, MIN_T, DT, D_T_S, N_S_SAMPLE, MAX_SPEED, MAX_ACCEL, MAX_CURVATURE, W_COLLISION, ANIMATION, CAR_RADIUS
+    SIM_LOOP = config["SIM_LOOP"]
+    MAX_ROAD_WIDTH = 7.0  # config["MAX_ROAD_WIDTH"]  # maximum road width [m]
+    D_ROAD_W = 1.0  # config["D_ROAD_W"]  # road width sampling length [m]
+    MAX_T = config["MAX_T"]  # max prediction time [m]
+    MIN_T = config["MIN_T"]  # min prediction time [m]
+    DT = config["DT"]  # time tick [s]
+    D_T_S = config["D_T_S"] / 3.6  # target longtitude vel sampling length [m/s]
+    N_S_SAMPLE = config["N_S_SAMPLE"]  # sampling number of target longtitude vel
+    MAX_SPEED = config["MAX_SPEED"] / 3.6  # maximum speed [m/s]
+    MAX_ACCEL = config["MAX_ACCEL"]  # maximum acceleration [m/s^2]
+    MAX_CURVATURE = config["MAX_CURVATURE"]  # maximum curvature [1/m]
+    W_COLLISION = config["weights"]["W_COLLISION"]  # SYNC: collision cost
+    ANIMATION = config["ANIMATION"]
+    CAR_WIDTH = config["vehicle"]["truck"]["width"]
+    CAR_LENGTH = config["vehicle"]["truck"]["length"]
+    CAR_RADIUS = 2.0  # math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
 
 
 def calc_frenet_paths(
-    s0,
-    c_speed,
-    c_d,
-    c_d_d,
-    c_d_dd,
-    sample_d=np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W),
-    sample_t=np.arange(MIN_T, MAX_T, 0.5),
-    sample_v=np.arange(
-        TARGET_SPEED - D_T_S * N_S_SAMPLE, TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S
-    ),
+    s0, c_speed, c_d, c_d_d, c_d_dd, sample_d, sample_t, sample_v, DT
 ):
     frenet_paths = []
 
@@ -95,13 +92,6 @@ def calc_frenet_paths(
                 frenet_paths.append(tfp)
 
     end = time.process_time()
-    number = (
-        np.arange(
-            TARGET_SPEED - D_T_S * N_S_SAMPLE, TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S,
-        ).shape[0]
-        * np.arange(MIN_T, MAX_T, DT).shape[0]
-        * np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W).shape[0]
-    )
     print(
         "finish path generation, planning",
         len(frenet_paths),
@@ -128,7 +118,7 @@ def check_collision(fp, ob):
             for (ix, iy) in zip(fp.x, fp.y)
         ]
 
-        collision = any([di <= ROBOT_RADIUS ** 2 for di in d])
+        collision = any([di <= CAR_RADIUS ** 2 for di in d])
 
         if collision:
             return False
@@ -146,12 +136,12 @@ def cal_cost(fplist, ob, course_spline):
         # print("acc cost", cost.acc(path) * DT)
         # print("jerk cost", cost.jerk(path) * DT)
         path.cost = (
-            cost.smoothness(path, course_spline) * DT
-            + cost.vel_diff(path, ref_vel_list) * DT
-            + cost.guidance(path) * DT
-            + cost.acc(path) * DT
-            + cost.jerk(path) * DT
-            + cost.time(path) * DT
+            cost.smoothness(path, course_spline, config["weights"]) * DT
+            + cost.vel_diff(path, ref_vel_list, config["weights"]) * DT
+            + cost.guidance(path, config["weights"]) * DT
+            + cost.acc(path, config["weights"]) * DT
+            + cost.jerk(path, config["weights"]) * DT
+            + cost.time(path, config["weights"]) * DT
         )
     return fplist
 
@@ -169,7 +159,15 @@ def check_path(path, ob):
 
 
 def frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob):
-    fplist = calc_frenet_paths(s0, c_speed, c_d, c_d_d, c_d_dd)
+    target_speed = 30.0 / 3.6  # target speed [m/s]
+    sample_d = np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W)
+    sample_t = np.arange(MIN_T, MAX_T, 0.5)
+    sample_v = np.arange(
+        target_speed - D_T_S * N_S_SAMPLE, target_speed + D_T_S * N_S_SAMPLE, D_T_S,
+    )
+    fplist = calc_frenet_paths(
+        s0, c_speed, c_d, c_d_d, c_d_dd, sample_d, sample_t, sample_v, DT
+    )
     fplist = calc_global_paths(fplist, csp)
     fplist = cal_cost(fplist, ob, csp)
     # 先排序 再从小到大check轨迹
@@ -184,6 +182,7 @@ def frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob):
 
 
 def main():
+    load_config(config_file_path)
     # way points
     wx = [0.0, 10.0, 20.5, 35.0, 70.5]
     wy = [0.0, -6.0, 5.0, 6.5, 0.0]
