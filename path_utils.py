@@ -59,7 +59,7 @@ class State:
 
 class Trajectory:
     def __init__(self):
-        # trajectory states
+        # trajectory consist State class
         self.states = []
         # costs
         self.cost = 0.0

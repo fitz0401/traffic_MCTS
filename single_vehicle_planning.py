@@ -5,11 +5,8 @@ Description:
 
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
-from cgi import test
-from copy import deepcopy
 import time
 from state_lattice_planner import state_lattice_planner
-from state_lattice_planner.model_predictive_trajectory_generator import motion_model
 from frenet_optimal_planner import frenet_optimal_planner
 from path_utils import Trajectory, State
 import cost
@@ -190,12 +187,6 @@ def main():
         """
         Step 3: Generate trajectories
         """
-        # yaw0,k0,xf,yf,yawf,...
-        # Default in self-centered XY plains
-        # k0 = course_spline.calc_curvature(current_state.s)
-
-        # state_lattice_planner.generate_path(target_states, k0)
-
         paths = frenet_optimal_planner.calc_frenet_paths(
             current_state.s,
             current_state.s_d,
@@ -218,7 +209,6 @@ def main():
         start = time.process_time()
         for path in paths:
             path.frenet_to_cartesian(course_spline)
-            # path.cartesian_to_frenet(course_spline)
         end = time.process_time()
         print(
             "finish cord covertion for",
