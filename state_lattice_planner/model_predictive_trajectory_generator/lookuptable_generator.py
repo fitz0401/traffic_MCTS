@@ -25,8 +25,8 @@ def calc_states_list():
     yaw0 = np.arange(-maxyaw0, maxyaw0 * 1.01, maxyaw0 / 2)
     xf = np.arange(10.0, 21.0, 5.0)
     yf = np.arange(-10.0, 11.0, 5.0)
-    # yawf = np.arange(-maxyawf, maxyawf * 1.01, maxyawf / 2)
-    yawf = [0.0]
+    yawf = np.arange(-maxyawf, maxyawf * 1.01, maxyawf / 2)
+    # yawf = [0.0]
 
     states = []
     for iyaw0 in yaw0:
@@ -50,9 +50,9 @@ def search_nearest_one_from_lookuptable(yaw0, xf, yf, yawf, lookuptable):
         dyawf = yawf - table[3]
         # d = math.sqrt(dyaw0 ** 2 + dxf ** 2 + dyf ** 2 + dyawf ** 2)
         d = (
-            math.sqrt(dyaw0**2)
-            + math.sqrt(dxf**2 + dyf**2)
-            + math.sqrt(dyawf**2)
+            math.sqrt(dyaw0 ** 2)
+            + math.sqrt(dxf ** 2 + dyf ** 2)
+            + math.sqrt(dyawf ** 2)
         )
         if d <= mind:
             minid = i

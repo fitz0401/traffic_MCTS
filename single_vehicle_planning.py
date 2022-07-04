@@ -7,10 +7,11 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 """
 from cgi import test
 from copy import deepcopy
+import time
 from state_lattice_planner import state_lattice_planner
 from state_lattice_planner.model_predictive_trajectory_generator import motion_model
 from frenet_optimal_planner import frenet_optimal_planner
-from path_utils import FrenetPath
+from path_utils import Trajectory, State
 import cost
 import numpy as np
 from frenet_optimal_planner.splines.cubic_spline import Spline2D
@@ -40,17 +41,6 @@ def load_config(config_file_path):
     W_COLLISION = config["weights"]["W_COLLISION"]  # SYNC: collision cost
 
 
-class State:
-    def __init__(self, s=0, s_d=0, s_dd=0, d=0, d_d=0, d_dd=0, t=0):
-        self.s = s
-        self.s_d = s_d
-        self.s_dd = s_dd
-        self.d = d
-        self.d_d = d_d
-        self.d_dd = d_dd
-        self.t = t
-
-
 def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=None):
     """
     Plot
@@ -58,7 +48,7 @@ def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=
     fig, ax = plt.subplots()
     #  using calc_position function calculate xlist and ylist in 100 x,y positions from 0 to course_spline.s[-1] on course_spline and plt.plot them
     xlist, ylist = [], []
-    for s in np.arange(current_state.s - 3, paths[0].s[-1] + 10, 0.1):
+    for s in np.arange(current_state.s - 3, paths[0].states[-1].s + 10, 0.1):
         x, y = course_spline.calc_position(s)
         xlist.append(x)
         ylist.append(y)
@@ -69,7 +59,9 @@ def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=
     colors = [color_map(i) for i in np.linspace(0, 1, len(paths))]
     linewidths = [i for i in np.linspace(2.5, 0.5, len(paths))]
     for i in range(len(paths) - 1, 0, -1):
-        plt.plot(paths[i].x, paths[i].y, color=colors[i], linewidth=linewidths[i])
+        pathx = [state.x for state in paths[i].states]
+        pathy = [state.y for state in paths[i].states]
+        plt.plot(pathx, pathy, color=colors[i], linewidth=linewidths[i])
     # (best_path,) = plt.plot(paths[0].x, paths[0].y, "r", linewidth=3)
 
     # plot obslist with  black circles with radius
@@ -90,20 +82,28 @@ def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=
         ax.add_patch(obs_circle)
 
     if stop_path is None:
-        bestpath = FrenetPath()
+        bestpath = Trajectory()
         lat_qp = paths[0].lat_qp
-        bestpath.t = [t for t in np.arange(0.0, paths[0].t[-1] * 1.01, 0.05)]
-        bestpath.d = [lat_qp.calc_point(t) for t in bestpath.t]
-        bestpath.d_d = [lat_qp.calc_first_derivative(t) for t in bestpath.t]
-        bestpath.d_dd = [lat_qp.calc_second_derivative(t) for t in bestpath.t]
-        bestpath.d_ddd = [lat_qp.calc_third_derivative(t) for t in bestpath.t]
         lon_qp = paths[0].lon_qp
-        bestpath.s = [lon_qp.calc_point(t) for t in bestpath.t]
-        bestpath.s_d = [lon_qp.calc_first_derivative(t) for t in bestpath.t]
-        bestpath.s_dd = [lon_qp.calc_second_derivative(t) for t in bestpath.t]
-        bestpath.s_ddd = [lon_qp.calc_third_derivative(t) for t in bestpath.t]
+        for t in np.arange(0.0, paths[0].states[-1].t * 1.01, 0.05):
+            bestpath.states.append(
+                State(
+                    t=t,
+                    d=lat_qp.calc_point(t),
+                    d_d=lat_qp.calc_first_derivative(t),
+                    d_dd=lat_qp.calc_second_derivative(t),
+                    d_ddd=lat_qp.calc_third_derivative(t),
+                    s=lon_qp.calc_point(t),
+                    s_d=lon_qp.calc_first_derivative(t),
+                    s_dd=lon_qp.calc_second_derivative(t),
+                    s_ddd=lon_qp.calc_third_derivative(t),
+                )
+            )
+
         bestpath.frenet_to_cartesian(course_spline)
-        (best_path,) = plt.plot(bestpath.x, bestpath.y, "r", linewidth=3)
+        pathx = [state.x for state in bestpath.states]
+        pathy = [state.y for state in bestpath.states]
+        (best_path,) = plt.plot(pathx, pathy, "r", linewidth=3)
         plt.legend(
             handles=[centerline, best_path],
             labels=["Frenet centerline", "Best path"],
@@ -112,7 +112,9 @@ def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=
         )
 
     if stop_path is not None:
-        (stop_path,) = plt.plot(stop_path.x, stop_path.y, color="black", linewidth=3)
+        pathx = [state.x for state in stop_path.states]
+        pathy = [state.y for state in stop_path.states]
+        (stop_path,) = plt.plot(pathx, pathy, color="black", linewidth=3)
         plt.legend(
             handles=[centerline, stop_path],
             labels=["Frenet centerline", "Stop path"],
@@ -123,6 +125,21 @@ def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=
     plt.grid(True)
     plt.axis("equal")
     plt.show()
+
+
+def check_path(path):
+    for state in path.states:
+        if state.vel > MAX_SPEED:  # Max speed check
+            return False
+        elif abs(state.acc) > MAX_ACCEL:  # Max accel check
+            return False
+        elif abs(state.cur) > MAX_CURVATURE:  # Max curvature check
+            return False
+
+    if path.cost > W_COLLISION * 100:  # Collision check
+        return False
+    else:
+        return True
 
 
 def main():
@@ -140,11 +157,20 @@ def main():
     # initial state
     s0 = 0.0  # initial longtitude position [m]
     s0_d = 10.0 / 3.6  # initial longtitude speed [m/s]
-    s0_dd = 0.0  # initial longtitude acceleration [m/s^2]
     d0 = 1.0  # initial lateral position [m]
     d0_d = 0.0  # initial lateral speed [m/s]
-    d0_dd = 0.0  # initial lateral acceleration [m/s^2]
-    current_state = State(s=s0, s_d=s0_d, s_dd=s0_dd, d=d0, d_d=d0_d, d_dd=d0_dd, t=0)
+    x0, y0 = course_spline.frenet_to_cartesian1D(s0, d0)
+    current_state = State(
+        t=0,
+        s=s0,
+        s_d=s0_d,
+        d=d0,
+        d_d=d0_d,
+        x=x0,
+        y=y0,
+        yaw=course_spline.calc_yaw(s0),
+        cur=course_spline.calc_curvature(s0),
+    )
 
     for i in range(SIM_LOOP):
         """
@@ -166,6 +192,8 @@ def main():
         """
         # yaw0,k0,xf,yf,yawf,...
         # Default in self-centered XY plains
+        # k0 = course_spline.calc_curvature(current_state.s)
+
         # state_lattice_planner.generate_path(target_states, k0)
 
         paths = frenet_optimal_planner.calc_frenet_paths(
@@ -180,18 +208,33 @@ def main():
             DT,
         )
 
+        if paths is None:
+            print("No path found")
+            break
+
+        """
+        Step 3.5: Convert between xy and frenet
+        """
+        start = time.process_time()
         for path in paths:
-            """
-            Step 3.5: Convert between xy and frenet
-            """
-            if len(path.x) == 0:
-                path.frenet_to_cartesian(course_spline)
-            else:
-                path.cartesian_to_frenet(course_spline)
-            """
-            Step 4: Calculate paths' costs
-            """
-            ref_vel_list = [target_s_d] * len(path.s_d)
+            path.frenet_to_cartesian(course_spline)
+            # path.cartesian_to_frenet(course_spline)
+        end = time.process_time()
+        print(
+            "finish cord covertion for",
+            len(paths),
+            "paths with an average runtime",
+            (end - start) / len(paths),
+            "seconds.",
+            float(end - start),
+        )
+
+        """
+        Step 4: Calculate paths' costs
+        """
+        start = time.process_time()
+        for path in paths:
+            ref_vel_list = [target_s_d] * len(path.states)
             # test_obs = {
             #     "radius": 0.5,
             #     "path": [{"x": 19, "y": 4} for i in range(len(path.x))],
@@ -221,31 +264,28 @@ def main():
                 + cost.obs(path, obs_list, config["weights"])
             )
 
-        if paths is None:
-            print("No path found")
-            break
-
         paths.sort(key=lambda x: x.cost)
+
+        end = time.process_time()
+        print(
+            "finish cost calculation for",
+            len(paths),
+            "paths with an average runtime",
+            (end - start) / len(paths),
+            "seconds.",
+            float(end - start),
+        )
+
         """
         Step 5: Check collisions and boundaries
         """
         bestpath = None
         for path in paths:
-            if any([v > MAX_SPEED for v in path.vel]):  # Max speed check
-                # print("Max Vel ", max(path.vel), min(path.vel))
-                continue
-            elif any([abs(a) > MAX_ACCEL for a in path.acc]):  # Max accel check
-                # print("Max Acc ", max(path.acc), min(path.acc))
-                continue
-            elif any([abs(c) > MAX_CURVATURE for c in path.cur]):  # Max curvature check
-                # print("Max curvature ", max(path.cur), min(path.cur))
-                continue
-            elif path.cost > W_COLLISION * 100:  # Collision check
-                # print("Collision Path ")
-                continue
-            bestpath = path
-            print("find a valid path with minimum cost")
-            break
+            if check_path(path):
+                bestpath = path
+                print("find a valid path with minimum cost")
+                current_state = bestpath.states[1]
+                break
 
         """
         Step 5.5: if no path is found, Calculate a stop path
@@ -254,34 +294,31 @@ def main():
         if bestpath is None:
             print("No path found, Calculate a stop path")
             index = 0
-            stop_path = FrenetPath()
+            stop_path = Trajectory()
             t = 0
-            s = paths[0].s[index]
-            d = paths[0].d[index]
-            s_d = paths[0].s_d[index]
-            d_d = paths[0].d_d[index]
+            s = paths[0].states[index].s
+            d = paths[0].states[index].d
+            s_d = paths[0].states[index].s_d
+            d_d = paths[0].states[index].d_d
             while True:
-                stop_path.t.append(t)
-                stop_path.s.append(s)
-                stop_path.d.append(d)
-                stop_path.s_d.append(s_d)
-                stop_path.d_d.append(d_d)
-                stop_path.s_dd.append(-MAX_ACCEL / 2)
+                stop_path.states.append(
+                    State(t=t, s=s, d=d, s_d=s_d, d_d=d_d, s_dd=-MAX_ACCEL / 2)
+                )
 
                 if s_d == 0:
                     break
                 t += DT
                 s += s_d * DT
                 d += d_d * DT
-                if index < len(path.s) - 1 and s >= paths[0].s[index + 1]:
+                if index < len(path.s) - 1 and s >= paths[0].states[index + 1].s:
                     index += 1
-                s_d += stop_path.s_dd[-1] * DT
+                s_d += stop_path.states[-1].s_dd * DT
                 s_d = s_d if s_d > 0 else 0
-                d_d = paths[0].d_d[index] / paths[0].s_d[index] * s_d
+                d_d = paths[0].states[index].d_d / paths[0].states[index].s_d * s_d
 
             stop_path.frenet_to_cartesian(course_spline)
-
-            print("Total time: ", t, "Stoping distance ", s - paths[0].s[0])
+            current_state = stop_path.state[1]
+            print("Total time: ", t, "Stoping distance ", s - stop_path.states[0].s)
 
         if stop_path == None:
             plot_cost_function(current_state, paths, course_spline, obs_list)

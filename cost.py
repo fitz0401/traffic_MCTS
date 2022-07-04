@@ -13,9 +13,10 @@ import math
 def smoothness(path, ref_line, weight_config):
     cost_yaw_diff = 0
     cost_cur = 0
-    for i in range(len(path.x)):
-        cost_yaw_diff += (path.yaw[i] - ref_line.calc_yaw(path.s[i])) ** 2
-        cost_cur += path.cur[i] ** 2
+    for i in range(len(path.states)):
+        # print(path.states[i].s)
+        cost_yaw_diff += (path.states[i].yaw - ref_line.calc_yaw(path.states[i].s)) ** 2
+        cost_cur += path.states[i].cur ** 2
 
     # print ("yaw cost:" , cost_yaw_diff, " cur ",cost_cur)
     return weight_config["W_YAW"] * cost_yaw_diff + weight_config["W_CUR"] * cost_cur
@@ -23,13 +24,13 @@ def smoothness(path, ref_line, weight_config):
 
 def vel_diff(path, ref_vel_list, weight_config):
     cost_vel_diff = 0
-    for i in range(len(path.x)):
-        cost_vel_diff += (path.vel[i] - ref_vel_list[i]) ** 2
+    for i in range(len(path.states)):
+        cost_vel_diff += (path.states[i].vel - ref_vel_list[i]) ** 2
     return weight_config["W_VEL_DIFF"] * cost_vel_diff
 
 
 def time(path, weight_config):
-    return weight_config["W_T"] * path.t[-1]
+    return weight_config["W_T"] * path.states[-1].t
 
 
 def obs(path, obs_list, weight_config):
@@ -46,9 +47,10 @@ def obs(path, obs_list, weight_config):
     cost_obs = 0
     for obs in obs_list:
         obs_radius = obs["radius"]
-        for i in range(len(path.x)):
+        for i in range(len(path.states)):
             delta = math.hypot(
-                path.x[i] - obs["path"][i]["x"], path.y[i] - obs["path"][i]["y"]
+                path.states[i].x - obs["path"][i]["x"],
+                path.states[i].y - obs["path"][i]["y"],
             )
             if delta - CAR_RADIUS > CAR_NUDGE:
                 cost_obs += 0
@@ -66,8 +68,8 @@ def obs(path, obs_list, weight_config):
 
 def guidance(path, weight_config):
     cost_guidance = 0
-    for i in range(len(path.d)):
-        cost_guidance += path.d[i] ** 2
+    for i in range(len(path.states)):
+        cost_guidance += path.states[i].d ** 2
     return weight_config["W_GUIDE"] * cost_guidance
 
 
@@ -77,15 +79,15 @@ def ref_waypoints_guidance(path, waypoints, weight_config):
 
 def acc(path, weight_config):
     cost_acc = 0
-    for i in range(len(path.acc)):
-        cost_acc += path.acc[i] ** 2
+    for i in range(len(path.states)):
+        cost_acc += path.states[i].acc ** 2
     return weight_config["W_ACC"] * cost_acc
 
 
 def jerk(path, weight_config):
     cost_jerk = 0
-    for i in range(len(path.acc)):
-        cost_jerk += path.s_ddd[i] ** 2 + path.d_ddd[i] ** 2
+    for i in range(len(path.states)):
+        cost_jerk += path.states[i].s_ddd ** 2 + path.states[i].d_ddd ** 2
     return weight_config["W_JERK"] * cost_jerk
 
 

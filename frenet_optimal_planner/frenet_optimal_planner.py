@@ -23,7 +23,7 @@ import yaml
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../")
 try:
-    from path_utils import FrenetPath
+    from path_utils import Trajectory, State
     from splines.polynomial_curve import QuarticPolynomial, QuinticPolynomial
     from splines.cubic_spline import Spline2D
 except ImportError:
@@ -68,26 +68,30 @@ def calc_frenet_paths(
 
         # Lateral motion planning
         for Ti in sample_t:
-            fp = FrenetPath()
-
-            # lat_qp = quintic_polynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
+            fp = Trajectory()
             lat_qp = QuinticPolynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
             fp.lat_qp = lat_qp
-            fp.t = [t for t in np.arange(0.0, Ti * 1.01, DT)]
-            fp.d = [lat_qp.calc_point(t) for t in fp.t]
-            fp.d_d = [lat_qp.calc_first_derivative(t) for t in fp.t]
-            fp.d_dd = [lat_qp.calc_second_derivative(t) for t in fp.t]
-            fp.d_ddd = [lat_qp.calc_third_derivative(t) for t in fp.t]
+            for t in np.arange(0.0, Ti * 1.01, DT):
+                fp.states.append(
+                    State(
+                        t=t,
+                        d=lat_qp.calc_point(t),
+                        d_d=lat_qp.calc_first_derivative(t),
+                        d_dd=lat_qp.calc_second_derivative(t),
+                        d_ddd=lat_qp.calc_third_derivative(t),
+                    )
+                )
 
             # Longitudinal motion planning (Velocity keeping)
             for tv in sample_v:
                 tfp = copy.deepcopy(fp)
                 lon_qp = QuarticPolynomial(s0, c_speed, 0.0, tv, 0.0, Ti)
                 tfp.lon_qp = lon_qp
-                tfp.s = [lon_qp.calc_point(t) for t in fp.t]
-                tfp.s_d = [lon_qp.calc_first_derivative(t) for t in fp.t]
-                tfp.s_dd = [lon_qp.calc_second_derivative(t) for t in fp.t]
-                tfp.s_ddd = [lon_qp.calc_third_derivative(t) for t in fp.t]
+                for i in range(len(tfp.states)):
+                    tfp.states[i].s = lon_qp.calc_point(tfp.states[i].t)
+                    tfp.states[i].s_d = lon_qp.calc_first_derivative(tfp.states[i].t)
+                    tfp.states[i].s_dd = lon_qp.calc_second_derivative(tfp.states[i].t)
+                    tfp.states[i].s_ddd = lon_qp.calc_third_derivative(tfp.states[i].t)
 
                 frenet_paths.append(tfp)
 
@@ -113,10 +117,11 @@ def calc_global_paths(fplist, csp):
 
 def check_collision(fp, ob):
     for i in range(len(ob[:, 0])):
-        d = [
-            ((ix - ob[i, 0]) ** 2 + (iy - ob[i, 1]) ** 2)
-            for (ix, iy) in zip(fp.x, fp.y)
-        ]
+        d = []
+        for fpi in range(len(fp.states)):
+            d.append(
+                (fp.states[fpi].x - ob[i, 0]) ** 2 + (fp.states[fpi].y - ob[i, 1]) ** 2
+            )
 
         collision = any([di <= CAR_RADIUS ** 2 for di in d])
 
@@ -129,7 +134,7 @@ def check_collision(fp, ob):
 def cal_cost(fplist, ob, course_spline):
     for path in fplist:
         path.cost = 0
-        ref_vel_list = [20.0 / 3.6] * len(path.s_d)
+        ref_vel_list = [20.0 / 3.6] * len(path.states)
         # print("smooth cost", cost.smoothness(path, course_spline) * DT)
         # print("vel_diff cost", cost.vel_diff(path, ref_vel_list) * DT)
         # print("guidance cost", cost.guidance(path) * DT)
@@ -147,15 +152,18 @@ def cal_cost(fplist, ob, course_spline):
 
 
 def check_path(path, ob):
-    if any([v > MAX_SPEED for v in path.s_d]):  # Max speed check
+    for state in path.states:
+        if state.vel > MAX_SPEED:  # Max speed check
+            return False
+        elif abs(state.acc) > MAX_ACCEL:  # Max accel check
+            return False
+        elif abs(state.cur) > MAX_CURVATURE:  # Max curvature check
+            return False
+
+    if not check_collision(path, ob):
         return False
-    elif any([abs(a) > MAX_ACCEL for a in path.s_dd]):  # Max accel check
-        return False
-    elif any([abs(c) > MAX_CURVATURE for c in path.cur]):  # Max curvature check
-        return False
-    elif not check_collision(path, ob):
-        return False
-    return True
+    else:
+        return True
 
 
 def frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob):
@@ -185,7 +193,7 @@ def main():
     load_config(config_file_path)
     # way points
     wx = [0.0, 10.0, 20.5, 35.0, 70.5]
-    wy = [0.0, -6.0, 5.0, 6.5, 0.0]
+    wy = [0.0, -4.0, 5.0, 6.5, 0.0]
     # obstacle lists
     # ob = np.array([[0, 0]])
     ob = np.array([[20.0, 10.0], [30.0, 6.0], [30.0, 8.0], [35.0, 8.0], [50.0, 3.0]])
@@ -209,15 +217,9 @@ def main():
     s = np.arange(0, csp.s[-1], 0.1)
     left_bound, right_bound = [], []
     for si in s:
-        rx, ry = csp.calc_position(si)
-        ryaw = csp.calc_yaw(si)
-        xi, yi = csp.frenet_to_cartesian1D(
-            rx, ry, ryaw, si, -MAX_ROAD_WIDTH / 2
-        )  # left
+        xi, yi = csp.frenet_to_cartesian1D(si, -MAX_ROAD_WIDTH / 2)  # left
         left_bound.append([xi, yi])
-        xi, yi = csp.frenet_to_cartesian1D(
-            rx, ry, ryaw, si, MAX_ROAD_WIDTH / 2
-        )  # right
+        xi, yi = csp.frenet_to_cartesian1D(si, MAX_ROAD_WIDTH / 2)  # right
         right_bound.append([xi, yi])
     left_bound = np.array(left_bound)
     right_bound = np.array(right_bound)
@@ -225,20 +227,24 @@ def main():
     # initial state
     c_speed = 10.0 / 3.6  # current speed [m/s]
     c_d = 2.0  # current lateral position [m]
-    c_d_d = 0.0  # current lateral speed [m/s]
-    c_d_dd = 0.0  # current lateral acceleration [m/s]
     s0 = 0.0  # current course position
 
+    current_state = State(s=s0, s_d=c_speed, d=c_d)
+
     for i in range(SIM_LOOP):
-        path = frenet_optimal_planning(csp, s0, c_speed, c_d, c_d_d, c_d_dd, ob)
+        path = frenet_optimal_planning(
+            csp,
+            current_state.s,
+            current_state.s_d,
+            current_state.d,
+            current_state.d_d,
+            current_state.d_dd,
+            ob,
+        )
 
-        s0 = path.s[1]
-        c_d = path.d[1]
-        c_d_d = path.d_d[1]
-        c_d_dd = path.d_dd[1]
-        c_speed = path.s_d[1]
+        current_state = path.states[1]
 
-        if np.hypot(path.x[1] - tx[-1], path.y[1] - ty[-1]) <= 1.0:
+        if np.hypot(path.states[1].x - tx[-1], path.states[1].y - ty[-1]) <= 1.0:
             print("Goal")
             break
 
@@ -253,14 +259,17 @@ def main():
             plt.plot(left_bound[:, 0], left_bound[:, 1], "g")
             plt.plot(right_bound[:, 0], right_bound[:, 1], "g")
             plt.plot(ob[:, 0], ob[:, 1], "xk")
-            plt.plot(path.x[1:], path.y[1:], "-or")
-            plt.plot(path.x[1], path.y[1], "vc")
-            # plt.xlim(path.x[1] - area, path.x[1] + area)
-            # plt.ylim(path.y[1] - area, path.y[1] + area)
+            pathx = [state.x for state in path.states[1:]]
+            pathy = [state.y for state in path.states[1:]]
+            plt.plot(pathx, pathy, "-or")
+            plt.plot(path.states[1].x, path.states[1].y, "vc")
+            # area = 5
+            # plt.xlim(path.states[1].x - area, path.states[1].x + area)
+            # plt.ylim(path.states[1].y - area, path.states[1].y + area)
             plt.title("v[km/h]:" + str(c_speed * 3.6)[0:4])
             plt.axis("equal")
             plt.grid(True)
-            plt.pause(0.01)
+            plt.pause(0.001)
 
     print("Finish")
     if ANIMATION:  # pragma: no cover

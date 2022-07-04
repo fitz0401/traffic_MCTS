@@ -27,7 +27,7 @@ except ImportError:
     raise
 
 
-table_path = os.path.dirname(os.path.abspath(__file__)) + "/data/lookuptable_325.csv"
+table_path = os.path.dirname(os.path.abspath(__file__)) + "/data/lookuptable.csv"
 
 show_animation = True
 
@@ -43,9 +43,9 @@ def search_nearest_one_from_lookuptable(yaw0, xf, yf, yawf, lookuptable):
         dyawf = yawf - table[3]
         # d = math.sqrt(dyaw0 ** 2 + dxf ** 2 + dyf ** 2 + dyawf ** 2)
         d = (
-            math.sqrt(dyaw0**2)
-            + math.sqrt(dxf**2 + dyf**2)
-            + math.sqrt(dyawf**2)
+            math.sqrt(dyaw0 ** 2)
+            + math.sqrt(dxf ** 2 + dyf ** 2)
+            + math.sqrt(dyawf ** 2)
         )
         if d <= mind:
             minid = i
@@ -60,11 +60,10 @@ def get_lookup_table():
     return np.array(data)
 
 
-def generate_path(target_states, k0):
+def generate_path(yaw0, target_states, k0):
     # x, y, yaw, s, km, kf
     lookup_table = get_lookup_table()
     result = []
-    yaw0 = 0.0
     planning_time = []
 
     for state in target_states:
@@ -90,9 +89,9 @@ def generate_path(target_states, k0):
 
     print(
         "finish path generation, planning",
-        len(planning_time),
+        len(result),
         "paths with an average runtime",
-        sum(planning_time) / len(planning_time),
+        sum(planning_time) / len(result),
         "seconds.",
         planning_time,
     )
@@ -141,7 +140,7 @@ def speed_allocation(v0, vf, s, T, n):
 
 
 def lane_state_sampling_test():
-    k0 = 0.0
+    k0 = -0.2
 
     l_center = 5.0
     l_heading = np.deg2rad(0.0)
@@ -149,8 +148,9 @@ def lane_state_sampling_test():
     v_width = 1.0
     d = 10
     nxy = 8
+    yaw0 = np.deg2rad(0.0)
     states = calc_lane_states(l_center, l_heading, l_width, v_width, d, nxy)
-    result = generate_path(states, k0)
+    result = generate_path(yaw0, states, k0)
 
     if show_animation:
         plt.close("all")
@@ -167,7 +167,7 @@ def lane_state_sampling_test():
         for Ti in T:
             vc = speed_allocation(v0, vf, table[4], Ti, len(xc))
             print([vc[i] * 3.6 for i in range(0, len(vc), 5)])
-        break
+        # break
 
         if show_animation:
             plt.plot(xc, yc, "-b", linewidth=1)

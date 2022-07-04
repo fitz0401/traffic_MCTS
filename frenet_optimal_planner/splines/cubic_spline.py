@@ -217,7 +217,9 @@ class Spline2D:
         yaw = math.atan2(dy, dx)
         return yaw
 
-    def frenet_to_cartesian1D(self, rx, ry, ryaw, s, d):
+    def frenet_to_cartesian1D(self, s, d):
+        rx, ry = self.calc_position(s)
+        ryaw = self.calc_yaw(s)
         cos_theta_r = math.cos(ryaw)
         sin_theta_r = math.sin(ryaw)
         x = rx - sin_theta_r * d
