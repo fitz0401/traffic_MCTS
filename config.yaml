@@ -11,6 +11,7 @@ MAX_SPEED: 50.0 # maximum speed [km/h]
 MAX_ACCEL: 3.0 # maximum acceleration [m/s^2]
 MAX_CURVATURE: 1.0 # maximum curvature [1/m]
 
+# 可以参数辨识
 weights:
   W_YAW: 1.0 # smoothness cost yaw difference
   W_CUR: 1.0 # curvature cost
@@ -24,7 +25,7 @@ weights:
 
 vehicle:
   truck:
-    length: 1 # 车长
+    length: 2 # 车长
     width: 1 #车宽
     L: 1 # wheel base 轴距
     R: 1.5 # minimum turning radius 最小转弯半径

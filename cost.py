@@ -33,16 +33,16 @@ def time(path, weight_config):
     return weight_config["W_T"] * path.states[-1].t
 
 
-def obs(path, obs_list, weight_config):
+def obs(path, obs_list, weight_config, vehicle_config):
     # obs_list should be a list of Obstacle objects in frenet coordinates
     """
     ATTENSION:The simple circular enclosing box is used here in the Cartesian coordinate system; if more refinement is needed, the rectangular enclosing box is used in the Frenet coordinate system
     """
     # buffer
-    CAR_WIDTH = 1.0
-    CAR_LENGTH = 1.0
+    CAR_WIDTH = vehicle_config["width"]
+    CAR_LENGTH = vehicle_config["length"]
     CAR_RADIUS = math.hypot(CAR_WIDTH / 2, CAR_LENGTH / 2)
-    CAR_NUDGE = CAR_RADIUS * 2
+    CAR_NUDGE = CAR_RADIUS * 3
 
     cost_obs = 0
     for obs in obs_list:

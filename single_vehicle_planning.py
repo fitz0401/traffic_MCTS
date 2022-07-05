@@ -5,15 +5,17 @@ Description:
 
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
+import math
 import time
+import numpy as np
+import matplotlib.pyplot as plt
+import yaml
+
 from state_lattice_planner import state_lattice_planner
 from frenet_optimal_planner import frenet_optimal_planner
 from path_utils import Trajectory, State
 import cost
-import numpy as np
 from frenet_optimal_planner.splines.cubic_spline import Spline2D
-import matplotlib.pyplot as plt
-import yaml
 
 config_file_path = "config.yaml"
 
@@ -23,7 +25,7 @@ def load_config(config_file_path):
         global config
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    global SIM_LOOP, MAX_ROAD_WIDTH, D_ROAD_W, MAX_T, MIN_T, DT, D_T_S, N_S_SAMPLE, MAX_SPEED, MAX_ACCEL, MAX_CURVATURE, W_COLLISION
+    global SIM_LOOP, MAX_ROAD_WIDTH, D_ROAD_W, MAX_T, MIN_T, DT, D_T_S, N_S_SAMPLE, MAX_SPEED, MAX_ACCEL, MAX_CURVATURE, W_COLLISION, ANIMATION, CAR_WIDTH, CAR_LENGTH
     SIM_LOOP = config["SIM_LOOP"]
     MAX_ROAD_WIDTH = config["MAX_ROAD_WIDTH"]  # maximum road width [m]
     D_ROAD_W = config["D_ROAD_W"]  # road width sampling length [m]
@@ -36,6 +38,9 @@ def load_config(config_file_path):
     MAX_ACCEL = config["MAX_ACCEL"]  # maximum acceleration [m/s^2]
     MAX_CURVATURE = config["MAX_CURVATURE"]  # maximum curvature [1/m]
     W_COLLISION = config["weights"]["W_COLLISION"]  # SYNC: collision cost
+    CAR_WIDTH = config["vehicle"]["truck"]["width"]
+    CAR_LENGTH = config["vehicle"]["truck"]["length"]
+    ANIMATION = config["ANIMATION"]
 
 
 def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=None):
@@ -140,16 +145,28 @@ def check_path(path):
 
 
 def main():
+    plt.ion()
+    fig, ax = plt.subplots()
+    # for stopping simulation with the esc key.
+    plt.gcf().canvas.mpl_connect(
+        "key_release_event", lambda event: [exit(0) if event.key == "escape" else None],
+    )
     load_config(config_file_path)
     """
     Step 1. Build Frenet cord
     """
     # way points
-    wx = [0.0, 10.0, 20.5, 35.0, 70.5]
-    wy = [0.0, -6.0, 5.0, 6.5, 0.0]
-    # wy = [0.0, 0.0, 0.0, 0.0, 0.0]
+    wx = [-5, 10.0, 20.5, 35.0, 70.5, 90]
+    wy = [0.0, -3.0, 5.0, 6.5, 0.0, 5]
     # target course
     course_spline = Spline2D(wx, wy)
+    # generate target and left right boundaries
+    s = np.arange(0, course_spline.s[-1], 0.2)
+    center_line, left_bound, right_bound = [], [], []
+    for si in s:
+        center_line.append(course_spline.calc_position(si))
+        left_bound.append(course_spline.frenet_to_cartesian1D(si, -MAX_ROAD_WIDTH / 2))
+        right_bound.append(course_spline.frenet_to_cartesian1D(si, MAX_ROAD_WIDTH / 2))
 
     # initial state
     s0 = 0.0  # initial longtitude position [m]
@@ -179,10 +196,18 @@ def main():
         )  # sample target lateral offset
         sample_t = [5.0]  # Sample course time
         sample_s_d = np.arange(
-            target_s_d - D_T_S * N_S_SAMPLE, target_s_d + D_T_S * N_S_SAMPLE, D_T_S,
+            target_s_d - D_T_S * N_S_SAMPLE,
+            target_s_d + D_T_S * N_S_SAMPLE * 1.01,
+            D_T_S,
         )  # sample target longtitude vel(Velocity keeping)
+        print("sample_s_d:", sample_s_d * 3.6)
         # static obstacle lists
         obs_list = []
+        test_obs = {
+            "radius": 1,
+            "path": [{"x": 36, "y": 5.5} for i in range(100)],
+        }
+        obs_list = [test_obs]
 
         """
         Step 3: Generate trajectories
@@ -225,11 +250,6 @@ def main():
         start = time.process_time()
         for path in paths:
             ref_vel_list = [target_s_d] * len(path.states)
-            # test_obs = {
-            #     "radius": 0.5,
-            #     "path": [{"x": 19, "y": 4} for i in range(len(path.x))],
-            # }
-            # obs_list = [test_obs]
 
             # print(
             #     "smooth cost",
@@ -251,7 +271,9 @@ def main():
                 + cost.guidance(path, config["weights"]) * DT
                 + cost.acc(path, config["weights"]) * DT
                 + cost.jerk(path, config["weights"]) * DT
-                + cost.obs(path, obs_list, config["weights"])
+                + cost.obs(
+                    path, obs_list, config["weights"], config["vehicle"]["truck"]
+                )
             )
 
         paths.sort(key=lambda x: x.cost)
@@ -274,8 +296,69 @@ def main():
             if check_path(path):
                 bestpath = path
                 print("find a valid path with minimum cost")
-                current_state = bestpath.states[1]
+                bestpath.states[2].t += current_state.t
+                current_state = bestpath.states[2]
                 break
+
+        if bestpath is not None and ANIMATION:
+            plt.cla()
+            # plot a rectangle centered at current state
+
+            ax.add_patch(
+                plt.Rectangle(
+                    (
+                        current_state.x
+                        - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
+                        * math.sin(
+                            math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
+                            - current_state.yaw
+                        ),
+                        current_state.y
+                        - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
+                        * math.cos(
+                            math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
+                            - current_state.yaw
+                        ),
+                    ),
+                    CAR_LENGTH,
+                    CAR_WIDTH,
+                    angle=current_state.yaw / math.pi * 180,
+                    facecolor="blue",
+                    fill=True,
+                )
+            )
+
+            for obs in obs_list:
+                ax.add_patch(
+                    plt.Circle(
+                        (obs["path"][0]["x"], obs["path"][0]["y"]),
+                        obs["radius"],
+                        color="black",
+                        zorder=3,
+                    )
+                )
+
+            plt.plot(*zip(*center_line), "g--", linewidth=1)
+            plt.plot(*zip(*left_bound), "k", linewidth=1)
+            plt.plot(*zip(*right_bound), "k", linewidth=1)
+            # plt.plot(ob[:, 0], ob[:, 1], "xk")
+            pathx = [state.x for state in bestpath.states[1::2]]
+            pathy = [state.y for state in bestpath.states[1::2]]
+            plt.plot(pathx, pathy, "-or", markersize=2)
+            plt.axis("equal")
+            area = 8
+            plt.xlim(path.states[1].x - area, path.states[1].x + area * 2)
+            plt.ylim(path.states[1].y - area, path.states[1].y + area * 2)
+
+            plt.title(
+                "Time:"
+                + str(current_state.t)[0:4]
+                + "s v[km/h]:"
+                + str(current_state.vel * 3.6)[0:4],
+            )
+            plt.grid(True)
+            # plt.pause(100)
+            plt.pause(0.001)
 
         """
         Step 5.5: if no path is found, Calculate a stop path
@@ -310,12 +393,17 @@ def main():
             current_state = stop_path.state[1]
             print("Total time: ", t, "Stoping distance ", s - stop_path.states[0].s)
 
-        if stop_path == None:
-            plot_cost_function(current_state, paths, course_spline, obs_list)
-        else:
-            plot_cost_function(current_state, paths, course_spline, obs_list, stop_path)
+        # if stop_path == None:
+        #     plot_cost_function(current_state, paths, course_spline, obs_list)
+        # else:
+        #     plot_cost_function(current_state, paths, course_spline, obs_list, stop_path)
 
-        break  # FIXME: for test
+        """
+        Step 6:  Test Goal
+        """
+        if np.hypot(current_state.x - wx[-1], current_state.y - wy[-1]) <= 1.0:
+            print("Goal")
+            break
 
     print("Done!")
 

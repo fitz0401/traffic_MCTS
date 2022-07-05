@@ -65,7 +65,6 @@ def calc_frenet_paths(
     start = time.process_time()
     # generate path to each offset goal
     for di in sample_d:
-
         # Lateral motion planning
         for Ti in sample_t:
             fp = Trajectory()
@@ -263,11 +262,11 @@ def main():
             pathy = [state.y for state in path.states[1:]]
             plt.plot(pathx, pathy, "-or")
             plt.plot(path.states[1].x, path.states[1].y, "vc")
-            # area = 5
-            # plt.xlim(path.states[1].x - area, path.states[1].x + area)
-            # plt.ylim(path.states[1].y - area, path.states[1].y + area)
+            area = 8
+            plt.xlim(path.states[1].x - area, path.states[1].x + area * 3)
+            plt.ylim(path.states[1].y - area, path.states[1].y + area * 3)
             plt.title("v[km/h]:" + str(c_speed * 3.6)[0:4])
-            plt.axis("equal")
+            # plt.axis("equal")
             plt.grid(True)
             plt.pause(0.001)
 
