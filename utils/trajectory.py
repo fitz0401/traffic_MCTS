@@ -2,12 +2,13 @@
 Author: Licheng Wen
 Date: 2022-06-16 12:18:42
 Description: 
+Trajectory base class 
+containing transformation between Frenet and Cartesian coordinate system
 
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
 
 from math import *
-from os import access
 import numpy as np
 
 

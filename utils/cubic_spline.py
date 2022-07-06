@@ -1,8 +1,9 @@
 """
 Author: Atsushi Sakai(@Atsushi_twi)
+Modified by Licheng Wen
 Date: 2022-06-14 11:52:30
 Description: 
-Cubic spline class
+Cubic spline class for building Frenet coordinate system
 
 """
 import math

@@ -2,9 +2,12 @@
 Author: Licheng Wen
 Date: 2022-06-15 10:19:19
 Description: 
+Planner for a single vehicle
 
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
+
+from copy import deepcopy
 import math
 import time
 import numpy as np
@@ -13,9 +16,9 @@ import yaml
 
 from state_lattice_planner import state_lattice_planner
 from frenet_optimal_planner import frenet_optimal_planner
-from path_utils import Trajectory, State
-import cost
-from frenet_optimal_planner.splines.cubic_spline import Spline2D
+from utils.cubic_spline import Spline2D
+from utils.trajectory import Trajectory, State
+import utils.cost as cost
 
 config_file_path = "config.yaml"
 
@@ -146,7 +149,15 @@ def check_path(path):
 
 def main():
     plt.ion()
-    fig, ax = plt.subplots()
+    fig = plt.figure(figsize=(12, 6), constrained_layout=True)
+    axs = fig.subplot_mosaic(
+        [["Left", "TopRight"], ["Left", "BottomRight"]],
+        gridspec_kw={"width_ratios": [3, 1]},
+    )
+    main_fig = axs["Left"]
+    vel_fig = axs["TopRight"]
+    acc_fig = axs["BottomRight"]
+
     # for stopping simulation with the esc key.
     plt.gcf().canvas.mpl_connect(
         "key_release_event", lambda event: [exit(0) if event.key == "escape" else None],
@@ -170,7 +181,7 @@ def main():
 
     # initial state
     s0 = 0.0  # initial longtitude position [m]
-    s0_d = 10.0 / 3.6  # initial longtitude speed [m/s]
+    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 1.0  # initial lateral position [m]
     d0_d = 0.0  # initial lateral speed [m/s]
     x0, y0 = course_spline.frenet_to_cartesian1D(s0, d0)
@@ -296,15 +307,17 @@ def main():
             if check_path(path):
                 bestpath = path
                 print("find a valid path with minimum cost")
-                bestpath.states[2].t += current_state.t
-                current_state = bestpath.states[2]
+                current_time = current_state.t
+                current_state = deepcopy(bestpath.states[2])
+                current_state.t += current_time
                 break
 
         if bestpath is not None and ANIMATION:
-            plt.cla()
-            # plot a rectangle centered at current state
+            main_fig.cla()
+            vel_fig.cla()
+            acc_fig.cla()
 
-            ax.add_patch(
+            main_fig.add_patch(
                 plt.Rectangle(
                     (
                         current_state.x
@@ -329,7 +342,7 @@ def main():
             )
 
             for obs in obs_list:
-                ax.add_patch(
+                main_fig.add_patch(
                     plt.Circle(
                         (obs["path"][0]["x"], obs["path"][0]["y"]),
                         obs["radius"],
@@ -338,27 +351,37 @@ def main():
                     )
                 )
 
-            plt.plot(*zip(*center_line), "g--", linewidth=1)
-            plt.plot(*zip(*left_bound), "k", linewidth=1)
-            plt.plot(*zip(*right_bound), "k", linewidth=1)
-            # plt.plot(ob[:, 0], ob[:, 1], "xk")
+            area = 6
+            main_fig.axis("equal")
+            main_fig.axis(
+                xmin=path.states[1].x - area / 2,
+                xmax=path.states[1].x + area * 2,
+                ymin=path.states[1].y - area * 2,
+                ymax=path.states[1].y + area * 2,
+            )
+            main_fig.plot(*zip(*center_line), "g--", linewidth=1)
+            main_fig.plot(*zip(*left_bound), "k", linewidth=1)
+            main_fig.plot(*zip(*right_bound), "k", linewidth=1)
             pathx = [state.x for state in bestpath.states[1::2]]
             pathy = [state.y for state in bestpath.states[1::2]]
-            plt.plot(pathx, pathy, "-or", markersize=2)
-            plt.axis("equal")
-            area = 8
-            plt.xlim(path.states[1].x - area, path.states[1].x + area * 2)
-            plt.ylim(path.states[1].y - area, path.states[1].y + area * 2)
+            main_fig.plot(pathx, pathy, "-or", markersize=2)
+            main_fig.set_title("Time:" + str(current_state.t)[0:4] + "s")
+            main_fig.set_facecolor("lightgray")
+            main_fig.grid(True)
 
-            plt.title(
-                "Time:"
-                + str(current_state.t)[0:4]
-                + "s v[km/h]:"
-                + str(current_state.vel * 3.6)[0:4],
-            )
-            plt.grid(True)
+            t_best = [state.t + current_state.t for state in bestpath.states[1:]]
+            vel_best = [state.vel * 3.6 for state in bestpath.states[1:]]
+            vel_fig.plot(t_best, vel_best, lw=1)
+            vel_fig.set_title("Velocity [km/h]:" + str(current_state.vel * 3.6)[0:4])
+            vel_fig.grid(True)
+
+            acc_best = [state.acc for state in bestpath.states[1:]]
+            acc_fig.plot(t_best, acc_best, lw=1)
+            acc_fig.set_title("Acceleration [m/s2]:" + str(current_state.acc)[0:4])
+            acc_fig.grid(True)
             # plt.pause(100)
-            plt.pause(0.001)
+            plt.pause(0.1)
+            plt.show()
 
         """
         Step 5.5: if no path is found, Calculate a stop path

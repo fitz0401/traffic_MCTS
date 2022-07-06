@@ -16,16 +16,16 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
-import cost
 import time
 import os, sys
 import yaml
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../")
 try:
-    from path_utils import Trajectory, State
+    import utils.cost as cost
+    from utils.trajectory import Trajectory, State
+    from utils.cubic_spline import Spline2D
     from splines.polynomial_curve import QuarticPolynomial, QuinticPolynomial
-    from splines.cubic_spline import Spline2D
 except ImportError:
     raise
 

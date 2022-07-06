@@ -18,7 +18,7 @@ weights:
   W_VEL_DIFF: 1.0e-1 # velocity diff cost
   W_T: 1.0 # time cost
   W_OBS: 1.0 # obstacle cost
-  W_GUIDE: 1.0 # guidance cost
+  W_GUIDE: 5.0 # guidance cost
   W_ACC: 1.0 # acceleration cost
   W_JERK: 1.0 # jerk cost
   W_COLLISION: 4.0 # collision cost
