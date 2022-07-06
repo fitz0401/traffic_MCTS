@@ -44,7 +44,7 @@ class State:
         self.s = s
         self.s_d = s_d
         self.s_dd = s_dd
-        self.d_dd = s_ddd
+        self.s_ddd = s_ddd
         self.d = d
         self.d_d = d_d
         self.d_dd = d_dd

@@ -42,7 +42,7 @@ def obs(path, obs_list, weight_config, vehicle_config):
     CAR_WIDTH = vehicle_config["width"]
     CAR_LENGTH = vehicle_config["length"]
     CAR_RADIUS = math.hypot(CAR_WIDTH / 2, CAR_LENGTH / 2)
-    CAR_NUDGE = CAR_RADIUS * 3
+    CAR_NUDGE = CAR_RADIUS * 2
 
     cost_obs = 0
     for obs in obs_list:
@@ -89,6 +89,10 @@ def jerk(path, weight_config):
     for i in range(len(path.states)):
         cost_jerk += path.states[i].s_ddd ** 2 + path.states[i].d_ddd ** 2
     return weight_config["W_JERK"] * cost_jerk
+
+
+def stop(weight_config):
+    return weight_config["W_STOP"]
 
 
 def main():

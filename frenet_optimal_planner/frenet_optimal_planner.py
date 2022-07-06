@@ -57,9 +57,7 @@ def load_config(config_file_path):
     CAR_RADIUS = 2.0  # math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
 
 
-def calc_frenet_paths(
-    s0, c_speed, c_d, c_d_d, c_d_dd, sample_d, sample_t, sample_v, DT
-):
+def calc_frenet_paths(current_state, sample_d, sample_t, sample_v, dt, config):
     frenet_paths = []
 
     start = time.process_time()
@@ -68,9 +66,11 @@ def calc_frenet_paths(
         # Lateral motion planning
         for Ti in sample_t:
             fp = Trajectory()
-            lat_qp = QuinticPolynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
+            lat_qp = QuinticPolynomial(
+                current_state.d, current_state.d_d, current_state.d_dd, di, 0.0, 0.0, Ti
+            )
             fp.lat_qp = lat_qp
-            for t in np.arange(0.0, Ti * 1.01, DT):
+            for t in np.arange(0.0, Ti * 1.01, dt):
                 fp.states.append(
                     State(
                         t=t,
@@ -84,7 +84,9 @@ def calc_frenet_paths(
             # Longitudinal motion planning (Velocity keeping)
             for tv in sample_v:
                 tfp = copy.deepcopy(fp)
-                lon_qp = QuarticPolynomial(s0, c_speed, 0.0, tv, 0.0, Ti)
+                lon_qp = QuarticPolynomial(
+                    current_state.s, current_state.s_d, current_state.s_dd, tv, 0.0, Ti
+                )
                 tfp.lon_qp = lon_qp
                 for i in range(len(tfp.states)):
                     tfp.states[i].s = lon_qp.calc_point(tfp.states[i].t)
@@ -95,14 +97,15 @@ def calc_frenet_paths(
                 frenet_paths.append(tfp)
 
     end = time.process_time()
-    print(
-        "finish path generation, planning",
-        len(frenet_paths),
-        "paths with an average runtime",
-        (end - start) / len(frenet_paths),
-        "seconds.",
-        float(end - start),
-    )
+    if config["VERBOSE"]:
+        print(
+            "finish path generation, planning",
+            len(frenet_paths),
+            "paths with an average runtime",
+            (end - start) / len(frenet_paths),
+            "seconds.",
+            float(end - start),
+        )
 
     return frenet_paths
 
