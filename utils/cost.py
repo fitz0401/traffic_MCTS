@@ -42,7 +42,7 @@ def obs(path, obs_list, weight_config, vehicle_config):
     CAR_WIDTH = vehicle_config["width"]
     CAR_LENGTH = vehicle_config["length"]
     CAR_RADIUS = math.hypot(CAR_WIDTH / 2, CAR_LENGTH / 2)
-    CAR_NUDGE = CAR_RADIUS * 2
+    CAR_NUDGE = CAR_RADIUS * 3
 
     cost_obs = 0
     for obs in obs_list:

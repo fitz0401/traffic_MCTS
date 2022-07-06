@@ -25,9 +25,9 @@ def load_config(config_file_path):
         global config
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    global SIM_LOOP, MAX_ROAD_WIDTH, D_ROAD_W, MAX_T, MIN_T, DT, D_T_S, N_S_SAMPLE, MAX_SPEED, MAX_ACCEL, MAX_CURVATURE, ANIMATION, CAR_WIDTH, CAR_LENGTH
+    global SIM_LOOP, ROAD_WIDTH, D_ROAD_W, MAX_T, MIN_T, DT, D_T_S, N_S_SAMPLE, MAX_SPEED, MAX_ACCEL, MAX_CURVATURE, ANIMATION, CAR_WIDTH, CAR_LENGTH
     SIM_LOOP = config["SIM_LOOP"]
-    MAX_ROAD_WIDTH = config["MAX_ROAD_WIDTH"]  # maximum road width [m]
+    ROAD_WIDTH = config["MAX_ROAD_WIDTH"]  # maximum road width [m]
     D_ROAD_W = config["D_ROAD_W"]  # road width sampling length [m]
     MAX_T = config["MAX_T"]  # max prediction time [m]
     MIN_T = config["MIN_T"]  # min prediction time [m]
@@ -59,9 +59,7 @@ def plot_init():
     )
 
 
-def plot_trajectory(
-    current_state, obs_list, bestpath, center_line, left_bound, right_bound
-):
+def plot_trajectory(current_state, obs_list, bestpath, lanes):
     main_fig.cla()
     vel_fig.cla()
     acc_fig.cla()
@@ -117,9 +115,13 @@ def plot_trajectory(
         ymin=bestpath.states[1].y - area * 2,
         ymax=bestpath.states[1].y + area * 2,
     )
-    main_fig.plot(*zip(*center_line), "g--", linewidth=1)
-    main_fig.plot(*zip(*left_bound), "k", linewidth=1)
-    main_fig.plot(*zip(*right_bound), "k", linewidth=1)
+
+    main_fig.plot(*zip(*lanes[0]["right_bound"]), "k", linewidth=1.5)
+    for lane in lanes:
+        main_fig.plot(*zip(*lane["center_line"]), "w:", linewidth=1)
+        main_fig.plot(*zip(*lane["left_bound"]), "k--", linewidth=1)
+    main_fig.plot(*zip(*lanes[-1]["left_bound"]), "k", linewidth=1.5)
+
     pathx = [state.x for state in bestpath.states[1::2]]
     pathy = [state.y for state in bestpath.states[1::2]]
     main_fig.plot(pathx, pathy, "-or", markersize=2)
@@ -135,7 +137,7 @@ def plot_trajectory(
 
     acc_best = [state.acc for state in bestpath.states[1:]]
     acc_fig.plot(t_best, acc_best, lw=1)
-    acc_fig.set_title("Acceleration [m/s2]:" + str(current_state.acc)[0:4])
+    acc_fig.set_title("Acceleration [m/s2]:" + str(current_state.acc)[0:6])
     acc_fig.grid(True)
     # plt.pause(100)
     plt.pause(0.001)
@@ -151,19 +153,37 @@ def main():
     """
     Step 1. Build Frenet cord
     """
-    # way points
-    wx = [-5, 10.0, 20.5, 35.0, 70.5, 90]
+    # right boundary of the road
+    wx = [-10, 10.0, 20.5, 35.0, 70.5, 90]
     wy = [0.0, -3.0, 5.0, 6.5, 0.0, 5]
-    # wy = [0.0, 0.0, 0.0, 0.0, 0.0, 0]
+    # wy = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    road_right_spline = Spline2D(wx, wy)
+    s = np.arange(0, road_right_spline.s[-1], 0.2)
+    lane_number = 2
+    lanes = []
+    for lane_id in range(lane_number):
+        lanes.append({"center_line": [], "left_bound": [], "right_bound": []})
+        for si in s:
+            lanes[lane_id]["center_line"].append(
+                road_right_spline.frenet_to_cartesian1D(
+                    si, ROAD_WIDTH / 2 * (2 * lane_id + 1)
+                )
+            )
+            lanes[lane_id]["left_bound"].append(
+                road_right_spline.frenet_to_cartesian1D(si, ROAD_WIDTH * (lane_id + 1))
+            )
+            lanes[lane_id]["right_bound"].append(
+                road_right_spline.frenet_to_cartesian1D(si, ROAD_WIDTH * lane_id)
+            )
+        lanes[lane_id]["course_spline"] = Spline2D(
+            list(zip(*lanes[lane_id]["center_line"]))[0],
+            list(zip(*lanes[lane_id]["center_line"]))[1],
+        )
+
     # target course
-    course_spline = Spline2D(wx, wy)
+    course_spline = lanes[0]["course_spline"]
     # generate target and left right boundaries
     s = np.arange(0, course_spline.s[-1], 0.2)
-    center_line, left_bound, right_bound = [], [], []
-    for si in s:
-        center_line.append(course_spline.calc_position(si))
-        left_bound.append(course_spline.frenet_to_cartesian1D(si, -MAX_ROAD_WIDTH / 2))
-        right_bound.append(course_spline.frenet_to_cartesian1D(si, MAX_ROAD_WIDTH / 2))
 
     # initial state
     s0 = 0.0  # initial longtitude position [m]
@@ -191,8 +211,8 @@ def main():
         # static obstacle lists
         obs_list = []
         test_obs = {
-            "radius": 1,
-            "path": [{"x": 36, "y": 4.5} for i in range(100)],
+            "radius": 0.5,
+            "path": [{"x": 36, "y": 6.5} for i in range(100)],
         }
         obs_list = [test_obs]
 
@@ -205,14 +225,20 @@ def main():
         current_state.t += current_time
 
         if bestpath is not None and ANIMATION:
-            plot_trajectory(
-                current_state, obs_list, bestpath, center_line, left_bound, right_bound
-            )
+            plot_trajectory(current_state, obs_list, bestpath, lanes)
 
         """
         Test Goal
+        Todo: Goal should be more specific
         """
-        if np.hypot(current_state.x - wx[-1], current_state.y - wy[-1]) <= 1.0:
+        lane_id = 0
+        if (
+            np.hypot(
+                current_state.x - lanes[lane_id]["center_line"][-1][0],
+                current_state.y - lanes[lane_id]["center_line"][-1][1],
+            )
+            <= 1.0
+        ):
             print("Goal")
             break
 
