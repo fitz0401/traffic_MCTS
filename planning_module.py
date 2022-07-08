@@ -9,6 +9,8 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 
 from copy import deepcopy
 import math
+import multiprocessing
+import time
 from matplotlib import pyplot as plt
 import numpy as np
 import yaml
@@ -16,6 +18,7 @@ import yaml
 import single_vehicle_planning as single_vehicle_planner
 from utils.cubic_spline import Spline2D
 from utils.trajectory import State
+from utils.vehicle import Vehicle
 
 config_file_path = "config.yaml"
 
@@ -59,33 +62,37 @@ def plot_init():
     )
 
 
-def plot_trajectory(current_state, obs_list, bestpath, lanes):
+def plot_trajectory(vehicles, obs_list, bestpaths, lanes, T):
     main_fig.cla()
     vel_fig.cla()
     acc_fig.cla()
 
-    main_fig.add_patch(
-        plt.Rectangle(
-            (
-                current_state.x
-                - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
-                * math.sin(
-                    math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2) - current_state.yaw
+    for i, vehicle in enumerate(vehicles):
+        main_fig.add_patch(
+            plt.Rectangle(
+                (
+                    vehicle.current_state.x
+                    - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
+                    * math.sin(
+                        math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
+                        - vehicle.current_state.yaw
+                    ),
+                    vehicle.current_state.y
+                    - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
+                    * math.cos(
+                        math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
+                        - vehicle.current_state.yaw
+                    ),
                 ),
-                current_state.y
-                - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
-                * math.cos(
-                    math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2) - current_state.yaw
-                ),
-            ),
-            CAR_LENGTH,
-            CAR_WIDTH,
-            angle=current_state.yaw / math.pi * 180,
-            facecolor="blue",
-            fill=True,
-            zorder=2,
+                CAR_LENGTH,
+                CAR_WIDTH,
+                angle=vehicle.current_state.yaw / math.pi * 180,
+                facecolor=colors[vehicle.id],
+                fill=True,
+                alpha=0.7,
+                zorder=2,
+            )
         )
-    )
 
     for obs in obs_list:
         main_fig.add_patch(
@@ -107,41 +114,78 @@ def plot_trajectory(current_state, obs_list, bestpath, lanes):
             )
         )
 
-    area = 8
-    main_fig.axis("equal")
-    main_fig.axis(
-        xmin=bestpath.states[1].x - area / 2,
-        xmax=bestpath.states[1].x + area * 2,
-        ymin=bestpath.states[1].y - area * 2,
-        ymax=bestpath.states[1].y + area * 2,
-    )
-
     main_fig.plot(*zip(*lanes[0]["right_bound"]), "k", linewidth=1.5)
     for lane in lanes:
         main_fig.plot(*zip(*lane["center_line"]), "w:", linewidth=1)
         main_fig.plot(*zip(*lane["left_bound"]), "k--", linewidth=1)
     main_fig.plot(*zip(*lanes[-1]["left_bound"]), "k", linewidth=1.5)
 
-    pathx = [state.x for state in bestpath.states[1::2]]
-    pathy = [state.y for state in bestpath.states[1::2]]
-    main_fig.plot(pathx, pathy, "-or", markersize=2)
-    main_fig.set_title("Time:" + str(current_state.t)[0:4] + "s")
-    main_fig.set_facecolor("lightgray")
-    main_fig.grid(True)
+    for id, path in bestpaths.items():
+        pathx = [state.x for state in path.states[1::2]]
+        pathy = [state.y for state in path.states[1::2]]
+        main_fig.plot(pathx, pathy, "-o", markersize=2, linewidth=1.5, color=colors[id])
+        main_fig.set_title("Time:" + str(T)[0:4] + "s")
+        main_fig.set_facecolor("lightgray")
+        main_fig.grid(True)
 
-    t_best = [state.t + current_state.t for state in bestpath.states[1:]]
-    vel_best = [state.vel * 3.6 for state in bestpath.states[1:]]
-    vel_fig.plot(t_best, vel_best, lw=1)
-    vel_fig.set_title("Velocity [km/h]:" + str(current_state.vel * 3.6)[0:4])
-    vel_fig.grid(True)
+    focus_car_id = 0
+    if focus_car_id in bestpaths:
+        t_best = [state.t + T for state in bestpaths[focus_car_id].states[1:]]
+        vel_best = [state.vel * 3.6 for state in bestpaths[focus_car_id].states[1:]]
+        vel_fig.plot(t_best, vel_best, lw=1)
+        vel_fig.set_title(
+            "Velocity [km/h]:"
+            + str(vehicles[focus_car_id].current_state.vel * 3.6)[0:4]
+        )
+        vel_fig.grid(True)
 
-    acc_best = [state.acc for state in bestpath.states[1:]]
-    acc_fig.plot(t_best, acc_best, lw=1)
-    acc_fig.set_title("Acceleration [m/s2]:" + str(current_state.acc)[0:6])
-    acc_fig.grid(True)
+        acc_best = [state.acc for state in bestpaths[focus_car_id].states[1:]]
+        acc_fig.plot(t_best, acc_best, lw=1)
+        acc_fig.set_title(
+            "Acceleration [m/s2]:" + str(vehicles[focus_car_id].current_state.acc)[0:6]
+        )
+        acc_fig.grid(True)
+
+        area = 8
+        main_fig.axis("equal")
+        main_fig.axis(
+            xmin=bestpaths[focus_car_id].states[1].x - area / 2,
+            xmax=bestpaths[focus_car_id].states[1].x + area * 2,
+            ymin=bestpaths[focus_car_id].states[1].y - area * 2,
+            ymax=bestpaths[focus_car_id].states[1].y + area * 2,
+        )
+
     # plt.pause(100)
     plt.pause(0.001)
     plt.show()
+
+
+def planner(index, vehicles, predictions, lanes, static_obs_list, bestpaths):
+    vehicle = vehicles[index]
+    # target course
+    course_spline = lanes[vehicle.lane_id]["course_spline"]
+    """
+    Convert prediction to dynamic obstacle
+    """
+    obs_list = deepcopy(static_obs_list)
+    for predict_vel_id, prediction in predictions.items():
+        if predict_vel_id != vehicle.id:
+            dynamic_obs = {
+                "radius": 0.7,
+                "path": [],
+            }
+            for i in range(len(prediction.states)):
+                dynamic_obs["path"].append(
+                    {"x": prediction.states[i].x, "y": prediction.states[i].y}
+                )
+            obs_list.append(dynamic_obs)
+    # print("obs_list:", obs_list)
+
+    path = single_vehicle_planner.trajectory_generator(
+        vehicle.current_state, vehicle.target_speed, course_spline, obs_list, config,
+    )
+
+    return vehicle.id, index, path
 
 
 def main():
@@ -154,12 +198,12 @@ def main():
     Step 1. Build Frenet cord
     """
     # right boundary of the road
-    wx = [-10, 10.0, 20.5, 35.0, 70.5, 90]
+    wx = [-20, 10.0, 20.5, 35.0, 70.5, 90]
     wy = [0.0, -3.0, 5.0, 6.5, 0.0, 5]
     # wy = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     road_right_spline = Spline2D(wx, wy)
     s = np.arange(0, road_right_spline.s[-1], 0.2)
-    lane_number = 2
+    lane_number = 3
     lanes = []
     for lane_id in range(lane_number):
         lanes.append({"center_line": [], "left_bound": [], "right_bound": []})
@@ -180,69 +224,132 @@ def main():
             list(zip(*lanes[lane_id]["center_line"]))[1],
         )
 
-    # target course
-    course_spline = lanes[0]["course_spline"]
-    # generate target and left right boundaries
-    s = np.arange(0, course_spline.s[-1], 0.2)
+    """
+    Init vehicles
+    """
+    vehicles = []
 
-    # initial state
     s0 = 0.0  # initial longtitude position [m]
-    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 1.0  # initial lateral position [m]
-    d0_d = 0.0  # initial lateral speed [m/s]
-    x0, y0 = course_spline.frenet_to_cartesian1D(s0, d0)
-    current_state = State(
-        t=0,
-        s=s0,
-        s_d=s0_d,
-        d=d0,
-        d_d=d0_d,
-        x=x0,
-        y=y0,
-        yaw=course_spline.calc_yaw(s0),
-        cur=course_spline.calc_curvature(s0),
-    )
-
-    for i in range(SIM_LOOP):
-        """
-        Sample target states
-        """
-        target_s_d = 20.0 / 3.6  # target longtitude vel [m/s]
-        # static obstacle lists
-        obs_list = []
-        test_obs = {
-            "radius": 0.5,
-            "path": [{"x": 36, "y": 6.5} for i in range(100)],
-        }
-        obs_list = [test_obs]
-
-        bestpath = single_vehicle_planner.trajectory_generator(
-            current_state, target_s_d, course_spline, obs_list, config
+    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
+    d0 = 0.0  # initial lateral position [m]
+    lane_id = 0  # init lane id
+    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    vehicles.append(
+        Vehicle(
+            id=len(vehicles),
+            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+            lane_id=lane_id,
+            target_speed=20.0 / 3.6,  # target longtitude vel [m/s]
+            behaviour="KL",
         )
+    )
+    s0 = 4.0  # initial longtitude position [m]
+    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
+    d0 = 0.0  # initial lateral position [m]
+    lane_id = 0  # init lane id
+    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    vehicles.append(
+        Vehicle(
+            id=len(vehicles),
+            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+            lane_id=1,
+            target_speed=20.0 / 3.6,  # target longtitude vel [m/s]
+            behaviour="KL",
+        )
+    )
+    s0 = 10.0  # initial longtitude position [m]
+    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
+    d0 = 0.0  # initial lateral position [m]
+    lane_id = 0  # init lane id
+    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    vehicles.append(
+        Vehicle(
+            id=len(vehicles),
+            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+            lane_id=1,
+            target_speed=15.0 / 3.6,  # target longtitude vel [m/s]
+            behaviour="KL",
+        )
+    )
+    # color map
+    global colors
+    color_map = plt.get_cmap("winter")
+    colors = [color_map(i) for i in np.linspace(0, 1, len(vehicles))]
 
-        current_time = current_state.t
-        current_state = deepcopy(bestpath.states[2])
-        current_state.t += current_time
+    # static obstacle lists
+    static_obs_list = []
+    test_obs = {
+        "radius": 0.2,
+        "path": [
+            {"x": 36, "y": 6.5}
+            for i in range(math.ceil(config["MAX_T"] / config["DT"]))
+        ],
+    }
+    static_obs_list = [test_obs]
 
-        if bestpath is not None and ANIMATION:
-            plot_trajectory(current_state, obs_list, bestpath, lanes)
+    global T, delta_timestep, delta_t
+    T = 0.0
+    delta_timestep = 2
+    delta_t = delta_timestep * config["DT"]
+    predictions = {}
+    for i in range(SIM_LOOP):
+        bestpaths = {}
+        start = time.time()
+
+        param_list = []
+        for index in range(len(vehicles)):
+            param_list.append(
+                (index, vehicles, predictions, lanes, static_obs_list, bestpaths)
+            )
+        pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+        results = pool.starmap(planner, param_list)
+        pool.close()
+
+        for result_path in results:
+            vehicle_id = result_path[0]
+            vehicle_index = result_path[1]
+            vehicle = vehicles[vehicle_index]
+            bestpaths[vehicle_id] = result_path[2]
+            vehicle.current_state = deepcopy(result_path[2].states[delta_timestep])
+            vehicle.current_state.t = T + delta_t
 
         """
         Test Goal
-        Todo: Goal should be more specific
         """
-        lane_id = 0
-        if (
-            np.hypot(
-                current_state.x - lanes[lane_id]["center_line"][-1][0],
-                current_state.y - lanes[lane_id]["center_line"][-1][1],
-            )
-            <= 1.0
-        ):
-            print("Goal")
+        for vehicle in vehicles:
+            if (
+                np.hypot(
+                    vehicle.current_state.x
+                    - lanes[vehicle.lane_id]["center_line"][-1][0],
+                    vehicle.current_state.y
+                    - lanes[vehicle.lane_id]["center_line"][-1][1],
+                )
+                <= 1.0
+            ):
+                print("Goal for vehicle", vehicle.id, "is reached")
+                vehicles.remove(vehicle)
+
+        if len(vehicles) == 0:
+            print("Done!")
             break
 
-    print("Done!")
+        end = time.time()
+        # print("One loop take {} seconds".format(end - start))
+
+        if ANIMATION:
+            plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T)
+
+        # Update
+        T += delta_t
+        predictions.clear()
+        for velhicle_id, path in bestpaths.items():
+            predictions[velhicle_id] = path
 
 
 if __name__ == "__main__":

@@ -47,7 +47,7 @@ def obs(path, obs_list, weight_config, vehicle_config):
     cost_obs = 0
     for obs in obs_list:
         obs_radius = obs["radius"]
-        for i in range(len(path.states)):
+        for i in range(min(len(path.states), len(obs["path"]))):
             delta = math.hypot(
                 path.states[i].x - obs["path"][i]["x"],
                 path.states[i].y - obs["path"][i]["y"],

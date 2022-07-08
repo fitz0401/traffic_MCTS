@@ -145,7 +145,7 @@ def trajectory_generator(
     sample_d = np.arange(
         -max_road_width, max_road_width * 1.01, d_road_w
     )  # sample target lateral offset
-    sample_t = [7.0]  # Sample course time
+    sample_t = [config["MIN_T"]]  # Sample course time
     sample_vel = np.arange(
         target_vel - d_t_sample * n_s_sample,
         target_vel + d_t_sample * n_s_sample * 1.01,
@@ -234,7 +234,7 @@ def trajectory_generator(
         d_d = paths[0].states[index].d_d
         while True:
             stop_path.states.append(
-                State(t=t, s=s, d=d, s_d=s_d, d_d=d_d, s_dd=-MAX_ACCEL / 2)
+                State(t=t, s=s, d=d, s_d=s_d, d_d=d_d, s_dd=-config["MAX_ACCEL"] / 2)
             )
             if s_d == 0:
                 break
@@ -336,7 +336,7 @@ def main():
     Generate trajectories
     """
     paths = frenet_optimal_planner.calc_frenet_paths(
-        current_state, sample_d, sample_t, sample_vel, dt,
+        current_state, sample_d, sample_t, sample_vel, dt, config=config
     )
 
     if paths is None:
