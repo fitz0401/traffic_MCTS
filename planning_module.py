@@ -68,31 +68,32 @@ def plot_trajectory(vehicles, obs_list, bestpaths, lanes, T):
     acc_fig.cla()
 
     for i, vehicle in enumerate(vehicles):
-        main_fig.add_patch(
-            plt.Rectangle(
-                (
-                    vehicle.current_state.x
-                    - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
-                    * math.sin(
-                        math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
-                        - vehicle.current_state.yaw
+        if vehicle.id in bestpaths:
+            main_fig.add_patch(
+                plt.Rectangle(
+                    (
+                        vehicle.current_state.x
+                        - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
+                        * math.sin(
+                            math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
+                            - vehicle.current_state.yaw
+                        ),
+                        vehicle.current_state.y
+                        - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
+                        * math.cos(
+                            math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
+                            - vehicle.current_state.yaw
+                        ),
                     ),
-                    vehicle.current_state.y
-                    - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
-                    * math.cos(
-                        math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
-                        - vehicle.current_state.yaw
-                    ),
-                ),
-                CAR_LENGTH,
-                CAR_WIDTH,
-                angle=vehicle.current_state.yaw / math.pi * 180,
-                facecolor=colors[vehicle.id],
-                fill=True,
-                alpha=0.7,
-                zorder=2,
+                    CAR_LENGTH,
+                    CAR_WIDTH,
+                    angle=vehicle.current_state.yaw / math.pi * 180,
+                    facecolor=colors[vehicle.id],
+                    fill=True,
+                    alpha=0.7,
+                    zorder=2,
+                )
             )
-        )
 
     for obs in obs_list:
         main_fig.add_patch(
@@ -160,10 +161,16 @@ def plot_trajectory(vehicles, obs_list, bestpaths, lanes, T):
     plt.show()
 
 
-def planner(index, vehicles, predictions, lanes, static_obs_list, bestpaths):
+def planner(
+    index,
+    vehicles,
+    next_behaviour,
+    predictions,
+    lanes,
+    static_obs_list,
+    target_state=None,
+):
     vehicle = vehicles[index]
-    # target course
-    course_spline = lanes[vehicle.lane_id]["course_spline"]
     """
     Convert prediction to dynamic obstacle
     """
@@ -181,9 +188,22 @@ def planner(index, vehicles, predictions, lanes, static_obs_list, bestpaths):
             obs_list.append(dynamic_obs)
     # print("obs_list:", obs_list)
 
-    path = single_vehicle_planner.trajectory_generator(
-        vehicle.current_state, vehicle.target_speed, course_spline, obs_list, config,
-    )
+    if next_behaviour == "KL":
+        # Keep Lane
+        course_spline = lanes[vehicle.lane_id]["course_spline"]
+        path = single_vehicle_planner.trajectory_generator(
+            vehicle.current_state,
+            vehicle.target_speed,
+            course_spline,
+            obs_list,
+            config,
+        )
+    elif next_behaviour == "STOP":
+        # Stop
+        course_spline = lanes[vehicle.lane_id]["course_spline"]
+        path = single_vehicle_planner.stop_trajectory_generator(
+            vehicle.current_state, target_state, course_spline, obs_list, config
+        )
 
     return vehicle.id, index, path
 
@@ -279,7 +299,7 @@ def main():
     )
     # color map
     global colors
-    color_map = plt.get_cmap("winter")
+    color_map = plt.get_cmap("spring")
     colors = [color_map(i) for i in np.linspace(0, 1, len(vehicles))]
 
     # static obstacle lists
@@ -304,9 +324,18 @@ def main():
 
         param_list = []
         for index in range(len(vehicles)):
-            param_list.append(
-                (index, vehicles, predictions, lanes, static_obs_list, bestpaths)
-            )
+            if vehicles[index].current_state.t <= T:
+                next_behaviour = "KL"
+                param_list.append(
+                    (
+                        index,
+                        vehicles,
+                        next_behaviour,
+                        predictions,
+                        lanes,
+                        static_obs_list,
+                    )
+                )
         pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
         results = pool.starmap(planner, param_list)
         pool.close()
@@ -342,14 +371,15 @@ def main():
         end = time.time()
         # print("One loop take {} seconds".format(end - start))
 
-        if ANIMATION:
-            plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T)
-
         # Update
+        # TODO: update vehicle current lane
         T += delta_t
         predictions.clear()
         for velhicle_id, path in bestpaths.items():
             predictions[velhicle_id] = path
+
+        if ANIMATION:
+            plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T)
 
 
 if __name__ == "__main__":

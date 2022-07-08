@@ -57,6 +57,44 @@ def load_config(config_file_path):
     CAR_RADIUS = 2.0  # math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
 
 
+def calc_spec_path(current_state, target_state, T, dt, config):
+    print("Here!", T)
+    lat_qp = QuinticPolynomial(
+        current_state.d,
+        current_state.d_d,
+        current_state.d_dd,
+        target_state.d,
+        target_state.d_d,
+        target_state.d_dd,
+        T,
+    )
+    lon_qp = QuinticPolynomial(
+        current_state.s,
+        current_state.s_d,
+        current_state.s_dd,
+        target_state.s,
+        target_state.s_d,
+        target_state.s_dd,
+        T,
+    )
+    fp = Trajectory()
+    for t in np.arange(0.0, T * 1.01, dt):
+        fp.states.append(
+            State(
+                t=t,
+                s=lon_qp.calc_point(t),
+                d=lat_qp.calc_point(t),
+                s_d=lon_qp.calc_first_derivative(t),
+                d_d=lat_qp.calc_first_derivative(t),
+                s_dd=lon_qp.calc_second_derivative(t),
+                d_dd=lat_qp.calc_second_derivative(t),
+                s_ddd=lon_qp.calc_third_derivative(t),
+                d_ddd=lat_qp.calc_third_derivative(t),
+            )
+        )
+    return fp
+
+
 def calc_frenet_paths(current_state, sample_d, sample_t, sample_v, dt, config):
     frenet_paths = []
 

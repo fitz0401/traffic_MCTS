@@ -130,6 +130,32 @@ def check_path(path, config):
         return True
 
 
+def stop_trajectory_generator(
+    current_state, stop_state, course_spline, obs_list, config
+) -> Trajectory:
+
+    dt = config["DT"]
+    path = frenet_optimal_planner.calc_spec_path(
+        current_state, stop_state, stop_state.t - current_state.t, dt, config
+    )
+
+    path.frenet_to_cartesian(course_spline)
+
+    path.cost = (
+        cost.smoothness(path, course_spline, config["weights"]) * dt
+        + cost.guidance(path, config["weights"]) * dt
+        + cost.acc(path, config["weights"]) * dt
+        + cost.jerk(path, config["weights"]) * dt
+        + cost.obs(path, obs_list, config["weights"], config["vehicle"]["truck"])
+        + cost.stop(config["weights"])
+    )
+
+    if check_path(path, config) == False:
+        print("WARNING: Stop Path didn't path  boundary check!")
+
+    return path
+
+
 def trajectory_generator(
     current_state, target_vel, course_spline, obs_list, config
 ) -> Trajectory:
@@ -222,7 +248,7 @@ def trajectory_generator(
         return bestpath
     else:
         """
-        Step 5.5: if no path is found, Calculate a stop path
+        Step 5.5: if no path is found, Calculate a emergency stop path
         """
         print("No path found, Calculate a stop path")
         index = 0
