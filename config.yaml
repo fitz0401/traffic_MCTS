@@ -8,7 +8,9 @@ MAX_T: 8.0 # max prediction time [m]
 MIN_T: 5.0 # min prediction time [m]
 DT: 0.1 # time tick [s]
 D_T_S: 2.50 # target longtitude vel sampling length [km/h]
-N_S_SAMPLE: 1 # sampling number of target longtitude vel
+N_D_S_SAMPLE: 1 # sampling number of target longtitude vel
+S_SAMPLE: 0.5 #lane change longtitude sample length [m]
+N_S_SAMPLE: 8 #sampling number for longtitude sample length
 MAX_SPEED: 50.0 # maximum speed [km/h]
 MAX_ACCEL: 3.0 # maximum acceleration [m/s^2]
 MAX_CURVATURE: 1.0 # maximum curvature [1/m]
@@ -25,6 +27,7 @@ weights:
   W_JERK: 1.0 # jerk cost
   W_COLLISION: 4.0 # collision cost
   W_STOP: 100 # punishment for stop
+  W_CHANGELANE: 50 # punishment for lane change
 
 vehicle:
   truck:

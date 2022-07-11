@@ -58,7 +58,6 @@ def load_config(config_file_path):
 
 
 def calc_spec_path(current_state, target_state, T, dt, config):
-    print("Here!", T)
     lat_qp = QuinticPolynomial(
         current_state.d,
         current_state.d_d,
@@ -78,6 +77,8 @@ def calc_spec_path(current_state, target_state, T, dt, config):
         T,
     )
     fp = Trajectory()
+    fp.lat_qp = lat_qp
+    fp.lon_qp = lon_qp
     for t in np.arange(0.0, T * 1.01, dt):
         fp.states.append(
             State(

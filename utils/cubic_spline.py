@@ -226,6 +226,25 @@ class Spline2D:
         x = rx - sin_theta_r * d
         y = ry + cos_theta_r * d
         return x, y
+    
+    """
+    Ref: https://windses.blog.csdn.net/article/details/124871737
+    """
+
+    def find_nearest_rs(self, s_list, x, y):
+        min_dist = float(math.inf)
+        rs = 0.0
+        ri = -1
+        for index, s in enumerate(s_list):
+            rx, ry = self.calc_position(s)
+            dx = x - rx
+            dy = y - ry
+            dist = np.sqrt(dx * dx + dy * dy)
+            if min_dist > dist:
+                min_dist = dist
+                rs = s
+                ri = index
+        return rs, ri
 
 
 def main():  # pragma: no cover

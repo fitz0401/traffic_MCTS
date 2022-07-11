@@ -118,16 +118,139 @@ def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=
 def check_path(path, config):
     for state in path.states:
         if state.vel > config["MAX_SPEED"]:  # Max speed check
+            print("Max speed exceeded")
             return False
         elif abs(state.acc) > config["MAX_ACCEL"]:  # Max accel check
+            print("Max accel exceeded")
             return False
         elif abs(state.cur) > config["MAX_CURVATURE"]:  # Max curvature check
+            print("Max curvature exceeded")
             return False
 
     if path.cost > config["weights"]["W_COLLISION"] * 100:  # Collision check
         return False
     else:
         return True
+
+
+def lanechange_trajectory_generator(
+    current_state, target_vel, course_spline, obs_list, config
+) -> Trajectory:
+    dt = config["DT"]
+    d_t_sample = config["D_T_S"] / 3.6
+    n_s_d_sample = config["N_D_S_SAMPLE"]
+    s_sample = config["S_SAMPLE"]
+    n_s_sample = config["N_S_SAMPLE"]
+
+    sample_t = [config["MIN_T"]]  # Sample course time
+    sample_vel = np.arange(
+        target_vel - d_t_sample * n_s_d_sample,
+        target_vel + d_t_sample * n_s_d_sample * 1.01,
+        d_t_sample,
+    )
+    sample_s = np.empty(0)
+    for t in sample_t:
+        sample_s = np.append(
+            sample_s,
+            np.arange(
+                current_state.s + t * target_vel - s_sample * n_s_sample,
+                current_state.s + t * target_vel + s_sample * n_s_sample * 1.01,
+                s_sample,
+            ),
+        )
+
+    """
+    Step 2: Calculate Paths
+    """
+    start = time.process_time()
+    paths = []
+    for t in sample_t:
+        for s in sample_s:
+            for s_d in sample_vel:
+                target_state = State(t=t, s=s, s_d=s_d)
+                paths.append(
+                    frenet_optimal_planner.calc_spec_path(
+                        current_state, target_state, target_state.t, dt, config
+                    )
+                )
+    end = time.process_time()
+    if config["VERBOSE"]:
+        print(
+            "finish path generation, planning",
+            len(paths),
+            "paths with an average runtime",
+            (end - start) / len(paths),
+            "seconds.",
+            float(end - start),
+        )
+    if paths is None:
+        print("WARNING: No lane change path found")
+        return
+
+    """
+    Step 3: Convert between xy and frenet
+    """
+    start = time.process_time()
+    for path in paths:
+        path.frenet_to_cartesian(course_spline)
+    end = time.process_time()
+    if config["VERBOSE"]:
+        print(
+            "finish cord covertion for",
+            len(paths),
+            "paths with an average runtime",
+            (end - start) / len(paths),
+            "seconds.",
+            float(end - start),
+        )
+
+    """
+    Step 4: Calculate paths' costs
+    """
+    start = time.process_time()
+    for path in paths:
+        ref_vel_list = [target_vel] * len(path.states)
+        path.cost = (
+            cost.smoothness(path, course_spline, config["weights"]) * dt
+            + cost.vel_diff(path, ref_vel_list, config["weights"]) * dt
+            + cost.guidance(path, config["weights"]) * dt
+            + cost.acc(path, config["weights"]) * dt
+            + cost.jerk(path, config["weights"]) * dt
+            + cost.obs(path, obs_list, config["weights"], config["vehicle"]["truck"])
+            + cost.changelane(config["weights"])
+        )
+    paths.sort(key=lambda x: x.cost)
+
+    end = time.process_time()
+    if config["VERBOSE"]:
+        print(
+            "finish cost calculation for",
+            len(paths),
+            "paths with an average runtime",
+            (end - start) / len(paths),
+            "seconds.",
+            float(end - start),
+        )
+
+    """
+    Step 5: Check collisions and boundaries
+    """
+    bestpath = None
+    for path in paths:
+        if check_path(path, config):
+            bestpath = deepcopy(path)
+            if config["VERBOSE"]:
+                print(
+                    "find a valid lane change path for with minimum cost:",
+                    bestpath.cost,
+                )
+            break
+
+    if bestpath is not None:
+        return bestpath
+    else:
+        print("NONE a valid lane change path with minimum cost:")
+        return None
 
 
 def stop_trajectory_generator(
@@ -156,7 +279,7 @@ def stop_trajectory_generator(
     return path
 
 
-def trajectory_generator(
+def lanekeeping_trajectory_generator(
     current_state, target_vel, course_spline, obs_list, config
 ) -> Trajectory:
     """
@@ -165,16 +288,16 @@ def trajectory_generator(
     max_road_width = config["MAX_ROAD_WIDTH"]
     d_road_w = config["D_ROAD_W"]
     d_t_sample = config["D_T_S"] / 3.6
-    n_s_sample = config["N_S_SAMPLE"]
+    n_s_d_sample = config["N_D_S_SAMPLE"]
     dt = config["DT"]
 
     sample_d = np.arange(
-        -max_road_width, max_road_width * 1.01, d_road_w
+        -max_road_width / 2, max_road_width / 2 * 1.01, d_road_w
     )  # sample target lateral offset
     sample_t = [config["MIN_T"]]  # Sample course time
     sample_vel = np.arange(
-        target_vel - d_t_sample * n_s_sample,
-        target_vel + d_t_sample * n_s_sample * 1.01,
+        target_vel - d_t_sample * n_s_d_sample,
+        target_vel + d_t_sample * n_s_d_sample * 1.01,
         d_t_sample,
     )  # sample target longtitude vel(Velocity keeping)
 
@@ -241,7 +364,7 @@ def trajectory_generator(
         if check_path(path, config):
             bestpath = deepcopy(path)
             if config["VERBOSE"]:
-                print("find a valid path with minimum cost:", bestpath.cost)
+                print("find a lanekeeping valid path with minimum cost:", bestpath.cost)
             break
 
     if bestpath is not None:
@@ -345,7 +468,7 @@ def main():
     max_road_width = config["MAX_ROAD_WIDTH"]
     d_road_w = config["D_ROAD_W"]
     d_t_sample = config["D_T_S"] / 3.6
-    n_s_sample = config["N_S_SAMPLE"]
+    n_s_d_sample = config["N_D_S_SAMPLE"]
     dt = config["DT"]
 
     sample_d = np.arange(
@@ -353,8 +476,8 @@ def main():
     )  # sample target lateral offset
     sample_t = [7.0]  # Sample course time
     sample_vel = np.arange(
-        target_vel - d_t_sample * n_s_sample,
-        target_vel + d_t_sample * n_s_sample * 1.01,
+        target_vel - d_t_sample * n_s_d_sample,
+        target_vel + d_t_sample * n_s_d_sample * 1.01,
         d_t_sample,
     )  # sample target longtitude vel(Velocity keeping)
 

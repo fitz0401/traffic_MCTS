@@ -95,6 +95,10 @@ def stop(weight_config):
     return weight_config["W_STOP"]
 
 
+def changelane(weight_config):
+    return weight_config["W_CHANGELANE"]
+
+
 def main():
     pass
 

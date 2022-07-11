@@ -178,7 +178,7 @@ def planner(
     for predict_vel_id, prediction in predictions.items():
         if predict_vel_id != vehicle.id:
             dynamic_obs = {
-                "radius": 0.7,
+                "radius": 0.5,
                 "path": [],
             }
             for i in range(len(prediction.states)):
@@ -191,8 +191,36 @@ def planner(
     if next_behaviour == "KL":
         # Keep Lane
         course_spline = lanes[vehicle.lane_id]["course_spline"]
-        path = single_vehicle_planner.trajectory_generator(
+        path = single_vehicle_planner.lanekeeping_trajectory_generator(
             vehicle.current_state,
+            vehicle.target_speed,
+            course_spline,
+            obs_list,
+            config,
+        )
+    elif next_behaviour == "LC-L":
+        # Turn Left
+        if vehicle.lane_id + 1 >= len(lanes):
+            print("warning: lane change left for car %d is out of range", vehicle.id)
+            return
+        course_spline = lanes[vehicle.lane_id + 1]["course_spline"]
+        LC_vehicle = vehicle.change_to_lane(vehicle.lane_id + 1, course_spline)
+        path = single_vehicle_planner.lanechange_trajectory_generator(
+            LC_vehicle.current_state,
+            vehicle.target_speed,
+            course_spline,
+            obs_list,
+            config,
+        )
+    elif next_behaviour == "LC-R":
+        # Turn Left
+        if vehicle.lane_id - 1 < 0:
+            print("warning: lane change left for car %d is out of range", vehicle.id)
+            return
+        course_spline = lanes[vehicle.lane_id - 1]["course_spline"]
+        LC_vehicle = vehicle.change_to_lane(vehicle.lane_id - 1, course_spline)
+        path = single_vehicle_planner.lanechange_trajectory_generator(
+            LC_vehicle.current_state,
             vehicle.target_speed,
             course_spline,
             obs_list,
@@ -205,7 +233,7 @@ def planner(
             vehicle.current_state, target_state, course_spline, obs_list, config
         )
 
-    return vehicle.id, index, path
+    return vehicle.id, index, path, next_behaviour
 
 
 def main():
@@ -265,10 +293,10 @@ def main():
             behaviour="KL",
         )
     )
-    s0 = 4.0  # initial longtitude position [m]
+    s0 = 0.0  # initial longtitude position [m]
     s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
-    lane_id = 0  # init lane id
+    lane_id = 1  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
     yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
     cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
@@ -276,7 +304,7 @@ def main():
         Vehicle(
             id=len(vehicles),
             init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=1,
+            lane_id=lane_id,
             target_speed=20.0 / 3.6,  # target longtitude vel [m/s]
             behaviour="KL",
         )
@@ -284,7 +312,7 @@ def main():
     s0 = 10.0  # initial longtitude position [m]
     s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
-    lane_id = 0  # init lane id
+    lane_id = 1  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
     yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
     cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
@@ -292,7 +320,7 @@ def main():
         Vehicle(
             id=len(vehicles),
             init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=1,
+            lane_id=lane_id,
             target_speed=15.0 / 3.6,  # target longtitude vel [m/s]
             behaviour="KL",
         )
@@ -321,10 +349,10 @@ def main():
     for i in range(SIM_LOOP):
         bestpaths = {}
         start = time.time()
-
         param_list = []
         for index in range(len(vehicles)):
             if vehicles[index].current_state.t <= T:
+                # next_behaviour = "LC-L"
                 next_behaviour = "KL"
                 param_list.append(
                     (
@@ -339,6 +367,9 @@ def main():
         pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
         results = pool.starmap(planner, param_list)
         pool.close()
+        end = time.time()
+        if config["VERBOSE"]:
+            print("--------\nOne loop Time: ", end - start, "\n--------")
 
         for result_path in results:
             vehicle_id = result_path[0]
