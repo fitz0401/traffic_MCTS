@@ -226,7 +226,23 @@ class Spline2D:
         x = rx - sin_theta_r * d
         y = ry + cos_theta_r * d
         return x, y
-    
+
+    def cartesian_to_frenet1D(self, x, y):
+        refined_s = np.arange(0, self.s[-1], self.s[-1] / 1000)
+        rs, _ = self.find_nearest_rs(refined_s, x, y)
+        rx, ry = self.calc_position(rs)
+        ryaw = self.calc_yaw(rs)
+
+        dx = x - rx
+        dy = y - ry
+        cos_theta_r = math.cos(ryaw)
+        sin_theta_r = math.sin(ryaw)
+        cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
+        d = math.copysign(math.sqrt(dx * dx + dy * dy), cross_rd_nd)
+        s = rs
+
+        return s, d
+
     """
     Ref: https://windses.blog.csdn.net/article/details/124871737
     """

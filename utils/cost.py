@@ -8,6 +8,7 @@ For details please see https://www.notion.so/pjlab-adg/Cost-Function-097c6ee531d
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
 import math
+import obstacle_cost
 
 
 def smoothness(path, ref_line, weight_config):
@@ -33,35 +34,15 @@ def time(path, weight_config):
     return weight_config["W_T"] * path.states[-1].t
 
 
-def obs(path, obs_list, weight_config, vehicle_config):
+def obs(path, obs_list, config):
     # obs_list should be a list of Obstacle objects in frenet coordinates
-    """
-    ATTENSION:The simple circular enclosing box is used here in the Cartesian coordinate system; if more refinement is needed, the rectangular enclosing box is used in the Frenet coordinate system
-    """
-    # buffer
-    CAR_WIDTH = vehicle_config["width"]
-    CAR_LENGTH = vehicle_config["length"]
-    CAR_RADIUS = math.hypot(CAR_WIDTH / 2, CAR_LENGTH / 2)
-    CAR_NUDGE = CAR_RADIUS * 3
 
     cost_obs = 0
     for obs in obs_list:
-        obs_radius = obs["radius"]
-        for i in range(min(len(path.states), len(obs["path"]))):
-            delta = math.hypot(
-                path.states[i].x - obs["path"][i]["x"],
-                path.states[i].y - obs["path"][i]["y"],
-            )
-            if delta - CAR_RADIUS > CAR_NUDGE:
-                cost_obs += 0
-            elif delta - CAR_RADIUS < obs_radius:
-                cost_obs += weight_config["W_COLLISION"] * 100
-            else:
-                cost_obs += CAR_RADIUS * (
-                    1
-                    - (delta - weight_config["W_COLLISION"] - obs_radius)
-                    / (CAR_NUDGE - obs_radius)
-                )
+        if obs["type"] == "static":
+            cost_obs += obstacle_cost.calculate_static(obs, path, config)
+        elif obs["type"] == "car":
+            cost_obs += obstacle_cost.calculate_car(obs, path, config)
 
     return cost_obs
 

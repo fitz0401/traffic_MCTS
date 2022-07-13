@@ -62,7 +62,7 @@ def plot_init():
     )
 
 
-def plot_trajectory(vehicles, obs_list, bestpaths, lanes, T):
+def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
     main_fig.cla()
     vel_fig.cla()
     acc_fig.cla()
@@ -95,20 +95,20 @@ def plot_trajectory(vehicles, obs_list, bestpaths, lanes, T):
                 )
             )
 
-    for obs in obs_list:
+    for obs in static_obs_list:
         main_fig.add_patch(
             plt.Rectangle(
                 (
-                    obs["path"][0]["x"]
-                    - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
-                    * math.sin(math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)),
-                    obs["path"][0]["y"]
-                    - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
-                    * math.cos(math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)),
+                    obs["pos"]["x"]
+                    - math.sqrt((obs["width"] / 2) ** 2 + (obs["length"] / 2) ** 2)
+                    * math.sin(math.atan2(obs["length"] / 2, obs["width"] / 2)),
+                    obs["pos"]["y"]
+                    - math.sqrt((obs["width"] / 2) ** 2 + (obs["length"] / 2) ** 2)
+                    * math.cos(math.atan2(obs["length"] / 2, obs["width"] / 2)),
                 ),
-                CAR_LENGTH,
-                CAR_WIDTH,
-                angle=-0.2 / math.pi * 180,
+                obs["length"],
+                obs["width"],
+                angle=obs["pos"]["yaw"] / math.pi * 180,
                 facecolor="dimgrey",
                 fill=True,
                 zorder=3,
@@ -178,12 +178,19 @@ def planner(
     for predict_vel_id, prediction in predictions.items():
         if predict_vel_id != vehicle.id:
             dynamic_obs = {
-                "radius": 0.5,
+                "type": "car",
+                "length": config["vehicle"]["truck"]["length"],
+                "width": config["vehicle"]["truck"]["width"],
                 "path": [],
             }
             for i in range(len(prediction.states)):
                 dynamic_obs["path"].append(
-                    {"x": prediction.states[i].x, "y": prediction.states[i].y}
+                    {
+                        "x": prediction.states[i].x,
+                        "y": prediction.states[i].y,
+                        "yaw": prediction.states[i].yaw,
+                        "vel": prediction.states[i].vel,
+                    }
                 )
             obs_list.append(dynamic_obs)
     # print("obs_list:", obs_list)
@@ -247,7 +254,7 @@ def main():
     """
     # right boundary of the road
     wx = [-20, 10.0, 20.5, 35.0, 70.5, 90]
-    wy = [0.0, -3.0, 5.0, 6.5, 0.0, 5]
+    wy = [0.0, -1.0, 2.0, 6.5, 0.0, 5]
     # wy = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     road_right_spline = Spline2D(wx, wy)
     s = np.arange(0, road_right_spline.s[-1], 0.2)
@@ -277,7 +284,7 @@ def main():
     """
     vehicles = []
 
-    s0 = 0.0  # initial longtitude position [m]
+    s0 = 10.0  # initial longtitude position [m]
     s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 0  # init lane id
@@ -293,7 +300,7 @@ def main():
             behaviour="KL",
         )
     )
-    s0 = 0.0  # initial longtitude position [m]
+    s0 = 15.0  # initial longtitude position [m]
     s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 1  # init lane id
@@ -309,8 +316,8 @@ def main():
             behaviour="KL",
         )
     )
-    s0 = 10.0  # initial longtitude position [m]
-    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
+    s0 = 8.0  # initial longtitude position [m]
+    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 1  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
@@ -321,10 +328,11 @@ def main():
             id=len(vehicles),
             init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
             lane_id=lane_id,
-            target_speed=15.0 / 3.6,  # target longtitude vel [m/s]
+            target_speed=20.0 / 3.6,  # target longtitude vel [m/s]
             behaviour="KL",
         )
     )
+
     # color map
     global colors
     color_map = plt.get_cmap("spring")
@@ -333,11 +341,10 @@ def main():
     # static obstacle lists
     static_obs_list = []
     test_obs = {
-        "radius": 0.2,
-        "path": [
-            {"x": 36, "y": 6.5}
-            for i in range(math.ceil(config["MAX_T"] / config["DT"]))
-        ],
+        "type": "static",
+        "length": 4,
+        "width": 4,
+        "pos": {"x": 36, "y": 5.9, "yaw": -0.0},
     }
     static_obs_list = [test_obs]
 
@@ -405,7 +412,9 @@ def main():
         # Update
         # TODO: update vehicle current lane
         T += delta_t
+
         predictions.clear()
+        # ATTENSION:prdiction must have vel to be used in calculate cost
         for velhicle_id, path in bestpaths.items():
             predictions[velhicle_id] = path
 

@@ -127,7 +127,7 @@ def check_path(path, config):
             print("Max curvature exceeded")
             return False
 
-    if path.cost > config["weights"]["W_COLLISION"] * 100:  # Collision check
+    if path.cost == math.inf:  # Collision check
         return False
     else:
         return True
@@ -216,7 +216,7 @@ def lanechange_trajectory_generator(
             + cost.guidance(path, config["weights"]) * dt
             + cost.acc(path, config["weights"]) * dt
             + cost.jerk(path, config["weights"]) * dt
-            + cost.obs(path, obs_list, config["weights"], config["vehicle"]["truck"])
+            + cost.obs(path, obs_list, config)
             + cost.changelane(config["weights"])
         )
     paths.sort(key=lambda x: x.cost)
@@ -269,7 +269,7 @@ def stop_trajectory_generator(
         + cost.guidance(path, config["weights"]) * dt
         + cost.acc(path, config["weights"]) * dt
         + cost.jerk(path, config["weights"]) * dt
-        + cost.obs(path, obs_list, config["weights"], config["vehicle"]["truck"])
+        + cost.obs(path, obs_list, config)
         + cost.stop(config["weights"])
     )
 
@@ -341,7 +341,7 @@ def lanekeeping_trajectory_generator(
             + cost.guidance(path, config["weights"]) * dt
             + cost.acc(path, config["weights"]) * dt
             + cost.jerk(path, config["weights"]) * dt
-            + cost.obs(path, obs_list, config["weights"], config["vehicle"]["truck"])
+            + cost.obs(path, obs_list, config)
         )
     paths.sort(key=lambda x: x.cost)
 
@@ -503,7 +503,7 @@ def main():
             + cost.guidance(path, config["weights"]) * dt
             + cost.acc(path, config["weights"]) * dt
             + cost.jerk(path, config["weights"]) * dt
-            + cost.obs(path, obs_list, config["weights"], config["vehicle"]["truck"])
+            + cost.obs(path, obs_list, config)
         )
     plot_cost_function(current_state, paths, course_spline, obs_list)
 
