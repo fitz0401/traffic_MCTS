@@ -162,7 +162,7 @@ def lanechange_trajectory_generator(
     """
     Step 2: Calculate Paths
     """
-    start = time.process_time()
+    start = time.time()
     paths = []
     for t in sample_t:
         for s in sample_s:
@@ -173,7 +173,7 @@ def lanechange_trajectory_generator(
                         current_state, target_state, target_state.t, dt, config
                     )
                 )
-    end = time.process_time()
+    end = time.time()
     if config["VERBOSE"]:
         print(
             "finish path generation, planning",
@@ -190,10 +190,10 @@ def lanechange_trajectory_generator(
     """
     Step 3: Convert between xy and frenet
     """
-    start = time.process_time()
+    start = time.time()
     for path in paths:
         path.frenet_to_cartesian(course_spline)
-    end = time.process_time()
+    end = time.time()
     if config["VERBOSE"]:
         print(
             "finish cord covertion for",
@@ -207,7 +207,7 @@ def lanechange_trajectory_generator(
     """
     Step 4: Calculate paths' costs
     """
-    start = time.process_time()
+    start = time.time()
     for path in paths:
         ref_vel_list = [target_vel] * len(path.states)
         path.cost = (
@@ -221,7 +221,7 @@ def lanechange_trajectory_generator(
         )
     paths.sort(key=lambda x: x.cost)
 
-    end = time.process_time()
+    end = time.time()
     if config["VERBOSE"]:
         print(
             "finish cost calculation for",
@@ -315,10 +315,10 @@ def lanekeeping_trajectory_generator(
     """
     Step 3: Convert between xy and frenet
     """
-    start = time.process_time()
+    start = time.time()
     for path in paths:
         path.frenet_to_cartesian(course_spline)
-    end = time.process_time()
+    end = time.time()
     if config["VERBOSE"]:
         print(
             "finish cord covertion for",
@@ -332,7 +332,7 @@ def lanekeeping_trajectory_generator(
     """
     Step 4: Calculate paths' costs
     """
-    start = time.process_time()
+    start = time.time()
     for path in paths:
         ref_vel_list = [target_vel] * len(path.states)
         path.cost = (
@@ -345,7 +345,7 @@ def lanekeeping_trajectory_generator(
         )
     paths.sort(key=lambda x: x.cost)
 
-    end = time.process_time()
+    end = time.time()
     if config["VERBOSE"]:
         print(
             "finish cost calculation for",

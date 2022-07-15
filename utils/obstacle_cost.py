@@ -2,11 +2,14 @@
 Author: Licheng Wen
 Date: 2022-07-12 14:53:05
 Description: 
+
+For details:
+https://www.notion.so/pjlab-adg/Cost-Function-15a37bb612e24b03817937b0f3c9f6b4
+
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
 import math
 import numpy as np
-
 
 def rotate_yaw(yaw):
     return np.array(

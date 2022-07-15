@@ -312,12 +312,12 @@ def main():
             id=len(vehicles),
             init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
             lane_id=lane_id,
-            target_speed=20.0 / 3.6,  # target longtitude vel [m/s]
+            target_speed=15.0 / 3.6,  # target longtitude vel [m/s]
             behaviour="KL",
         )
     )
     s0 = 8.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
+    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 1  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)

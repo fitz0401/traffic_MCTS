@@ -99,7 +99,7 @@ def calc_spec_path(current_state, target_state, T, dt, config):
 def calc_frenet_paths(current_state, sample_d, sample_t, sample_v, dt, config):
     frenet_paths = []
 
-    start = time.process_time()
+    start = time.time()
     # generate path to each offset goal
     for di in sample_d:
         # Lateral motion planning
@@ -135,7 +135,7 @@ def calc_frenet_paths(current_state, sample_d, sample_t, sample_v, dt, config):
 
                 frenet_paths.append(tfp)
 
-    end = time.process_time()
+    end = time.time()
     if config["VERBOSE"]:
         print(
             "finish path generation, planning",

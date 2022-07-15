@@ -19,7 +19,7 @@ MAX_CURVATURE: 1.0 # maximum curvature [1/m]
 weights:
   W_YAW: 1.0 # smoothness cost yaw difference
   W_CUR: 1.0 # curvature cost
-  W_VEL_DIFF: 1.0e-1 # velocity diff cost
+  W_VEL_DIFF: 5.0e-1 # velocity diff cost
   W_T: 1.0 # time cost
   W_OBS: 1.0 # obstacle cost
   W_GUIDE: 5.0 # guidance cost
