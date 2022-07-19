@@ -134,7 +134,7 @@ def check_path(path, config):
 
 
 def lanechange_trajectory_generator(
-    current_state, target_vel, course_spline, obs_list, config
+    current_state, target_vel, course_spline, obs_list, config, T
 ) -> Trajectory:
     dt = config["DT"]
     d_t_sample = config["D_T_S"] / 3.6
@@ -216,7 +216,7 @@ def lanechange_trajectory_generator(
             + cost.guidance(path, config["weights"]) * dt
             + cost.acc(path, config["weights"]) * dt
             + cost.jerk(path, config["weights"]) * dt
-            + cost.obs(path, obs_list, config)
+            + cost.obs(path, obs_list, config, T)
             + cost.changelane(config["weights"])
         )
     paths.sort(key=lambda x: x.cost)
@@ -254,7 +254,7 @@ def lanechange_trajectory_generator(
 
 
 def stop_trajectory_generator(
-    current_state, stop_state, course_spline, obs_list, config
+    current_state, stop_state, course_spline, obs_list, config, T
 ) -> Trajectory:
 
     dt = config["DT"]
@@ -269,7 +269,7 @@ def stop_trajectory_generator(
         + cost.guidance(path, config["weights"]) * dt
         + cost.acc(path, config["weights"]) * dt
         + cost.jerk(path, config["weights"]) * dt
-        + cost.obs(path, obs_list, config)
+        + cost.obs(path, obs_list, config, T)
         + cost.stop(config["weights"])
     )
 
@@ -280,8 +280,10 @@ def stop_trajectory_generator(
 
 
 def lanekeeping_trajectory_generator(
-    current_state, target_vel, course_spline, obs_list, config
+    vehicle, course_spline, obs_list, config, T
 ) -> Trajectory:
+    current_state = vehicle.current_state
+    target_vel = vehicle.target_speed
     """
     Step 1: Sample target states
     """
@@ -309,7 +311,7 @@ def lanekeeping_trajectory_generator(
     )
 
     if paths is None:
-        print("WARNING: No path found")
+        print("WARNING: No lane keeping path found for vehicle {}".format(vehicle.id))
         return
 
     """
@@ -341,7 +343,7 @@ def lanekeeping_trajectory_generator(
             + cost.guidance(path, config["weights"]) * dt
             + cost.acc(path, config["weights"]) * dt
             + cost.jerk(path, config["weights"]) * dt
-            + cost.obs(path, obs_list, config)
+            + cost.obs(path, obs_list, config, T)
         )
     paths.sort(key=lambda x: x.cost)
 
@@ -373,28 +375,28 @@ def lanekeeping_trajectory_generator(
         """
         Step 5.5: if no path is found, Calculate a emergency stop path
         """
-        print("No path found, Calculate a stop path")
-        index = 0
+        print("No path found, Calculate a stop path for vehicle {}".format(vehicle.id))
         stop_path = Trajectory()
         t = 0
-        s = paths[0].states[index].s
-        d = paths[0].states[index].d
-        s_d = paths[0].states[index].s_d
-        d_d = paths[0].states[index].d_d
+        s = current_state.s
+        d = current_state.d
+        s_d = current_state.s_d
+        d_d = 0
         while True:
             stop_path.states.append(
                 State(t=t, s=s, d=d, s_d=s_d, d_d=d_d, s_dd=-config["MAX_ACCEL"] / 2)
             )
-            if s_d == 0:
+            if s_d <= 1e-10:
+                while len(stop_path.states) < sample_t[0] / dt:
+                    t += dt
+                    stop_path.states.append(State(t=t, s=s, d=d, s_d=s_d, d_d=0))
                 break
             t += dt
             s += s_d * dt
             d += d_d * dt
-            if index < len(paths[0].states) - 1 and s >= paths[0].states[index + 1].s:
-                index += 1
             s_d += stop_path.states[-1].s_dd * dt
-            s_d = s_d if s_d > 0 else 0
-            d_d = paths[0].states[index].d_d / paths[0].states[index].s_d * s_d
+            s_d = s_d if s_d > 0 else 1e-10
+            d_d = 0
 
         stop_path.frenet_to_cartesian(course_spline)
         ref_vel_list = [target_vel] * len(stop_path.states)

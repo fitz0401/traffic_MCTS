@@ -8,6 +8,7 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 """
 
 from math import *
+import warnings
 import numpy as np
 from coord_convertion import *
 
@@ -69,6 +70,7 @@ class Trajectory:
         self.cost = 0.0
 
     def frenet_to_cartesian(self, csp):
+        warnings.filterwarnings('error')
         for i in range(len(self.states)):
             rx, ry = csp.calc_position(self.states[i].s)
             if rx is None:
@@ -102,18 +104,22 @@ class Trajectory:
         # https://blog.csdn.net/m0_37454852/article/details/86514444
         # https://baike.baidu.com/item/%E6%9B%B2%E7%8E%87/9985286
         for i in range(1, len(self.states) - 1):
-            dy = (
-                (self.states[i + 1].y - self.states[i].y)
-                / (self.states[i + 1].x - self.states[i].x)
-                + (self.states[i].y - self.states[i - 1].y)
-                / (self.states[i].x - self.states[i - 1].x)
-            ) / 2
-            ddy = (
-                (self.states[i + 1].y - self.states[i].y)
-                / (self.states[i + 1].x - self.states[i].x)
-                - (self.states[i].y - self.states[i - 1].y)
-                / (self.states[i].x - self.states[i - 1].x)
-            ) / ((self.states[i + 1].x - self.states[i - 1].x) / 2)
+            try:
+                dy = (
+                    (self.states[i + 1].y - self.states[i].y)
+                    / (self.states[i + 1].x - self.states[i].x)
+                    + (self.states[i].y - self.states[i - 1].y)
+                    / (self.states[i].x - self.states[i - 1].x)
+                ) / 2
+                ddy = (
+                    (self.states[i + 1].y - self.states[i].y)
+                    / (self.states[i + 1].x - self.states[i].x)
+                    - (self.states[i].y - self.states[i - 1].y)
+                    / (self.states[i].x - self.states[i - 1].x)
+                ) / ((self.states[i + 1].x - self.states[i - 1].x) / 2)
+            except RuntimeWarning:
+                self.states[i].cur = 0
+                continue
             k = abs(ddy) / (1 + dy ** 2) ** 1.5
             self.states[i].cur = k
         # insert the first and last point

@@ -69,6 +69,12 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
 
     for i, vehicle in enumerate(vehicles):
         if vehicle.id in bestpaths:
+            main_fig.text(
+                vehicle.current_state.x,
+                vehicle.current_state.y,
+                "id:" + str(vehicle.id),
+                fontsize=12,
+            )
             main_fig.add_patch(
                 plt.Rectangle(
                     (
@@ -96,24 +102,40 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
             )
 
     for obs in static_obs_list:
-        main_fig.add_patch(
-            plt.Rectangle(
-                (
-                    obs["pos"]["x"]
-                    - math.sqrt((obs["width"] / 2) ** 2 + (obs["length"] / 2) ** 2)
-                    * math.sin(math.atan2(obs["length"] / 2, obs["width"] / 2)),
-                    obs["pos"]["y"]
-                    - math.sqrt((obs["width"] / 2) ** 2 + (obs["length"] / 2) ** 2)
-                    * math.cos(math.atan2(obs["length"] / 2, obs["width"] / 2)),
-                ),
-                obs["length"],
-                obs["width"],
-                angle=obs["pos"]["yaw"] / math.pi * 180,
-                facecolor="dimgrey",
-                fill=True,
-                zorder=3,
+        if obs["type"] == "pedestrian":
+            if T < obs["pos"][0]["t"] or T > obs["pos"][-1]["t"]:
+                continue
+            for i in range(len(obs["pos"])):
+                if abs(T - obs["pos"][i]["t"]) < 1e-5:
+                    main_fig.add_patch(
+                        plt.Circle(
+                            (obs["pos"][i]["x"], obs["pos"][i]["y"]),
+                            obs["length"] / 2,
+                            facecolor="black",
+                            fill=True,
+                            zorder=3,
+                        )
+                    )
+                    break
+        elif obs["type"] == "static":
+            main_fig.add_patch(
+                plt.Rectangle(
+                    (
+                        obs["pos"]["x"]
+                        - math.sqrt((obs["width"] / 2) ** 2 + (obs["length"] / 2) ** 2)
+                        * math.sin(math.atan2(obs["length"] / 2, obs["width"] / 2)),
+                        obs["pos"]["y"]
+                        - math.sqrt((obs["width"] / 2) ** 2 + (obs["length"] / 2) ** 2)
+                        * math.cos(math.atan2(obs["length"] / 2, obs["width"] / 2)),
+                    ),
+                    obs["length"],
+                    obs["width"],
+                    angle=obs["pos"]["yaw"] / math.pi * 180,
+                    facecolor="dimgrey",
+                    fill=True,
+                    zorder=3,
+                )
             )
-        )
 
     main_fig.plot(*zip(*lanes[0]["right_bound"]), "k", linewidth=1.5)
     for lane in lanes:
@@ -168,6 +190,7 @@ def planner(
     predictions,
     lanes,
     static_obs_list,
+    T,
     target_state=None,
 ):
     vehicle = vehicles[index]
@@ -199,11 +222,7 @@ def planner(
         # Keep Lane
         course_spline = lanes[vehicle.lane_id]["course_spline"]
         path = single_vehicle_planner.lanekeeping_trajectory_generator(
-            vehicle.current_state,
-            vehicle.target_speed,
-            course_spline,
-            obs_list,
-            config,
+            vehicle, course_spline, obs_list, config, T,
         )
     elif next_behaviour == "LC-L":
         # Turn Left
@@ -218,6 +237,7 @@ def planner(
             course_spline,
             obs_list,
             config,
+            T,
         )
     elif next_behaviour == "LC-R":
         # Turn Left
@@ -232,12 +252,13 @@ def planner(
             course_spline,
             obs_list,
             config,
+            T,
         )
     elif next_behaviour == "STOP":
         # Stop
         course_spline = lanes[vehicle.lane_id]["course_spline"]
         path = single_vehicle_planner.stop_trajectory_generator(
-            vehicle.current_state, target_state, course_spline, obs_list, config
+            vehicle.current_state, target_state, course_spline, obs_list, config, T
         )
 
     return vehicle.id, index, path, next_behaviour
@@ -316,7 +337,7 @@ def main():
             behaviour="KL",
         )
     )
-    s0 = 8.0  # initial longtitude position [m]
+    s0 = 2.0  # initial longtitude position [m]
     s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 1  # init lane id
@@ -342,11 +363,21 @@ def main():
     static_obs_list = []
     test_obs = {
         "type": "static",
-        "length": 4,
-        "width": 4,
+        "length": 5,
+        "width": 3,
         "pos": {"x": 36, "y": 5.9, "yaw": -0.0},
     }
-    static_obs_list = [test_obs]
+    pedestrian = {
+        "type": "pedestrian",
+        "length": 1,
+        "width": 1,
+        "pos": [],
+    }
+    start_x, start_y = 8, -1
+    for t in np.arange(1, 7, config["DT"]):
+        pedestrian["pos"].append({"t": t, "x": start_x, "y": start_y})
+        start_y += 1.5 * config["DT"]
+    static_obs_list = [test_obs, pedestrian]
 
     global T, delta_timestep, delta_t
     T = 0.0
@@ -369,6 +400,7 @@ def main():
                         predictions,
                         lanes,
                         static_obs_list,
+                        T,
                     )
                 )
         pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
@@ -409,6 +441,9 @@ def main():
         end = time.time()
         # print("One loop take {} seconds".format(end - start))
 
+        if ANIMATION:
+            plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T)
+
         # Update
         # TODO: update vehicle current lane
         T += delta_t
@@ -417,9 +452,6 @@ def main():
         # ATTENSION:prdiction must have vel to be used in calculate cost
         for velhicle_id, path in bestpaths.items():
             predictions[velhicle_id] = path
-
-        if ANIMATION:
-            plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T)
 
 
 if __name__ == "__main__":

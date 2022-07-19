@@ -11,6 +11,7 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 import math
 import numpy as np
 
+
 def rotate_yaw(yaw):
     return np.array(
         [[np.cos(yaw), np.sin(yaw)], [-np.sin(yaw), np.cos(yaw)]], dtype=np.float32,
@@ -104,6 +105,75 @@ def calculate_static(obs, path, config):
             if abs(nearest_corner[1]) > car_width / 2:
                 cost += (
                     1 - (abs(nearest_corner[1]) - car_width / 2) / (car_width / 2)
+                ) * config["weights"]["W_COLLISION"]
+
+    return cost
+
+
+def calculate_pedestrian(obs, path, config, T):
+    reaction_time = 2.0  # important param for avoid pedestrian
+    cost = 0
+
+    if T < obs["pos"][0]["t"] - 1e-5 or T > obs["pos"][-1]["t"] + 1e-5:
+        return cost
+
+    obs_i = 0
+    while obs_i < len(obs["pos"]):
+        if abs(T - obs["pos"][obs_i]["t"]) < 1e-5:
+            break
+        obs_i += 1
+
+    car_width = config["vehicle"]["truck"]["width"]
+    car_length = config["vehicle"]["truck"]["length"]
+
+    dist_to_collide = (
+        reaction_time * path.states[0].vel
+        + 1 * car_length  # Reaction dist + Hard Collision
+    )
+    for i in range(0, int(reaction_time / config["DT"]), 2):
+        obs_index = obs_i
+        # obs_index = min(len(obs["pos"]) - 1, obs_i + i)
+        dist = math.hypot(
+            path.states[i].x - obs["pos"][obs_index]["x"],
+            path.states[i].y - obs["pos"][obs_index]["y"],
+        )
+        if dist > dist_to_collide:
+            continue
+
+        result, nearest_corner = check_collsion_new(
+            np.array([path.states[i].x, path.states[i].y]),
+            car_length,
+            car_width,
+            path.states[i].yaw,
+            np.array([obs["pos"][obs_index]["x"], obs["pos"][obs_index]["y"]]),
+            obs["length"],
+            obs["width"] + car_width * 1.0,
+            0,
+        )
+        if result:
+            cost += math.inf
+            return cost
+        elif (
+            nearest_corner[0] > dist_to_collide
+            or nearest_corner[0] < -car_length
+            or abs(nearest_corner[1]) > 1.0 * car_width
+        ):
+            continue
+        else:
+            if nearest_corner[0] < -0.5 * car_length:
+                cost += (
+                    1 - (nearest_corner[0] + car_length * 0.5) / (-car_length * 0.5)
+                ) * config["weights"]["W_COLLISION"]
+            if nearest_corner[0] > 0.5 * car_length:
+                cost += (
+                    1
+                    - (nearest_corner[0] - car_length * 0.5)
+                    / (dist_to_collide - car_length * 0.5)
+                ) * config["weights"]["W_COLLISION"]
+                # cost += config["weights"]["W_COLLISION"] * 10
+            if abs(nearest_corner[1]) > car_width / 2:
+                cost += (
+                    1 - (abs(nearest_corner[1]) - car_width / 2) / (0.5 * car_width)
                 ) * config["weights"]["W_COLLISION"]
 
     return cost
