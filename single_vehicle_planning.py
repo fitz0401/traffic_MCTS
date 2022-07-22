@@ -254,29 +254,157 @@ def lanechange_trajectory_generator(
 
 
 def stop_trajectory_generator(
-    current_state, stop_state, course_spline, obs_list, config, T
+    vehicle, course_spline, obs_list, config, T
 ) -> Trajectory:
-
+    current_state = vehicle.current_state
+    current_lane = vehicle.lane_id
+    course_t = config["MIN_T"]  # Sample course time
     dt = config["DT"]
-    path = frenet_optimal_planner.calc_spec_path(
-        current_state, stop_state, stop_state.t - current_state.t, dt, config
+    road_width = config["MAX_ROAD_WIDTH"]
+    d_road_w = config["D_ROAD_W"]
+    max_acc = config["MAX_ACCEL"]
+    car_width = config["vehicle"]["truck"]["width"]
+    car_length = config["vehicle"]["truck"]["length"]
+
+    """
+    Step 1: find the right stopping position
+    """
+    s = np.arange(
+        current_state.s,
+        min(
+            course_spline.s[-1],
+            current_state.s + current_state.s_d * course_t + 3 * car_length,
+        ),
+        course_spline.s[-1] / 100,
     )
+    min_s = s[-1]
+    for obs in obs_list:
+        if obs["type"] == "static":
+            obs_s, obs_d = course_spline.cartesian_to_frenet1D(
+                obs["pos"]["x"], obs["pos"]["y"], s
+            )
+            if obs_s == s[0] or obs_s == s[-1]:
+                continue
+            obs_near_d = max(0, abs(obs_d) - obs["width"] / 2)
+            if obs_near_d < road_width / 2:
+                min_s = min(min_s, obs_s - obs["length"] / 2 - car_length)
+        elif obs["type"] == "pedestrian":
+            obs_s, obs_d = course_spline.cartesian_to_frenet1D(
+                obs["pos"]["x"], obs["pos"]["y"], s
+            )
+            if obs_s == s[0] or obs_s == s[-1]:
+                continue
+            obs_near_d = max(0, abs(obs_d) - obs["width"] / 2)
+            if obs_near_d < road_width:
+                min_s = min(min_s, obs_s - obs["length"] / 2 - car_length)
+        elif obs["type"] == "car":
+            ## TODO: check car's lane_id same to current_lane
+            obs_s, obs_d = course_spline.cartesian_to_frenet1D(
+                obs["path"][0]["x"], obs["path"][0]["y"], s
+            )
+            if obs_s == s[0] or obs_s == s[-1]:
+                continue
+            obs_near_d = max(0, abs(obs_d) - obs["width"] / 2)
+            if obs_near_d < road_width / 2:
+                min_s = min(min_s, obs_s - obs["length"] / 2 - car_length / 1.5)
 
-    path.frenet_to_cartesian(course_spline)
+    """
+    Step 2: 
+    """
+    path = Trajectory()
+    if (
+        current_state.vel <= 1.0 and (min_s - current_state.s) <= car_length
+    ):  # already stopped,keep it
+        if config["VERBOSE"]:
+            print("Already stopped for vehicle %d" % vehicle.id)
+        path = Trajectory()
+        for t in np.arange(0, course_t / dt, dt):
+            path.states.append(State(t=t, s=current_state.s, d=current_state.d))
+        path.frenet_to_cartesian(course_spline)
+        path.cost = (
+            cost.smoothness(path, course_spline, config["weights"]) * dt
+            + cost.guidance(path, config["weights"]) * dt
+            + cost.acc(path, config["weights"]) * dt
+            + cost.jerk(path, config["weights"]) * dt
+        )
+        return path
+    if (
+        min_s == s[-1] or (min_s - current_state.s) > current_state.s_d * course_t / 1.5
+    ):  # no need to stop
+        if config["VERBOSE"]:
+            print("No need to stop for vehicle %d" % vehicle.id)
+        if (min_s - current_state.s) < 5.0 / 3.6 * course_t:
+            target_s = min_s
+        else:
+            target_s = current_state.s + max(10.0 / 3.6, current_state.s_d) * course_t
+        target_state = State(s=target_s, s_d=max(10.0 / 3.6, current_state.s_d), d=0)
+        path = frenet_optimal_planner.calc_spec_path(
+            current_state, target_state, course_t, dt, config
+        )
+        path.frenet_to_cartesian(course_spline)
+        path.cost = (
+            cost.smoothness(path, course_spline, config["weights"]) * dt
+            + cost.guidance(path, config["weights"]) * dt
+            + cost.acc(path, config["weights"]) * dt
+            + cost.jerk(path, config["weights"]) * dt
+        )
+        return path
+    elif (min_s - current_state.s) < max(
+        current_state.s_d ** 2 / (2 * max_acc), car_length / 4
+    ):  # need emergency stop
+        if config["VERBOSE"]:
+            print("Emergency Brake for vehicle %d" % vehicle.id)
+        path = frenet_optimal_planner.calc_stop_path(
+            current_state, config["MAX_ACCEL"], course_t, dt, config
+        )
+        path.frenet_to_cartesian(course_spline)
+        path.cost = (
+            cost.smoothness(path, course_spline, config["weights"]) * dt
+            + cost.guidance(path, config["weights"]) * dt
+            + cost.acc(path, config["weights"]) * dt
+            + cost.jerk(path, config["weights"]) * dt
+            + cost.stop(config["weights"])
+        )
+        return path
 
-    path.cost = (
-        cost.smoothness(path, course_spline, config["weights"]) * dt
-        + cost.guidance(path, config["weights"]) * dt
-        + cost.acc(path, config["weights"]) * dt
-        + cost.jerk(path, config["weights"]) * dt
-        + cost.obs(path, obs_list, config, T)
-        + cost.stop(config["weights"])
-    )
+    # normal stop
+    if config["VERBOSE"]:
+        print("Normal stopping for vehicle %d" % vehicle.id)
+    paths = []
+    if (min_s - current_state.s) < car_length:
+        sample_d = [current_state.d]
+    else:
+        sample_d = np.arange(-road_width / 2, road_width / 2 * 1.01, d_road_w)
+    sample_stop_t = np.arange(1, course_t * 1.01, 1.0)
+    for d in sample_d:
+        for stop_t in sample_stop_t:
+            target_state = State(s=min_s, s_d=0, d=d)
+            path = frenet_optimal_planner.calc_spec_path(
+                current_state, target_state, stop_t, dt, config
+            )
+            t = path.states[-1].t
+            s = path.states[-1].s
+            d = path.states[-1].d
+            while len(path.states) < course_t / dt:
+                t += dt
+                path.states.append(State(t=t, s=s, d=d))
+            paths.append(path)
 
-    if check_path(path, config) == False:
-        print("WARNING: Stop Path didn't path  boundary check!")
+    """
+    Step 3: 
+    """
+    for path in paths:
+        path.frenet_to_cartesian(course_spline)
+        path.cost = (
+            cost.smoothness(path, course_spline, config["weights"]) * dt
+            + cost.guidance(path, config["weights"]) * dt
+            + cost.jerk(path, config["weights"]) * dt
+            + cost.stop(config["weights"])
+        )
+    paths.sort(key=lambda x: x.cost)
 
-    return path
+    bestpath = deepcopy(paths[0])
+    return bestpath
 
 
 def lanekeeping_trajectory_generator(
@@ -298,8 +426,11 @@ def lanekeeping_trajectory_generator(
     )  # sample target lateral offset
     sample_t = [config["MIN_T"]]  # Sample course time
     sample_vel = np.arange(
-        target_vel - d_t_sample * n_s_d_sample,
-        target_vel + d_t_sample * n_s_d_sample * 1.01,
+        max(1e-9, vehicle.current_state.vel - d_t_sample * n_s_d_sample),
+        min(
+            target_vel + d_t_sample * n_s_d_sample,
+            vehicle.current_state.vel + config["MAX_ACCEL"] * 4,
+        ),
         d_t_sample,
     )  # sample target longtitude vel(Velocity keeping)
 
@@ -375,43 +506,23 @@ def lanekeeping_trajectory_generator(
         """
         Step 5.5: if no path is found, Calculate a emergency stop path
         """
-        print("No path found, Calculate a stop path for vehicle {}".format(vehicle.id))
-        stop_path = Trajectory()
-        t = 0
-        s = current_state.s
-        d = current_state.d
-        s_d = current_state.s_d
-        d_d = 0
-        while True:
-            stop_path.states.append(
-                State(t=t, s=s, d=d, s_d=s_d, d_d=d_d, s_dd=-config["MAX_ACCEL"] / 2)
+        print(
+            "No lane keeping path found, Calculate a emergency brake path for vehicle {}".format(
+                vehicle.id
             )
-            if s_d <= 1e-10:
-                while len(stop_path.states) < sample_t[0] / dt:
-                    t += dt
-                    stop_path.states.append(State(t=t, s=s, d=d, s_d=s_d, d_d=0))
-                break
-            t += dt
-            s += s_d * dt
-            d += d_d * dt
-            s_d += stop_path.states[-1].s_dd * dt
-            s_d = s_d if s_d > 0 else 1e-10
-            d_d = 0
+        )
 
+        stop_path = frenet_optimal_planner.calc_stop_path(
+            current_state, config["MAX_ACCEL"], sample_t[0], dt, config
+        )
         stop_path.frenet_to_cartesian(course_spline)
-        ref_vel_list = [target_vel] * len(stop_path.states)
         stop_path.cost = (
-            cost.smoothness(stop_path, course_spline, config["weights"]) * dt
-            + cost.vel_diff(stop_path, ref_vel_list, config["weights"]) * dt
-            + cost.guidance(stop_path, config["weights"]) * dt
-            + cost.acc(stop_path, config["weights"]) * dt
-            + cost.jerk(stop_path, config["weights"]) * dt
+            cost.smoothness(path, course_spline, config["weights"]) * dt
+            + cost.guidance(path, config["weights"]) * dt
+            + cost.acc(path, config["weights"]) * dt
+            + cost.jerk(path, config["weights"]) * dt
             + cost.stop(config["weights"])
         )
-        if config["VERBOSE"]:
-            print(
-                "Total time: ", t, "Stoping distance ", s - stop_path.states[0].s, "m."
-            )
         return stop_path
 
 

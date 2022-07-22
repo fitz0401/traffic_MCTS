@@ -8,8 +8,11 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 
 
 from copy import deepcopy
+import glob
 import math
 import multiprocessing
+import os
+import subprocess
 import time
 from matplotlib import pyplot as plt
 import numpy as np
@@ -21,6 +24,7 @@ from utils.trajectory import State
 from utils.vehicle import Vehicle
 
 config_file_path = "config.yaml"
+plt_folder = "./output_video/"
 
 
 def load_config(config_file_path):
@@ -45,6 +49,33 @@ def load_config(config_file_path):
     ANIMATION = config["ANIMATION"]
 
 
+def exitplot():
+    plt.close("all")
+    plt.ioff()
+    plt.show()
+    print("exit with ESC key")
+    if config["VIDEO"]:
+        os.chdir(plt_folder)
+        videoname = config["VIDEO_NAME"] + ".mp4"
+        subprocess.call(
+            [
+                'ffmpeg',
+                '-framerate',
+                '8',
+                '-i',
+                'frame%02d.png',
+                '-r',
+                '30',
+                '-pix_fmt',
+                'yuv420p',
+                videoname,
+            ]
+        )
+        for file_name in glob.glob("*.png"):
+            os.remove(file_name)
+    exit(0)
+
+
 def plot_init():
     plt.ion()
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
@@ -52,13 +83,19 @@ def plot_init():
         [["Left", "TopRight"], ["Left", "BottomRight"]],
         gridspec_kw={"width_ratios": [3, 1]},
     )
-    global main_fig, vel_fig, acc_fig
+    global main_fig, vel_fig, acc_fig, frame_id
     main_fig = axs["Left"]
     vel_fig = axs["TopRight"]
     acc_fig = axs["BottomRight"]
+    if config["VIDEO"]:
+        # check if the folder exists, if not, create it
+        if not os.path.exists(plt_folder):
+            os.makedirs(plt_folder)
+        frame_id = 0
     # for stopping simulation with the esc key.
     plt.gcf().canvas.mpl_connect(
-        "key_release_event", lambda event: [exit(0) if event.key == "escape" else None],
+        "key_release_event",
+        lambda event: [exitplot() if event.key == "escape" else None],
     )
 
 
@@ -69,12 +106,6 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
 
     for i, vehicle in enumerate(vehicles):
         if vehicle.id in bestpaths:
-            main_fig.text(
-                vehicle.current_state.x,
-                vehicle.current_state.y,
-                "id:" + str(vehicle.id),
-                fontsize=12,
-            )
             main_fig.add_patch(
                 plt.Rectangle(
                     (
@@ -99,6 +130,15 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
                     alpha=0.7,
                     zorder=2,
                 )
+            )
+            main_fig.annotate(
+                "id:" + str(vehicle.id),
+                (vehicle.current_state.x, vehicle.current_state.y),
+                color='black',
+                weight='bold',
+                fontsize=10,
+                ha='center',
+                va='center',
             )
 
     for obs in static_obs_list:
@@ -151,7 +191,7 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
         main_fig.set_facecolor("lightgray")
         main_fig.grid(True)
 
-    focus_car_id = 0
+    focus_car_id = 2
     if focus_car_id in bestpaths:
         t_best = [state.t + T for state in bestpaths[focus_car_id].states[1:]]
         vel_best = [state.vel * 3.6 for state in bestpaths[focus_car_id].states[1:]]
@@ -178,7 +218,12 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
             ymax=bestpaths[focus_car_id].states[1].y + area * 2,
         )
 
-    # plt.pause(100)
+    if config["VIDEO"]:
+        global frame_id
+        plt.savefig(plt_folder + "/frame%02d.png" % frame_id)
+        frame_id += 1
+
+    # plt.pause(0.2)
     plt.pause(0.001)
     plt.show()
 
@@ -193,11 +238,30 @@ def planner(
     T,
     target_state=None,
 ):
+    start = time.time()
     vehicle = vehicles[index]
     """
     Convert prediction to dynamic obstacle
     """
-    obs_list = deepcopy(static_obs_list)
+    obs_list = []
+    for obs in static_obs_list:
+        if obs["type"] == "static":
+            obs_list.append(obs)
+        elif obs["type"] == "pedestrian":
+            if T < obs["pos"][0]["t"] - 1e-5 or T > obs["pos"][-1]["t"] + 1e-5:
+                continue
+            for i in range(len(obs["pos"])):
+                if abs(T - obs["pos"][i]["t"]) < 1e-5:
+                    obs_list.append(
+                        {
+                            "type": "pedestrian",
+                            "length": obs["length"],
+                            "width": obs["width"],
+                            "pos": obs["pos"][i],
+                        }
+                    )
+                    break
+
     for predict_vel_id, prediction in predictions.items():
         if predict_vel_id != vehicle.id:
             dynamic_obs = {
@@ -222,6 +286,12 @@ def planner(
         # Keep Lane
         course_spline = lanes[vehicle.lane_id]["course_spline"]
         path = single_vehicle_planner.lanekeeping_trajectory_generator(
+            vehicle, course_spline, obs_list, config, T,
+        )
+    elif next_behaviour == "STOP":
+        # Stopping
+        course_spline = lanes[vehicle.lane_id]["course_spline"]
+        path = single_vehicle_planner.stop_trajectory_generator(
             vehicle, course_spline, obs_list, config, T,
         )
     elif next_behaviour == "LC-L":
@@ -254,12 +324,8 @@ def planner(
             config,
             T,
         )
-    elif next_behaviour == "STOP":
-        # Stop
-        course_spline = lanes[vehicle.lane_id]["course_spline"]
-        path = single_vehicle_planner.stop_trajectory_generator(
-            vehicle.current_state, target_state, course_spline, obs_list, config, T
-        )
+    if config["VERBOSE"]:
+        print("time for planner:", time.time() - start)
 
     return vehicle.id, index, path, next_behaviour
 
@@ -305,6 +371,22 @@ def main():
     """
     vehicles = []
 
+    s0 = 0.0  # initial longtitude position [m]
+    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
+    d0 = 0.0  # initial lateral position [m]
+    lane_id = 0  # init lane id
+    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    vehicles.append(
+        Vehicle(
+            id=len(vehicles),
+            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+            lane_id=lane_id,
+            target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+            behaviour="KL",
+        )
+    )
     s0 = 10.0  # initial longtitude position [m]
     s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
@@ -317,12 +399,28 @@ def main():
             id=len(vehicles),
             init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
             lane_id=lane_id,
-            target_speed=20.0 / 3.6,  # target longtitude vel [m/s]
+            target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
             behaviour="KL",
         )
     )
-    s0 = 15.0  # initial longtitude position [m]
-    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
+    s0 = 20.0  # initial longtitude position [m]
+    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
+    d0 = 0.0  # initial lateral position [m]
+    lane_id = 0  # init lane id
+    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    vehicles.append(
+        Vehicle(
+            id=len(vehicles),
+            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+            lane_id=lane_id,
+            target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+            behaviour="KL",
+        )
+    )
+    s0 = 20.0  # initial longtitude position [m]
+    s0_d = 20 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 1  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
@@ -333,12 +431,12 @@ def main():
             id=len(vehicles),
             init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
             lane_id=lane_id,
-            target_speed=15.0 / 3.6,  # target longtitude vel [m/s]
+            target_speed=35.0 / 3.6,  # target longtitude vel [m/s]
             behaviour="KL",
         )
     )
-    s0 = 2.0  # initial longtitude position [m]
-    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
+    s0 = 10.0  # initial longtitude position [m]
+    s0_d = 20 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 1  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
@@ -349,7 +447,23 @@ def main():
             id=len(vehicles),
             init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
             lane_id=lane_id,
-            target_speed=20.0 / 3.6,  # target longtitude vel [m/s]
+            target_speed=40.0 / 3.6,  # target longtitude vel [m/s]
+            behaviour="KL",
+        )
+    )
+    s0 = 0.0  # initial longtitude position [m]
+    s0_d = 20 / 3.6  # initial longtitude speed [m/s]
+    d0 = 0.0  # initial lateral position [m]
+    lane_id = 1  # init lane id
+    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    vehicles.append(
+        Vehicle(
+            id=len(vehicles),
+            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+            lane_id=lane_id,
+            target_speed=40.0 / 3.6,  # target longtitude vel [m/s]
             behaviour="KL",
         )
     )
@@ -365,7 +479,7 @@ def main():
         "type": "static",
         "length": 5,
         "width": 3,
-        "pos": {"x": 36, "y": 5.9, "yaw": -0.0},
+        "pos": {"x": 36, "y": 7.5, "yaw": -0.0},
     }
     pedestrian = {
         "type": "pedestrian",
@@ -373,7 +487,7 @@ def main():
         "width": 1,
         "pos": [],
     }
-    start_x, start_y = 8, -1
+    start_x, start_y = 30, 7
     for t in np.arange(1, 7, config["DT"]):
         pedestrian["pos"].append({"t": t, "x": start_x, "y": start_y})
         start_y += 1.5 * config["DT"]
@@ -381,7 +495,7 @@ def main():
 
     global T, delta_timestep, delta_t
     T = 0.0
-    delta_timestep = 2
+    delta_timestep = 1
     delta_t = delta_timestep * config["DT"]
     predictions = {}
     for i in range(SIM_LOOP):
@@ -391,7 +505,7 @@ def main():
         for index in range(len(vehicles)):
             if vehicles[index].current_state.t <= T:
                 # next_behaviour = "LC-L"
-                next_behaviour = "KL"
+                next_behaviour = "STOP"
                 param_list.append(
                     (
                         index,
@@ -407,8 +521,7 @@ def main():
         results = pool.starmap(planner, param_list)
         pool.close()
         end = time.time()
-        if config["VERBOSE"]:
-            print("--------\nOne loop Time: ", end - start, "\n--------")
+        print("--------\nOne loop Time: ", end - start, "\n--------")
 
         for result_path in results:
             vehicle_id = result_path[0]
@@ -452,6 +565,8 @@ def main():
         # ATTENSION:prdiction must have vel to be used in calculate cost
         for velhicle_id, path in bestpaths.items():
             predictions[velhicle_id] = path
+
+    exitplot()
 
 
 if __name__ == "__main__":

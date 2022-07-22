@@ -96,6 +96,29 @@ def calc_spec_path(current_state, target_state, T, dt, config):
     return fp
 
 
+def calc_stop_path(current_state, acc, T, dt, config):
+    stop_path = Trajectory()
+    t = 0
+    s = current_state.s
+    d = current_state.d
+    s_d = current_state.s_d
+    d_d = 0
+    while True:
+        stop_path.states.append(State(t=t, s=s, d=d, s_d=s_d, d_d=d_d, s_dd=-acc))
+        if s_d <= 1e-10:
+            while len(stop_path.states) < T / dt:
+                t += dt
+                stop_path.states.append(State(t=t, s=s, d=d, s_d=s_d, d_d=0))
+            break
+        t += dt
+        s += s_d * dt
+        d += d_d * dt
+        s_d += stop_path.states[-1].s_dd * dt
+        s_d = s_d if s_d > 0 else 1e-10
+
+    return stop_path
+
+
 def calc_frenet_paths(current_state, sample_d, sample_t, sample_v, dt, config):
     frenet_paths = []
 

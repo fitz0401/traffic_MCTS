@@ -83,17 +83,12 @@ class Trajectory:
             # x, y, v, yaw = self.frenet_to_cartesian2D(rx, ry, ryaw, rkappa, i)
             self.states[i].x = x
             self.states[i].y = y
-            self.states[i].vel = v
-            if isnan(yaw):
-                print(
-                    "encounter nan yaw because s_d and d_d is both 0 but need to convert to cartesian",
-                    self.states[i].d,
-                    self.states[i].s_d,
-                    self.states[i].d_d,
-                )
-                self.states[i].yaw = self.states[i - 1].yaw
+            if self.states[i].s_d < 1e-5:
+                self.states[i].vel = 0
+                self.states[i].yaw = ryaw
             else:
                 self.states[i].yaw = yaw
+                self.states[i].vel = v
 
         for i in range(0, len(self.states) - 1):
             self.states[i].acc = (self.states[i + 1].vel - self.states[i].vel) / (
@@ -133,7 +128,7 @@ class Trajectory:
         此处默认s沿着轨迹方向单调递增
         """
 
-        refined_s = np.arange(0, csp.s[-1], csp.s[-1] / 1000)
+        refined_s = np.arange(0, csp.s[-1], csp.s[-1] / 500)
         # print("s_t", csp.s[-1] / 1000)
 
         _, ri = csp.find_nearest_rs(refined_s, self.states[0].x, self.states[0].y)

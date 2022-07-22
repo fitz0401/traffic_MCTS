@@ -43,8 +43,8 @@ def obs(path, obs_list, config, T):
             cost_obs += obstacle_cost.calculate_static(obs, path, config)
         elif obs["type"] == "car":
             cost_obs += obstacle_cost.calculate_car(obs, path, config)
-        elif  obs["type"] == "pedestrian":
-            cost_obs += obstacle_cost.calculate_pedestrian(obs, path, config,T)
+        elif obs["type"] == "pedestrian":
+            cost_obs += obstacle_cost.calculate_pedestrian(obs, path, config, T)
 
     return cost_obs
 

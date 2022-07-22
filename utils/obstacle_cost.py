@@ -78,7 +78,8 @@ def calculate_static(obs, path, config):
     dist_thershold = math.hypot(car_length + obs["length"], car_width + obs["width"])
 
     # rotate and translate the obstacle
-    for state in path.states:
+    for i in range(0, len(path.states), 2):
+        state = path.states[i]
         dist = math.hypot(state.x - obs["pos"]["x"], state.y - obs["pos"]["y"],)
         if dist > dist_thershold:
             continue
@@ -114,15 +115,6 @@ def calculate_pedestrian(obs, path, config, T):
     reaction_time = 2.0  # important param for avoid pedestrian
     cost = 0
 
-    if T < obs["pos"][0]["t"] - 1e-5 or T > obs["pos"][-1]["t"] + 1e-5:
-        return cost
-
-    obs_i = 0
-    while obs_i < len(obs["pos"]):
-        if abs(T - obs["pos"][obs_i]["t"]) < 1e-5:
-            break
-        obs_i += 1
-
     car_width = config["vehicle"]["truck"]["width"]
     car_length = config["vehicle"]["truck"]["length"]
 
@@ -131,11 +123,8 @@ def calculate_pedestrian(obs, path, config, T):
         + 1 * car_length  # Reaction dist + Hard Collision
     )
     for i in range(0, int(reaction_time / config["DT"]), 2):
-        obs_index = obs_i
-        # obs_index = min(len(obs["pos"]) - 1, obs_i + i)
         dist = math.hypot(
-            path.states[i].x - obs["pos"][obs_index]["x"],
-            path.states[i].y - obs["pos"][obs_index]["y"],
+            path.states[i].x - obs["pos"]["x"], path.states[i].y - obs["pos"]["y"],
         )
         if dist > dist_to_collide:
             continue
@@ -145,7 +134,7 @@ def calculate_pedestrian(obs, path, config, T):
             car_length,
             car_width,
             path.states[i].yaw,
-            np.array([obs["pos"][obs_index]["x"], obs["pos"][obs_index]["y"]]),
+            np.array([obs["pos"]["x"], obs["pos"]["y"]]),
             obs["length"],
             obs["width"] + car_width * 1.0,
             0,

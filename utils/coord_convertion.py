@@ -22,7 +22,10 @@ def frenet_to_cartesian2D(rx, ry, ryaw, rkappa, state):
 
     one_minus_kappa_r_d = 1 - rkappa * state.d
     v = sqrt(one_minus_kappa_r_d ** 2 * state.s_d ** 2 + state.d_d ** 2)
-    yaw = asin(state.d_d / v) + ryaw
+    if v == 0:
+        yaw = ryaw
+    else:
+        yaw = asin(state.d_d / v) + ryaw
 
     return x, y, v, yaw
 
