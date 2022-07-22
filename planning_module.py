@@ -191,7 +191,7 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
         main_fig.set_facecolor("lightgray")
         main_fig.grid(True)
 
-    focus_car_id = 2
+    focus_car_id = 1
     if focus_car_id in bestpaths:
         t_best = [state.t + T for state in bestpaths[focus_car_id].states[1:]]
         vel_best = [state.vel * 3.6 for state in bestpaths[focus_car_id].states[1:]]
@@ -229,14 +229,7 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
 
 
 def planner(
-    index,
-    vehicles,
-    next_behaviour,
-    predictions,
-    lanes,
-    static_obs_list,
-    T,
-    target_state=None,
+    index, vehicles, predictions, lanes, static_obs_list, T, target_state=None,
 ):
     start = time.time()
     vehicle = vehicles[index]
@@ -269,12 +262,16 @@ def planner(
                 "length": config["vehicle"]["truck"]["length"],
                 "width": config["vehicle"]["truck"]["width"],
                 "path": [],
+                "lane_id": vehicles[predict_vel_id].lane_id,
+                "id": predict_vel_id,
             }
             for i in range(len(prediction.states)):
                 dynamic_obs["path"].append(
                     {
                         "x": prediction.states[i].x,
                         "y": prediction.states[i].y,
+                        "s": prediction.states[i].s,
+                        "d": prediction.states[i].d,
                         "yaw": prediction.states[i].yaw,
                         "vel": prediction.states[i].vel,
                     }
@@ -282,44 +279,48 @@ def planner(
             obs_list.append(dynamic_obs)
     # print("obs_list:", obs_list)
 
-    if next_behaviour == "KL":
+    if vehicle.behaviour == "KL":
         # Keep Lane
         course_spline = lanes[vehicle.lane_id]["course_spline"]
         path = single_vehicle_planner.lanekeeping_trajectory_generator(
             vehicle, course_spline, obs_list, config, T,
         )
-    elif next_behaviour == "STOP":
+    elif vehicle.behaviour == "STOP":
         # Stopping
         course_spline = lanes[vehicle.lane_id]["course_spline"]
         path = single_vehicle_planner.stop_trajectory_generator(
             vehicle, course_spline, obs_list, config, T,
         )
-    elif next_behaviour == "LC-L":
+    elif vehicle.behaviour == "LC-L":
         # Turn Left
         if vehicle.lane_id + 1 >= len(lanes):
             print("warning: lane change left for car %d is out of range", vehicle.id)
             return
-        course_spline = lanes[vehicle.lane_id + 1]["course_spline"]
-        LC_vehicle = vehicle.change_to_lane(vehicle.lane_id + 1, course_spline)
+        current_course_spline = lanes[vehicle.lane_id]["course_spline"]
+        target_course_spline = lanes[vehicle.lane_id + 1]["course_spline"]
+        LC_vehicle = vehicle.change_to_lane(vehicle.lane_id + 1, target_course_spline)
         path = single_vehicle_planner.lanechange_trajectory_generator(
-            LC_vehicle.current_state,
-            vehicle.target_speed,
-            course_spline,
+            vehicle,
+            LC_vehicle,
+            current_course_spline,
+            target_course_spline,
             obs_list,
             config,
             T,
         )
-    elif next_behaviour == "LC-R":
+    elif vehicle.behaviour == "LC-R":
         # Turn Left
         if vehicle.lane_id - 1 < 0:
             print("warning: lane change left for car %d is out of range", vehicle.id)
             return
-        course_spline = lanes[vehicle.lane_id - 1]["course_spline"]
-        LC_vehicle = vehicle.change_to_lane(vehicle.lane_id - 1, course_spline)
+        current_course_spline = lanes[vehicle.lane_id]["course_spline"]
+        target_course_spline = lanes[vehicle.lane_id - 1]["course_spline"]
+        LC_vehicle = vehicle.change_to_lane(vehicle.lane_id - 1, target_course_spline)
         path = single_vehicle_planner.lanechange_trajectory_generator(
-            LC_vehicle.current_state,
-            vehicle.target_speed,
-            course_spline,
+            vehicle,
+            LC_vehicle,
+            current_course_spline,
+            target_course_spline,
             obs_list,
             config,
             T,
@@ -327,7 +328,7 @@ def planner(
     if config["VERBOSE"]:
         print("time for planner:", time.time() - start)
 
-    return vehicle.id, index, path, next_behaviour
+    return vehicle.id, index, path, vehicle.behaviour
 
 
 def main():
@@ -371,8 +372,24 @@ def main():
     """
     vehicles = []
 
-    s0 = 0.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
+    s0 = 3.0  # initial longtitude position [m]
+    s0_d = 30.0 / 3.6  # initial longtitude speed [m/s]
+    d0 = 0.0  # initial lateral position [m]
+    lane_id = 0  # init lane id
+    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    vehicles.append(
+        Vehicle(
+            id=len(vehicles),
+            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+            lane_id=lane_id,
+            target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+            behaviour="LC-L",
+        )
+    )
+    s0 = 16.0  # initial longtitude position [m]
+    s0_d = 30.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 0  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
@@ -387,40 +404,24 @@ def main():
             behaviour="KL",
         )
     )
-    s0 = 10.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = 0  # init lane id
-    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
-    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
-    vehicles.append(
-        Vehicle(
-            id=len(vehicles),
-            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=lane_id,
-            target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-            behaviour="KL",
-        )
-    )
+    # s0 = 20.0  # initial longtitude position [m]
+    # s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
+    # d0 = 0.0  # initial lateral position [m]
+    # lane_id = 0  # init lane id
+    # x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    # yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    # cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    # vehicles.append(
+    #     Vehicle(
+    #         id=len(vehicles),
+    #         init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+    #         lane_id=lane_id,
+    #         target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+    #         behaviour="KL",
+    #     )
+    # )
     s0 = 20.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = 0  # init lane id
-    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
-    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
-    vehicles.append(
-        Vehicle(
-            id=len(vehicles),
-            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=lane_id,
-            target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-            behaviour="KL",
-        )
-    )
-    s0 = 20.0  # initial longtitude position [m]
-    s0_d = 20 / 3.6  # initial longtitude speed [m/s]
+    s0_d = 30 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 1  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
@@ -432,27 +433,27 @@ def main():
             init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
             lane_id=lane_id,
             target_speed=35.0 / 3.6,  # target longtitude vel [m/s]
-            behaviour="KL",
+            behaviour="LC-R",
         )
     )
-    s0 = 10.0  # initial longtitude position [m]
-    s0_d = 20 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = 1  # init lane id
-    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
-    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
-    vehicles.append(
-        Vehicle(
-            id=len(vehicles),
-            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=lane_id,
-            target_speed=40.0 / 3.6,  # target longtitude vel [m/s]
-            behaviour="KL",
-        )
-    )
+    # s0 = 10.0  # initial longtitude position [m]
+    # s0_d = 20 / 3.6  # initial longtitude speed [m/s]
+    # d0 = 0.0  # initial lateral position [m]
+    # lane_id = 1  # init lane id
+    # x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    # yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    # cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    # vehicles.append(
+    #     Vehicle(
+    #         id=len(vehicles),
+    #         init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+    #         lane_id=lane_id,
+    #         target_speed=40.0 / 3.6,  # target longtitude vel [m/s]
+    #         behaviour="KL",
+    #     )
+    # )
     s0 = 0.0  # initial longtitude position [m]
-    s0_d = 20 / 3.6  # initial longtitude speed [m/s]
+    s0_d = 30 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 1  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
@@ -491,7 +492,8 @@ def main():
     for t in np.arange(1, 7, config["DT"]):
         pedestrian["pos"].append({"t": t, "x": start_x, "y": start_y})
         start_y += 1.5 * config["DT"]
-    static_obs_list = [test_obs, pedestrian]
+    static_obs_list = [test_obs]
+    static_obs_list = []
 
     global T, delta_timestep, delta_t
     T = 0.0
@@ -504,18 +506,10 @@ def main():
         param_list = []
         for index in range(len(vehicles)):
             if vehicles[index].current_state.t <= T:
-                # next_behaviour = "LC-L"
-                next_behaviour = "STOP"
+                # vehicles[index].behaviour = "LC-L"
+                # next_behaviour = "STOP"
                 param_list.append(
-                    (
-                        index,
-                        vehicles,
-                        next_behaviour,
-                        predictions,
-                        lanes,
-                        static_obs_list,
-                        T,
-                    )
+                    (index, vehicles, predictions, lanes, static_obs_list, T,)
                 )
         pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
         results = pool.starmap(planner, param_list)
@@ -523,13 +517,33 @@ def main():
         end = time.time()
         print("--------\nOne loop Time: ", end - start, "\n--------")
 
+        # Update
+        T += delta_t
         for result_path in results:
             vehicle_id = result_path[0]
             vehicle_index = result_path[1]
             vehicle = vehicles[vehicle_index]
             bestpaths[vehicle_id] = result_path[2]
             vehicle.current_state = deepcopy(result_path[2].states[delta_timestep])
-            vehicle.current_state.t = T + delta_t
+            vehicle.current_state.t = T
+            if (
+                vehicle.behaviour == 'LC-L'
+                and vehicle.current_state.d > config["MAX_ROAD_WIDTH"] / 1.5
+            ):
+                print("change lane successful!")
+                vehicles[vehicle_index] = vehicle.change_to_lane(
+                    vehicle.lane_id + 1, lanes[vehicle.lane_id + 1]["course_spline"]
+                )
+                vehicles[vehicle_index].behaviour = 'KL'
+            if (
+                vehicle.behaviour == 'LC-R'
+                and vehicle.current_state.d < -config["MAX_ROAD_WIDTH"] / 1.5
+            ):
+                print("Change lane successful!")
+                vehicles[vehicle_index] = vehicle.change_to_lane(
+                    vehicle.lane_id - 1, lanes[vehicle.lane_id - 1]["course_spline"]
+                )
+                vehicles[vehicle_index].behaviour = 'KL'
 
         """
         Test Goal
@@ -551,15 +565,8 @@ def main():
             print("Done!")
             break
 
-        end = time.time()
-        # print("One loop take {} seconds".format(end - start))
-
         if ANIMATION:
             plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T)
-
-        # Update
-        # TODO: update vehicle current lane
-        T += delta_t
 
         predictions.clear()
         # ATTENSION:prdiction must have vel to be used in calculate cost

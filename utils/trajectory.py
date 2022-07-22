@@ -172,7 +172,7 @@ class Trajectory:
         self.states[-1].s_dd = self.states[-2].s_dd
         self.states[-1].d_dd = self.states[-2].d_dd
 
-        for i in range(1, len(self.s) - 1):
+        for i in range(1, len(self.states) - 1):
             self.states[i].s_ddd = (
                 self.states[i + 1].s_d - 2 * self.states[i].s_d + self.states[i - 1].s_d
             ) / ((self.states[i + 1].t - self.states[i].t) ** 2)
