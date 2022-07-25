@@ -41,6 +41,8 @@ class Spline:
                 self.c[i + 1] + 2.0 * self.c[i]
             ) / 3.0
             self.b.append(tb)
+        self.b.append(self.b[-1])
+        self.d.append(self.d[-1])
 
     def calc(self, t):
         """

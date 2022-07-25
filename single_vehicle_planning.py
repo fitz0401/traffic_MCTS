@@ -152,8 +152,8 @@ def lanechange_trajectory_generator(
 
     sample_t = [config["MIN_T"]]  # Sample course time
     sample_vel = np.arange(
-        current_state.vel - d_t_sample * n_s_d_sample,
-        target_vel + d_t_sample * n_s_d_sample * 1.01,
+        max(1e-9, current_state.vel - d_t_sample * n_s_d_sample),
+        max(current_state.vel, target_vel) + d_t_sample * n_s_d_sample * 1.01,
         d_t_sample,
     )
     sample_s = np.empty(0)
@@ -182,18 +182,18 @@ def lanechange_trajectory_generator(
                     )
                 )
     end = time.time()
+    if paths == []:
+        print("ERROR: No lane change path found", sample_t, sample_s, sample_vel)
+        exit()
     if config["VERBOSE"]:
         print(
-            "finish path generation, planning",
+            "[INFO] LANE CHANGE: finish path generation, planning",
             len(paths),
             "paths with an average runtime",
             (end - start) / len(paths),
             "seconds.",
             float(end - start),
         )
-    if paths is None:
-        print("WARNING: No lane change path found")
-        return
 
     """
     Step 3: Convert between xy and frenet
@@ -245,9 +245,18 @@ def lanechange_trajectory_generator(
     """
     bestpath = None
     for path in paths:
-        if check_path(path, config):
+        if path.cost < math.inf:
             bestpath = deepcopy(path)
-            bestpath.cartesian_to_frenet(current_course_spline)
+            s = np.arange(
+                0, current_course_spline.s[-1], current_course_spline.s[-1] / 500
+            )
+            for i in range(len(bestpath.states)):
+                (
+                    bestpath.states[i].s,
+                    bestpath.states[i].d,
+                ) = current_course_spline.cartesian_to_frenet1D(
+                    bestpath.states[i].x, bestpath.states[i].y, s
+                )
             if config["VERBOSE"]:
                 print(
                     "find a valid lane change path for with minimum cost:",
@@ -265,10 +274,10 @@ def lanechange_trajectory_generator(
         )
         stop_path.frenet_to_cartesian(current_course_spline)
         stop_path.cost = (
-            cost.smoothness(path, current_course_spline, config["weights"]) * dt
-            + cost.guidance(path, config["weights"]) * dt
-            + cost.acc(path, config["weights"]) * dt
-            + cost.jerk(path, config["weights"]) * dt
+            cost.smoothness(stop_path, current_course_spline, config["weights"]) * dt
+            + cost.guidance(stop_path, config["weights"]) * dt
+            + cost.acc(stop_path, config["weights"]) * dt
+            + cost.jerk(stop_path, config["weights"]) * dt
             + cost.stop(config["weights"])
         )
         return stop_path

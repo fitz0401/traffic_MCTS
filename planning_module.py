@@ -8,6 +8,8 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 
 
 from copy import deepcopy
+import copy
+import csv
 import glob
 import math
 import multiprocessing
@@ -104,7 +106,8 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
     vel_fig.cla()
     acc_fig.cla()
 
-    for i, vehicle in enumerate(vehicles):
+    for vehicle_id in vehicles:
+        vehicle = vehicles[vehicle_id]
         if vehicle.id in bestpaths:
             main_fig.add_patch(
                 plt.Rectangle(
@@ -191,13 +194,15 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
         main_fig.set_facecolor("lightgray")
         main_fig.grid(True)
 
-    focus_car_id = 1
-    if focus_car_id in bestpaths:
+    focus_car_id = 0
+    if focus_car_id in bestpaths and focus_car_id in vehicles:
         t_best = [state.t + T for state in bestpaths[focus_car_id].states[1:]]
         vel_best = [state.vel * 3.6 for state in bestpaths[focus_car_id].states[1:]]
         vel_fig.plot(t_best, vel_best, lw=1)
         vel_fig.set_title(
-            "Velocity [km/h]:"
+            "Vehicle id:"
+            + str(focus_car_id)
+            + "\nVelocity [km/h]:"
             + str(vehicles[focus_car_id].current_state.vel * 3.6)[0:4]
         )
         vel_fig.grid(True)
@@ -229,10 +234,10 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, T):
 
 
 def planner(
-    index, vehicles, predictions, lanes, static_obs_list, T, target_state=None,
+    vehicle_id, vehicles, predictions, lanes, static_obs_list, T, target_state=None,
 ):
     start = time.time()
-    vehicle = vehicles[index]
+    vehicle = vehicles[vehicle_id]
     """
     Convert prediction to dynamic obstacle
     """
@@ -256,7 +261,7 @@ def planner(
                     break
 
     for predict_vel_id, prediction in predictions.items():
-        if predict_vel_id != vehicle.id:
+        if predict_vel_id != vehicle.id and predict_vel_id in vehicles:
             dynamic_obs = {
                 "type": "car",
                 "length": config["vehicle"]["truck"]["length"],
@@ -328,7 +333,7 @@ def planner(
     if config["VERBOSE"]:
         print("time for planner:", time.time() - start)
 
-    return vehicle.id, index, path, vehicle.behaviour
+    return vehicle_id, path, vehicle.behaviour
 
 
 def main():
@@ -341,9 +346,12 @@ def main():
     Step 1. Build Frenet cord
     """
     # right boundary of the road
-    wx = [-20, 10.0, 20.5, 35.0, 70.5, 90]
-    wy = [0.0, -1.0, 2.0, 6.5, 0.0, 5]
-    # wy = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    # wx = [-20, 10.0, 20.5, 35.0, 70.5, 90]
+    # wy = [0.0, -1.0, 2.0, 6.5, 0.0, 5]
+    wx = [-40, -20, -5.0, -5, -5, -5, -5]
+    wy = [0, 0.0, -5.0, -6, -7, -15, -30]
+    # wy = [0, 0, 0.0, 0]
+    # wx = [0, 10.0, 30.0, 90]
     road_right_spline = Spline2D(wx, wy)
     s = np.arange(0, road_right_spline.s[-1], 0.2)
     lane_number = 3
@@ -370,23 +378,21 @@ def main():
     """
     Init vehicles
     """
-    vehicles = []
+    vehicles = {}
 
-    s0 = 3.0  # initial longtitude position [m]
+    s0 = 6.0  # initial longtitude position [m]
     s0_d = 30.0 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
     lane_id = 0  # init lane id
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
     yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
     cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
-    vehicles.append(
-        Vehicle(
-            id=len(vehicles),
-            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=lane_id,
-            target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-            behaviour="LC-L",
-        )
+    vehicles[len(vehicles)] = Vehicle(
+        id=len(vehicles),
+        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+        lane_id=lane_id,
+        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+        behaviour="LC-L",
     )
     s0 = 16.0  # initial longtitude position [m]
     s0_d = 30.0 / 3.6  # initial longtitude speed [m/s]
@@ -395,14 +401,12 @@ def main():
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
     yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
     cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
-    vehicles.append(
-        Vehicle(
-            id=len(vehicles),
-            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=lane_id,
-            target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-            behaviour="KL",
-        )
+    vehicles[len(vehicles)] = Vehicle(
+        id=len(vehicles),
+        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+        lane_id=lane_id,
+        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+        behaviour="KL",
     )
     # s0 = 20.0  # initial longtitude position [m]
     # s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
@@ -420,24 +424,8 @@ def main():
     #         behaviour="KL",
     #     )
     # )
-    s0 = 20.0  # initial longtitude position [m]
-    s0_d = 30 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = 1  # init lane id
-    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
-    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
-    vehicles.append(
-        Vehicle(
-            id=len(vehicles),
-            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=lane_id,
-            target_speed=35.0 / 3.6,  # target longtitude vel [m/s]
-            behaviour="LC-R",
-        )
-    )
-    # s0 = 10.0  # initial longtitude position [m]
-    # s0_d = 20 / 3.6  # initial longtitude speed [m/s]
+    # s0 = 20.0  # initial longtitude position [m]
+    # s0_d = 30 / 3.6  # initial longtitude speed [m/s]
     # d0 = 0.0  # initial lateral position [m]
     # lane_id = 1  # init lane id
     # x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
@@ -448,10 +436,24 @@ def main():
     #         id=len(vehicles),
     #         init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
     #         lane_id=lane_id,
-    #         target_speed=40.0 / 3.6,  # target longtitude vel [m/s]
-    #         behaviour="KL",
+    #         target_speed=35.0 / 3.6,  # target longtitude vel [m/s]
+    #         behaviour="LC-R",
     #     )
     # )
+    s0 = 25.0  # initial longtitude position [m]
+    s0_d = 20 / 3.6  # initial longtitude speed [m/s]
+    d0 = 0.0  # initial lateral position [m]
+    lane_id = 1  # init lane id
+    x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
+    yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
+    cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
+    vehicles[len(vehicles)] = Vehicle(
+        id=len(vehicles),
+        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+        lane_id=lane_id,
+        target_speed=40.0 / 3.6,  # target longtitude vel [m/s]
+        behaviour="KL",
+    )
     s0 = 0.0  # initial longtitude position [m]
     s0_d = 30 / 3.6  # initial longtitude speed [m/s]
     d0 = 0.0  # initial lateral position [m]
@@ -459,14 +461,12 @@ def main():
     x0, y0 = lanes[lane_id]["course_spline"].frenet_to_cartesian1D(s0, d0)
     yaw0 = lanes[lane_id]["course_spline"].calc_yaw(s0)
     cur0 = lanes[lane_id]["course_spline"].calc_curvature(s0)
-    vehicles.append(
-        Vehicle(
-            id=len(vehicles),
-            init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-            lane_id=lane_id,
-            target_speed=40.0 / 3.6,  # target longtitude vel [m/s]
-            behaviour="KL",
-        )
+    vehicles[len(vehicles)] = Vehicle(
+        id=len(vehicles),
+        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
+        lane_id=lane_id,
+        target_speed=40.0 / 3.6,  # target longtitude vel [m/s]
+        behaviour="KL",
     )
 
     # color map
@@ -500,16 +500,38 @@ def main():
     delta_timestep = 1
     delta_t = delta_timestep * config["DT"]
     predictions = {}
+
+    # write current state to csv file
+    if config["CSV"]:
+        with open("trajectories.csv", "w") as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                ["t", "vehicle_id", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
+            )
+            for vehicle_id, vehicle in vehicles.items():
+                writer.writerow(
+                    [
+                        T,
+                        vehicle.id,
+                        vehicle.current_state.x,
+                        vehicle.current_state.y,
+                        vehicle.current_state.yaw,
+                        vehicle.current_state.vel,
+                        vehicle.current_state.acc,
+                    ]
+                )
+
+    # main loop
     for i in range(SIM_LOOP):
         bestpaths = {}
         start = time.time()
         param_list = []
-        for index in range(len(vehicles)):
-            if vehicles[index].current_state.t <= T:
+        for vehicle_id in vehicles:
+            if vehicles[vehicle_id].current_state.t <= T:
                 # vehicles[index].behaviour = "LC-L"
                 # next_behaviour = "STOP"
                 param_list.append(
-                    (index, vehicles, predictions, lanes, static_obs_list, T,)
+                    (vehicle_id, vehicles, predictions, lanes, static_obs_list, T,)
                 )
         pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
         results = pool.starmap(planner, param_list)
@@ -521,34 +543,50 @@ def main():
         T += delta_t
         for result_path in results:
             vehicle_id = result_path[0]
-            vehicle_index = result_path[1]
-            vehicle = vehicles[vehicle_index]
-            bestpaths[vehicle_id] = result_path[2]
-            vehicle.current_state = deepcopy(result_path[2].states[delta_timestep])
+            vehicle = vehicles[vehicle_id]
+            bestpaths[vehicle_id] = result_path[1]
+            vehicle.current_state = deepcopy(result_path[1].states[delta_timestep])
             vehicle.current_state.t = T
             if (
                 vehicle.behaviour == 'LC-L'
                 and vehicle.current_state.d > config["MAX_ROAD_WIDTH"] / 1.5
             ):
                 print("change lane successful!")
-                vehicles[vehicle_index] = vehicle.change_to_lane(
+                vehicles[vehicle_id] = vehicle.change_to_lane(
                     vehicle.lane_id + 1, lanes[vehicle.lane_id + 1]["course_spline"]
                 )
-                vehicles[vehicle_index].behaviour = 'KL'
+                vehicles[vehicle_id].behaviour = 'KL'
             if (
                 vehicle.behaviour == 'LC-R'
                 and vehicle.current_state.d < -config["MAX_ROAD_WIDTH"] / 1.5
             ):
                 print("Change lane successful!")
-                vehicles[vehicle_index] = vehicle.change_to_lane(
+                vehicles[vehicle_id] = vehicle.change_to_lane(
                     vehicle.lane_id - 1, lanes[vehicle.lane_id - 1]["course_spline"]
                 )
-                vehicles[vehicle_index].behaviour = 'KL'
+                vehicles[vehicle_id].behaviour = 'KL'
 
         """
         Test Goal
         """
-        for vehicle in vehicles:
+        for vehicle_id in copy.copy(vehicles):
+            vehicle = vehicles[vehicle_id]
+            # write current state to csv file
+            if config["CSV"]:
+                with open("trajectories.csv", "a") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(
+                        [
+                            T,
+                            vehicle.id,
+                            vehicle.current_state.x,
+                            vehicle.current_state.y,
+                            vehicle.current_state.yaw,
+                            vehicle.current_state.vel,
+                            vehicle.current_state.acc,
+                        ]
+                    )
+
             if (
                 np.hypot(
                     vehicle.current_state.x
@@ -556,10 +594,10 @@ def main():
                     vehicle.current_state.y
                     - lanes[vehicle.lane_id]["center_line"][-1][1],
                 )
-                <= 1.0
+                <= 3.0
             ):
                 print("Goal for vehicle", vehicle.id, "is reached")
-                vehicles.remove(vehicle)
+                vehicles.pop(vehicle.id)
 
         if len(vehicles) == 0:
             print("Done!")

@@ -1,7 +1,8 @@
 ANIMATION: True
 VERBOSE: False # print detailed debug message
 VIDEO: False # save plotting as video
-VIDEO_NAME: "stop_demo"
+VIDEO_NAME: "demo"
+CSV: False # write trajectories in trajectories.csv
 
 SIM_LOOP: 500
 MAX_ROAD_WIDTH: 3.5 # maximum road width [m]

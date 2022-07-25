@@ -73,7 +73,7 @@ class Trajectory:
         warnings.filterwarnings('error')
         for i in range(len(self.states)):
             rx, ry = csp.calc_position(self.states[i].s)
-            if rx is None:
+            if rx is None or ry is None:
                 del self.states[i:]
                 break
             ryaw = csp.calc_yaw(self.states[i].s)
@@ -123,6 +123,7 @@ class Trajectory:
 
         return
 
+    #------DONOT use this function!------ have bugs-----
     def cartesian_to_frenet(self, csp):
         """
         此处默认s沿着轨迹方向单调递增
