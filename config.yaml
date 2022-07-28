@@ -3,6 +3,7 @@ VERBOSE: False # print detailed debug message
 VIDEO: False # save plotting as video
 VIDEO_NAME: "demo"
 CSV: False # write trajectories in trajectories.csv
+ROAD_PATH: "roadgraph_intersect.yaml" # roadgraph yaml path
 
 SIM_LOOP: 500
 MAX_ROAD_WIDTH: 3.5 # maximum road width [m]

@@ -41,8 +41,8 @@ class Spline:
                 self.c[i + 1] + 2.0 * self.c[i]
             ) / 3.0
             self.b.append(tb)
-        self.b.append(self.b[-1])
-        self.d.append(self.d[-1])
+        # self.b.append(self.b[-1])
+        # self.d.append(self.d[-1])
 
     def calc(self, t):
         """
@@ -58,6 +58,8 @@ class Spline:
             return None
 
         i = self.__search_index(t)
+        if i == len(self.b):
+            i = i - 1
         dx = t - self.x[i]
         result = (
             self.a[i] + self.b[i] * dx + self.c[i] * dx ** 2.0 + self.d[i] * dx ** 3.0
@@ -78,6 +80,8 @@ class Spline:
             return None
 
         i = self.__search_index(t)
+        if i == len(self.b):
+            i = i - 1
         dx = t - self.x[i]
         result = self.b[i] + 2.0 * self.c[i] * dx + 3.0 * self.d[i] * dx ** 2.0
         return result
@@ -93,6 +97,8 @@ class Spline:
             return None
 
         i = self.__search_index(t)
+        if i == len(self.b):
+            i = i - 1
         dx = t - self.x[i]
         result = 2.0 * self.c[i] + 6.0 * self.d[i] * dx
         return result
@@ -108,6 +114,8 @@ class Spline:
             return None
 
         i = self.__search_index(t)
+        if i == len(self.b):
+            i = i - 1
         dx = t - self.x[i]
         result = 6.0 * self.d[i]
         return result

@@ -25,12 +25,11 @@ class Vehicle:
     def set_current_state(self, state: State):
         self.current_state = state
 
-    def change_to_lane(self, lane_id, course_spline):
-        # Assume
+    def change_to_next_lane(self, lane_id, course_spline):
         vehicle_new_lane = deepcopy(self)
         vehicle_new_lane.lane_id = lane_id
 
-        refined_s = np.arange(0, course_spline.s[-1], course_spline.s[-1] / 1000)
+        refined_s = np.linspace(0, course_spline.s[-1], 500)
         rs, _ = course_spline.find_nearest_rs(
             refined_s, self.current_state.x, self.current_state.y
         )
@@ -45,6 +44,23 @@ class Vehicle:
         vehicle_new_lane.current_state.s_d = s_d
         vehicle_new_lane.current_state.d = d
         vehicle_new_lane.current_state.d_d = d_d
+
+        return vehicle_new_lane
+
+    def change_to_adjacent_lane(self, lane_id, course_spline):
+        # Assume that adjacent lane is on the same edge and share same s-axis
+        vehicle_new_lane = deepcopy(self)
+        vehicle_new_lane.lane_id = lane_id
+
+        rx, ry = course_spline.calc_position(self.current_state.s)
+        ryaw = course_spline.calc_yaw(self.current_state.s)
+        rkappa = course_spline.calc_curvature(self.current_state.s)
+
+        s, s_d, d, d_d = cartesian_to_frenet2D(
+            self.current_state.s, rx, ry, ryaw, rkappa, vehicle_new_lane.current_state
+        )
+        vehicle_new_lane.current_state.s = s
+        vehicle_new_lane.current_state.d = d
 
         return vehicle_new_lane
 
