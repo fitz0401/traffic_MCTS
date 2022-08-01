@@ -123,8 +123,51 @@ class Trajectory:
 
         return
 
-    #------DONOT use this function!------ have bugs-----
-    def cartesian_to_frenet(self, csp):
+    def cartesian_to_frenet1D(self, current_course_spline):
+        """
+        FIXME:
+        此处默认s沿着轨迹方向单调递增, 且只更新s,d坐标
+        """
+        refined_s = np.linspace(0, current_course_spline.s[-1], num=500)
+        # print("s_t", csp.s[-1] / 1000)
+
+        _, ri = current_course_spline.find_nearest_rs(
+            refined_s, self.states[0].x, self.states[0].y
+        )
+        for i in range(len(self.states)):
+            # Step 1: find nearest reference point rs
+            rx, ry = current_course_spline.calc_position(refined_s[ri])
+            dist = np.sqrt((self.states[i].x - rx) ** 2 + (self.states[i].y - ry) ** 2)
+            while ri + 1 < len(refined_s):
+                rx1, ry1 = current_course_spline.calc_position(refined_s[ri + 1])
+                dist1 = np.sqrt(
+                    (self.states[i].x - rx1) ** 2 + (self.states[i].y - ry1) ** 2
+                )
+                if dist1 > dist:
+                    break
+                rx = rx1
+                ry = ry1
+                dist = dist1
+                ri = ri + 1
+            rs = refined_s[ri]
+
+            # Step 2: cartesian_to_frenet1D
+            rx, ry = current_course_spline.calc_position(rs)
+            ryaw = current_course_spline.calc_yaw(rs)
+            dx = self.states[i].x - rx
+            dy = self.states[i].y - ry
+            cos_theta_r = cos(ryaw)
+            sin_theta_r = sin(ryaw)
+            cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
+            d = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
+            s = rs
+            self.states[i].s = s
+            self.states[i].d = d
+
+        return
+
+    # ------DONOT use this function!------ have bugs-----
+    def cartesian_to_frenet_deperacated(self, csp):
         """
         此处默认s沿着轨迹方向单调递增
         """

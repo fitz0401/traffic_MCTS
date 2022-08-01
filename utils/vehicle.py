@@ -47,20 +47,23 @@ class Vehicle:
 
         return vehicle_new_lane
 
-    def change_to_adjacent_lane(self, lane_id, course_spline):
-        # Assume that adjacent lane is on the same edge and share same s-axis
-        vehicle_new_lane = deepcopy(self)
-        vehicle_new_lane.lane_id = lane_id
+    # def change_to_adjacent_lane(self, lane_id, course_spline):
+    #     # Assume that adjacent lane is on the same edge and share same s-axis
+    #     # Assumption wrong!!
+    #     vehicle_new_lane = deepcopy(self)
+    #     vehicle_new_lane.lane_id = lane_id
 
-        rx, ry = course_spline.calc_position(self.current_state.s)
-        ryaw = course_spline.calc_yaw(self.current_state.s)
-        rkappa = course_spline.calc_curvature(self.current_state.s)
+    #     rx, ry = course_spline.calc_position(self.current_state.s)
+    #     ryaw = course_spline.calc_yaw(self.current_state.s)
+    #     rkappa = course_spline.calc_curvature(self.current_state.s)
 
-        s, s_d, d, d_d = cartesian_to_frenet2D(
-            self.current_state.s, rx, ry, ryaw, rkappa, vehicle_new_lane.current_state
-        )
-        vehicle_new_lane.current_state.s = s
-        vehicle_new_lane.current_state.d = d
+    #     s, s_d, d, d_d = cartesian_to_frenet2D(
+    #         self.current_state.s, rx, ry, ryaw, rkappa, vehicle_new_lane.current_state
+    #     )
+    #     vehicle_new_lane.current_state.s = s
+    #     vehicle_new_lane.current_state.s_d = s_d
+    #     vehicle_new_lane.current_state.d = d
+    #     vehicle_new_lane.current_state.d_d = d_d
 
-        return vehicle_new_lane
+    #     return vehicle_new_lane
 

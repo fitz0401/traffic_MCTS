@@ -247,21 +247,7 @@ def lanechange_trajectory_generator(
     for path in paths:
         if path.cost < math.inf:
             bestpath = deepcopy(path)
-            s = np.arange(
-                0, current_course_spline.s[-1], current_course_spline.s[-1] / 500
-            )
-            for i in range(len(bestpath.states)):
-                (
-                    bestpath.states[i].s,
-                    bestpath.states[i].d,
-                ) = current_course_spline.cartesian_to_frenet1D(
-                    bestpath.states[i].x, bestpath.states[i].y, s
-                )
-            if config["VERBOSE"]:
-                print(
-                    "find a valid lane change path for with minimum cost:",
-                    bestpath.cost,
-                )
+            bestpath.cartesian_to_frenet1D(current_course_spline)
             break
 
     if bestpath is not None:
@@ -328,6 +314,11 @@ def stop_trajectory_generator(
                 min_s = min(min_s, obs_s - obs["length"] / 2 - car_length)
         elif obs["type"] == "car":
             if "*" in vehicle.lane_id:  # in junction
+                # check if in same junction
+                veh_junction_id = vehicle.lane_id.split("*")[0]
+                obs_junction_id = obs["lane_id"].split("*")[0]
+                if veh_junction_id != obs_junction_id:
+                    continue
                 for i in range(0, min(len(obs["path"]), 15), 3):
                     obs_s, obs_d = course_spline.cartesian_to_frenet1D(
                         obs["path"][i]["x"], obs["path"][i]["y"], s
@@ -447,7 +438,7 @@ def stop_trajectory_generator(
 
 
 def lanekeeping_trajectory_generator(
-    vehicle, course_spline,road_width, obs_list, config, T
+    vehicle, course_spline, road_width, obs_list, config, T
 ) -> Trajectory:
     current_state = vehicle.current_state
     target_vel = vehicle.target_speed

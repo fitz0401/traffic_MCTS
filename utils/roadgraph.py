@@ -92,7 +92,7 @@ class AbstractLane(ABC):
 class JunctionLane(AbstractLane):
     def __init__(self, id, width) -> None:
         super().__init__(id, width)
-        # self.junction_id = 0
+        self.junction_id = ""
         self.next_lane = ""
 
 
@@ -104,29 +104,31 @@ class Lane(AbstractLane):
         self.go_straight_lane = []
         self.go_right_lane = []
 
-    def construct_junctionlane(self, connection, lanes):
+    def construct_junctionlane(self, connection, lanes, edges):
         build_lanes = []
+        junction_id = edges[self.edge_id].to_junction
         if connection["go_left"] != None:
             for lane_id in connection["go_left"]:
                 build_lanes.append(lane_id)
-                junction_lane_id = self.id + '*' + lane_id
+                junction_lane_id = junction_id + '*' + self.id + '*' + lane_id
                 self.go_left_lane.append(junction_lane_id)
         if connection["go_straight"] != None:
             for lane_id in connection["go_straight"]:
                 build_lanes.append(lane_id)
-                junction_lane_id = self.id + '*' + lane_id
+                junction_lane_id = junction_id + '*' + self.id + '*' + lane_id
                 self.go_straight_lane.append(junction_lane_id)
         if connection["go_right"] != None:
             for lane_id in connection["go_right"]:
                 build_lanes.append(lane_id)
-                junction_lane_id = self.id + '*' + lane_id
+                junction_lane_id = junction_id + '*' + self.id + '*' + lane_id
                 self.go_right_lane.append(junction_lane_id)
         self.next_s = self.course_spline.s[-1] - OVERLAP_DISTANCE
 
         junction_lanes = {}
         for lane_id in build_lanes:
-            junction_lane_id = self.id + '*' + lane_id
+            junction_lane_id = junction_id + '*' + self.id + '*' + lane_id
             junction_lane = JunctionLane(junction_lane_id, self.width)
+            junction_lane.junction_id = junction_id
             center_line = []
             for si in np.linspace(
                 self.course_spline.s[-1] - OVERLAP_DISTANCE,
@@ -206,6 +208,17 @@ def plot_roadgraph(edges, lanes, junction_lanes):
             if lane_index == 0:
                 ax.plot(*zip(*lane.right_bound), "k", linewidth=1.5)
 
+            # create a colormap of size N
+            # cmap = plt.get_cmap('Paired')
+            # colors = [cmap(i) for i in np.linspace(0, 1, len(lane.left_bound))]
+            # for i in range(len(lane.left_bound)):
+            #     ax.plot(
+            #         [lane.left_bound[i][0], lane.right_bound[i][0]],
+            #         [lane.left_bound[i][1], lane.right_bound[i][1]],
+            #         color=colors[i],
+            #         linewidth=1,
+            #     )
+
             if edge.from_junction == None:
                 ax.plot(
                     [lane.left_bound[0][0], lane.right_bound[0][0]],
@@ -259,7 +272,9 @@ def build_roadgraph(file_path):
         for lane_connection in roadgraph["Connections"]:
             lane_id = lane_connection["lane_id"]
             lane = lanes[lane_id]
-            junction_lanes.update(lane.construct_junctionlane(lane_connection, lanes))
+            junction_lanes.update(
+                lane.construct_junctionlane(lane_connection, lanes, edges)
+            )
 
     return edges, lanes, junction_lanes
 
@@ -268,6 +283,7 @@ def main():
     file_path = "roadgraph.yaml"
     # file_path = "roadgraph_intersect.yaml"
     edges, lanes, junction_lanes = build_roadgraph(file_path)
+    print(junction_lanes.keys())
     plot_roadgraph(edges, lanes, junction_lanes)
 
 

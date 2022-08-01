@@ -236,12 +236,12 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
 
         area = 8
         main_fig.axis("equal")
-        # main_fig.axis(
-        #     xmin=bestpaths[focus_car_id].states[1].x - area / 2,
-        #     xmax=bestpaths[focus_car_id].states[1].x + area * 2,
-        #     ymin=bestpaths[focus_car_id].states[1].y - area * 2,
-        #     ymax=bestpaths[focus_car_id].states[1].y + area * 2,
-        # )
+        main_fig.axis(
+            xmin=bestpaths[focus_car_id].states[1].x - area / 2,
+            xmax=bestpaths[focus_car_id].states[1].x + area * 2,
+            ymin=bestpaths[focus_car_id].states[1].y - area * 2,
+            ymax=bestpaths[focus_car_id].states[1].y + area * 2,
+        )
 
     if config["VIDEO"]:
         global frame_id
@@ -322,7 +322,7 @@ def planner(
         current_course_spline = lanes[vehicle.lane_id].course_spline
         left_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
         target_course_spline = lanes[left_lane_id].course_spline
-        LC_vehicle = vehicle.change_to_adjacent_lane(left_lane_id, target_course_spline)
+        LC_vehicle = vehicle.change_to_next_lane(left_lane_id, target_course_spline)
         path = single_vehicle_planner.lanechange_trajectory_generator(
             vehicle,
             LC_vehicle,
@@ -337,9 +337,7 @@ def planner(
         current_course_spline = lanes[vehicle.lane_id].course_spline
         right_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
         target_course_spline = lanes[right_lane_id].course_spline
-        LC_vehicle = vehicle.change_to_adjacent_lane(
-            right_lane_id, target_course_spline
-        )
+        LC_vehicle = vehicle.change_to_next_lane(right_lane_id, target_course_spline)
         path = single_vehicle_planner.lanechange_trajectory_generator(
             vehicle,
             LC_vehicle,
@@ -549,7 +547,7 @@ def main():
             ):
                 print("change lane successful!")
                 left_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
-                vehicles[vehicle_id] = vehicle.change_to_adjacent_lane(
+                vehicles[vehicle_id] = vehicle.change_to_next_lane(
                     left_lane_id, lanes[left_lane_id].course_spline
                 )
                 vehicles[vehicle_id].behaviour = 'KL'
@@ -559,7 +557,7 @@ def main():
             ):
                 print("Change lane successful!")
                 right_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
-                vehicles[vehicle_id] = vehicle.change_to_adjacent_lane(
+                vehicles[vehicle_id] = vehicle.change_to_next_lane(
                     right_lane_id, lanes[right_lane_id].course_spline
                 )
                 vehicles[vehicle_id].behaviour = 'KL'

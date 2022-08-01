@@ -185,7 +185,8 @@ def calculate_car(obs, path, config):
             + 1 * car_length  # Hard Collision
         )
         if dist > dist_to_collide:
-            continue
+            # if obs far away at beginning, we don't care
+            return cost
         result, nearest_corner = check_collsion_new(
             np.array([path.states[i].x, path.states[i].y]),
             car_length,
