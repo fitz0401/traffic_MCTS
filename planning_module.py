@@ -280,15 +280,15 @@ def planner(
                     )
                     break
 
-    for predict_vel_id, prediction in predictions.items():
-        if predict_vel_id != vehicle.id and predict_vel_id in vehicles:
+    for predict_veh_id, prediction in predictions.items():
+        if predict_veh_id != vehicle.id and predict_veh_id in vehicles:
             dynamic_obs = {
                 "type": "car",
                 "length": config["vehicle"]["truck"]["length"],
                 "width": config["vehicle"]["truck"]["width"],
                 "path": [],
-                "lane_id": vehicles[predict_vel_id].lane_id,
-                "id": predict_vel_id,
+                "lane_id": vehicles[predict_veh_id].lane_id,
+                "id": predict_veh_id,
             }
             for i in range(len(prediction.states)):
                 dynamic_obs["path"].append(
@@ -502,45 +502,61 @@ def main():
             writer.writerow(
                 ["t", "vehicle_id", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
             )
-            for vehicle_id, vehicle in vehicles.items():
-                writer.writerow(
-                    [
-                        T,
-                        vehicle.id,
-                        vehicle.current_state.x,
-                        vehicle.current_state.y,
-                        vehicle.current_state.yaw,
-                        vehicle.current_state.vel,
-                        vehicle.current_state.acc,
-                    ]
-                )
 
     # main loop
     for i in range(SIM_LOOP):
-        bestpaths = {}
-        start = time.time()
-        param_list = []
-        for vehicle_id in vehicles:
-            if vehicles[vehicle_id].current_state.t <= T:
-                # vehicles[index].behaviour = "LC-L"
-                # next_behaviour = "STOP"
-                param_list.append(
-                    (vehicle_id, vehicles, predictions, lanes, static_obs_list, T,)
+        """
+        Update/Get States
+        """
+        T = i * delta_t
+        for vehicle_id, vehicle in vehicles.items():
+            if vehicle_id in predictions:
+                #  TODO:
+                vehicle.current_state = deepcopy(
+                    predictions[vehicle_id].states[delta_timestep]
                 )
-        pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-        results = pool.starmap(planner, param_list)
-        pool.close()
-        end = time.time()
-        print("--------\nOne loop Time: ", end - start, "\n--------")
+                vehicle.current_state.t = T
 
-        # Update
-        T += delta_t
-        for result_path in results:
-            vehicle_id = result_path[0]
+            else:
+                print("Prediction don't have vehicle_id:", vehicle_id)
+
+        """
+        Test Goal
+        """
+        for vehicle_id in copy.copy(vehicles):
             vehicle = vehicles[vehicle_id]
-            bestpaths[vehicle_id] = result_path[1]
-            vehicle.current_state = deepcopy(result_path[1].states[delta_timestep])
-            vehicle.current_state.t = T
+            # write current state to csv file
+            if config["CSV"]:
+                with open("trajectories.csv", "a") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(
+                        [
+                            T,
+                            vehicle.id,
+                            vehicle.current_state.x,
+                            vehicle.current_state.y,
+                            vehicle.current_state.yaw,
+                            vehicle.current_state.vel,
+                            vehicle.current_state.acc,
+                        ]
+                    )
+
+            if (lanes[vehicle.lane_id].next_s == math.inf) and (
+                lanes[vehicle.lane_id].course_spline.s[-1] - vehicle.current_state.s
+                <= 3.0
+            ):
+                print("Goal for vehicle", vehicle.id, "is reached")
+                vehicles.pop(vehicle.id)
+
+        if len(vehicles) == 0:
+            print("Seesion Done!")
+            break
+
+        """
+        Update Behavior
+        """
+        for vehicle_id, vehicle in vehicles.items():
+            # Lane change behavior
             if (
                 vehicle.behaviour == 'LC-L'
                 and vehicle.current_state.d > lanes[vehicle.lane_id].width / 1.5
@@ -562,7 +578,7 @@ def main():
                 )
                 vehicles[vehicle_id].behaviour = 'KL'
 
-            # update next lane
+            # in junction behaviour
             if vehicle.current_state.s > lanes[vehicle.lane_id].next_s:
                 if isinstance(lanes[vehicle.lane_id], roadgraph.Lane):
                     # default go straight
@@ -603,45 +619,34 @@ def main():
                     )
                 else:  # out junction
                     vehicles[vehicle_id].behaviour = "KL"
-        """
-        Test Goal
-        """
-        for vehicle_id in copy.copy(vehicles):
-            vehicle = vehicles[vehicle_id]
-            # write current state to csv file
-            if config["CSV"]:
-                with open("trajectories.csv", "a") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(
-                        [
-                            T,
-                            vehicle.id,
-                            vehicle.current_state.x,
-                            vehicle.current_state.y,
-                            vehicle.current_state.yaw,
-                            vehicle.current_state.vel,
-                            vehicle.current_state.acc,
-                        ]
-                    )
 
-            if (lanes[vehicle.lane_id].next_s == math.inf) and (
-                lanes[vehicle.lane_id].course_spline.s[-1] - vehicle.current_state.s
-                <= 3.0
-            ):
-                print("Goal for vehicle", vehicle.id, "is reached")
-                vehicles.pop(vehicle.id)
+        """
+        Planner
+        """
+        start = time.time()
+        param_list = []
+        for vehicle_id in vehicles:
+            if vehicles[vehicle_id].current_state.t <= T:
+                param_list.append(
+                    (vehicle_id, vehicles, predictions, lanes, static_obs_list, T,)
+                )
+        pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+        results = pool.starmap(planner, param_list)
+        pool.close()
+        end = time.time()
+        print("--------\nOne loop Time: ", end - start, "\n--------")
 
-        if len(vehicles) == 0:
-            print("Done!")
-            break
+        """
+        Update prediction
+        """
+        # ATTENSION:prdiction must have vel to be used in calculate cost
+        predictions.clear()
+        for result_path in results:
+            vehicle_id = result_path[0]
+            predictions[vehicle_id] = result_path[1]
 
         if ANIMATION:
-            plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T)
-
-        predictions.clear()
-        # ATTENSION:prdiction must have vel to be used in calculate cost
-        for velhicle_id, path in bestpaths.items():
-            predictions[velhicle_id] = path
+            plot_trajectory(vehicles, static_obs_list, predictions, lanes, edges, T)
 
     exitplot()
 
