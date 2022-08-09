@@ -11,6 +11,7 @@ from copy import deepcopy
 import copy
 import csv
 import glob
+import logging
 import math
 import multiprocessing
 import os
@@ -57,7 +58,7 @@ def exitplot():
     plt.close("all")
     plt.ioff()
     plt.show()
-    print("exit with ESC key")
+    logging.info("Exiting...")
     if config["VIDEO"]:
         os.chdir(plt_folder)
         videoname = config["VIDEO_NAME"] + ".mp4"
@@ -248,9 +249,74 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
         plt.savefig(plt_folder + "/frame%02d.png" % frame_id)
         frame_id += 1
 
-    # plt.pause(0.2)
     plt.pause(0.001)
     plt.show()
+
+
+def update_behaviour(vehicle_id, vehicles, lanes):
+    vehicle = vehicles[vehicle_id]
+
+    # Lane change behavior
+    if (
+        vehicle.behaviour == "LC-L"
+        and vehicle.current_state.d > lanes[vehicle.lane_id].width / 1.5
+    ):
+        logging.info("Vehicle {} change lane successfully".format(vehicle_id))
+        left_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
+        vehicles[vehicle_id] = vehicle.change_to_next_lane(
+            left_lane_id, lanes[left_lane_id].course_spline
+        )
+        vehicles[vehicle_id].behaviour = "KL"
+    if (
+        vehicle.behaviour == "LC-R"
+        and vehicle.current_state.d < -lanes[vehicle.lane_id].width / 1.5
+    ):
+        logging.info("Vehicle {} change lane successfully".format(vehicle_id))
+        print("Change lane successful!")
+        right_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
+        vehicles[vehicle_id] = vehicle.change_to_next_lane(
+            right_lane_id, lanes[right_lane_id].course_spline
+        )
+        vehicles[vehicle_id].behaviour = "KL"
+
+    # in junction behaviour
+    if vehicle.current_state.s > lanes[vehicle.lane_id].next_s:
+        if isinstance(lanes[vehicle.lane_id], roadgraph.Lane):
+            # default go straight
+            next_lanes = lanes[vehicle.lane_id].go_straight_lane
+            next_lanes += (
+                lanes[vehicle.lane_id].go_left_lane
+                + lanes[vehicle.lane_id].go_right_lane
+            )
+            next_lane_id = random.choice(next_lanes)
+            vehicles[vehicle_id] = vehicle.change_to_next_lane(
+                next_lane_id, lanes[next_lane_id].course_spline
+            )
+            logging.info(
+                "Vehicle {} now drives in lane {}".format(vehicle_id, next_lane_id)
+            )
+        elif isinstance(lanes[vehicle.lane_id], roadgraph.JunctionLane):
+            next_lane_id = lanes[vehicle.lane_id].next_lane
+            vehicles[vehicle_id] = vehicle.change_to_next_lane(
+                next_lane_id, lanes[next_lane_id].course_spline
+            )
+            logging.info(
+                "Vehicle {} now drives in lane {}".format(vehicle_id, next_lane_id)
+            )
+        else:
+            logging.error(
+                "Vehicle {} Lane {}  is unknown lane type {}".vehicle.lane_id(
+                    vehicle_id, vehicle.lane_id, type(lanes[vehicle.lane_id])
+                )
+            )
+
+        if "*" in vehicles[vehicle_id].lane_id:  # in junction
+            vehicles[vehicle_id].behaviour = "JUNCTION"
+            logging.info(
+                "Vehicle {} is in {}".format(vehicle_id, vehicles[vehicle_id].behaviour)
+            )
+        else:  # out junction
+            vehicles[vehicle_id].behaviour = "KL"
 
 
 def planner(
@@ -354,15 +420,24 @@ def planner(
             vehicle, course_spline, road_width, obs_list, config, T,
         )
     else:
-        print("Error: Unknown behaviour", vehicle.behaviour, "for vehicle", vehicle.id)
-    if config["VERBOSE"]:
-        print("time for planner:", time.time() - start)
+        logging.error(
+            "Vehicle {} Unknown behaviour: {}".format(vehicle.id, vehicle.behaviour)
+        )
 
+    logging.debug("Vehicle {} Planning time:{}".format(vehicle.id, time.time() - start))
     return vehicle_id, path, vehicle.behaviour
 
 
 def main():
     load_config(config_file_path)
+    if config["VERBOSE"]:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(message)s", level=log_level
+    )
+    logging.getLogger("matplotlib.font_manager").disabled = True
 
     if ANIMATION:
         plot_init()
@@ -390,7 +465,7 @@ def main():
         init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
         lane_id=lane_id,
         target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="KL",
+        behaviour="LC-L",
     )
     s0 = 4.0  # initial longtitude position [m]
     s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
@@ -505,6 +580,7 @@ def main():
 
     # main loop
     for i in range(SIM_LOOP):
+        start = time.time()
         """
         Update/Get States
         """
@@ -518,7 +594,7 @@ def main():
                 vehicle.current_state.t = T
 
             else:
-                print("Prediction don't have vehicle_id:", vehicle_id)
+                logging.warning("Vehicle {} not in predictions".format(vehicle_id))
 
         """
         Test Goal
@@ -545,85 +621,22 @@ def main():
                 lanes[vehicle.lane_id].course_spline.s[-1] - vehicle.current_state.s
                 <= 3.0
             ):
-                print("Goal for vehicle", vehicle.id, "is reached")
+                logging.info("Vehicle {} reached goal".format(vehicle_id))
                 vehicles.pop(vehicle.id)
 
         if len(vehicles) == 0:
-            print("Seesion Done!")
+            logging.info("All vehicles reached goal")
             break
 
         """
         Update Behavior
         """
         for vehicle_id, vehicle in vehicles.items():
-            # Lane change behavior
-            if (
-                vehicle.behaviour == 'LC-L'
-                and vehicle.current_state.d > lanes[vehicle.lane_id].width / 1.5
-            ):
-                print("change lane successful!")
-                left_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
-                vehicles[vehicle_id] = vehicle.change_to_next_lane(
-                    left_lane_id, lanes[left_lane_id].course_spline
-                )
-                vehicles[vehicle_id].behaviour = 'KL'
-            if (
-                vehicle.behaviour == 'LC-R'
-                and vehicle.current_state.d < -lanes[vehicle.lane_id].width / 1.5
-            ):
-                print("Change lane successful!")
-                right_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
-                vehicles[vehicle_id] = vehicle.change_to_next_lane(
-                    right_lane_id, lanes[right_lane_id].course_spline
-                )
-                vehicles[vehicle_id].behaviour = 'KL'
-
-            # in junction behaviour
-            if vehicle.current_state.s > lanes[vehicle.lane_id].next_s:
-                if isinstance(lanes[vehicle.lane_id], roadgraph.Lane):
-                    # default go straight
-                    turning_option = ["TL", "TR", "STRAIGHT"]
-                    vehicle.turning_decision = random.choice(turning_option)
-                    if (
-                        vehicle.turning_decision == "TL"
-                        and len(lanes[vehicle.lane_id].go_left_lane) != 0
-                    ):
-                        next_lane_id = lanes[vehicle.lane_id].go_left_lane[0]
-                    elif (
-                        vehicle.turning_decision == "TR"
-                        and len(lanes[vehicle.lane_id].go_right_lane) != 0
-                    ):
-                        next_lane_id = lanes[vehicle.lane_id].go_right_lane[0]
-                    else:
-                        next_lane_id = lanes[vehicle.lane_id].go_straight_lane[0]
-                    vehicles[vehicle_id] = vehicle.change_to_next_lane(
-                        next_lane_id, lanes[next_lane_id].course_spline
-                    )
-                    print("vehicle", vehicle_id, "now drive lane on", next_lane_id)
-                elif isinstance(lanes[vehicle.lane_id], roadgraph.JunctionLane):
-                    next_lane_id = lanes[vehicle.lane_id].next_lane
-                    vehicles[vehicle_id] = vehicle.change_to_next_lane(
-                        next_lane_id, lanes[next_lane_id].course_spline
-                    )
-                    print("vehicle", vehicle_id, "now drive lane on", next_lane_id)
-                else:
-                    print("Error: unknown lane type")
-                # if vehicle.laneid contains "*"
-                if "*" in vehicles[vehicle_id].lane_id:  # in junction
-                    vehicles[vehicle_id].behaviour = "JUNCTION"
-                    print(
-                        "vehicle",
-                        vehicle_id,
-                        "now behaviour",
-                        vehicles[vehicle_id].behaviour,
-                    )
-                else:  # out junction
-                    vehicles[vehicle_id].behaviour = "KL"
+            update_behaviour(vehicle_id, vehicles, lanes)
 
         """
         Planner
         """
-        start = time.time()
         param_list = []
         for vehicle_id in vehicles:
             if vehicles[vehicle_id].current_state.t <= T:
@@ -633,8 +646,6 @@ def main():
         pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
         results = pool.starmap(planner, param_list)
         pool.close()
-        end = time.time()
-        print("--------\nOne loop Time: ", end - start, "\n--------")
 
         """
         Update prediction
@@ -644,10 +655,14 @@ def main():
         for result_path in results:
             vehicle_id = result_path[0]
             predictions[vehicle_id] = result_path[1]
+        end = time.time()
 
         if ANIMATION:
             plot_trajectory(vehicles, static_obs_list, predictions, lanes, edges, T)
 
+        # logging.info("------------------------------")
+        logging.info("One loop Time: %f", end - start)
+        logging.info("------------------------------")
     exitplot()
 
 

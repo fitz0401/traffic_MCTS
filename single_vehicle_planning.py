@@ -8,6 +8,7 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 """
 
 from copy import deepcopy
+import logging
 import math
 import time
 import numpy as np
@@ -183,17 +184,15 @@ def lanechange_trajectory_generator(
                 )
     end = time.time()
     if paths == []:
-        print("ERROR: No lane change path found", sample_t, sample_s, sample_vel)
-        exit()
-    if config["VERBOSE"]:
-        print(
-            "[INFO] LANE CHANGE: finish path generation, planning",
-            len(paths),
-            "paths with an average runtime",
-            (end - start) / len(paths),
-            "seconds.",
-            float(end - start),
+        logging.error(
+            "No lane change path found {},{},{}".format(sample_t, sample_s, sample_vel)
         )
+        return None
+    logging.debug(
+        "Vehicle {} Calculated {} Lane change paths in {} seconds".format(
+            LC_vehicle.id, len(paths), float(end - start)
+        )
+    )
 
     """
     Step 3: Convert between xy and frenet
@@ -202,15 +201,11 @@ def lanechange_trajectory_generator(
     for path in paths:
         path.frenet_to_cartesian(target_course_spline)
     end = time.time()
-    if config["VERBOSE"]:
-        print(
-            "finish cord covertion for",
-            len(paths),
-            "paths with an average runtime",
-            (end - start) / len(paths),
-            "seconds.",
-            float(end - start),
+    logging.debug(
+        "Vehicle {} Cord covertion for {} Lane change paths in {} seconds".format(
+            LC_vehicle.id, len(paths), float(end - start)
         )
+    )
 
     """
     Step 4: Calculate paths' costs
@@ -230,15 +225,11 @@ def lanechange_trajectory_generator(
     paths.sort(key=lambda x: x.cost)
 
     end = time.time()
-    if config["VERBOSE"]:
-        print(
-            "finish cost calculation for",
-            len(paths),
-            "paths with an average runtime",
-            (end - start) / len(paths),
-            "seconds.",
-            float(end - start),
+    logging.debug(
+        "Vehicle {} Cord covertion for {} Lane change paths in {} seconds".format(
+            LC_vehicle.id, len(paths), float(end - start)
         )
+    )
 
     """
     Step 5: Check collisions and boundaries
@@ -253,7 +244,11 @@ def lanechange_trajectory_generator(
     if bestpath is not None:
         return bestpath
     else:
-        print("NONE a valid lane change path for vehicle %d" % LC_vehicle.id)
+        logging.info(
+            "Vehicle {} No valid lane change path, calculating a stop path".format(
+                LC_vehicle.id
+            )
+        )
 
         stop_path = frenet_optimal_planner.calc_stop_path(
             vehicle.current_state, config["MAX_ACCEL"], sample_t[0], dt, config
@@ -319,7 +314,9 @@ def stop_trajectory_generator(
                 obs_junction_id = obs["lane_id"].split("*")[0]
                 if veh_junction_id != obs_junction_id:
                     continue
-                for i in range(0, min(len(obs["path"]), 15), 3):
+                if vehicle.lane_id == obs["lane_id"] and obs["path"][0]["vel"] > 5.0:
+                    continue
+                for i in range(0, min(len(obs["path"]), 20), 3):
                     obs_s, obs_d = course_spline.cartesian_to_frenet1D(
                         obs["path"][i]["x"], obs["path"][i]["y"], s
                     )
@@ -327,7 +324,7 @@ def stop_trajectory_generator(
                         continue
                     obs_near_d = max(0, abs(obs_d) - obs["width"] / 2)
                     if obs_near_d < road_width / 2:
-                        min_s = min(min_s, obs_s - obs["length"] - car_length / 1.5)
+                        min_s = min(min_s, obs_s - obs["length"] - car_length)
             else:  # in lane
                 if obs["lane_id"] != current_lane:
                     continue
@@ -345,8 +342,7 @@ def stop_trajectory_generator(
     if (
         current_state.vel <= 1.0 and (min_s - current_state.s) <= car_length
     ):  # already stopped,keep it
-        if config["VERBOSE"]:
-            print("Already stopped for vehicle %d" % vehicle.id)
+        logging.debug("Vehicle {} Already stopped".format(vehicle.id))
         path = Trajectory()
         for t in np.arange(0, course_t / dt, dt):
             path.states.append(State(t=t, s=current_state.s, d=current_state.d))
@@ -361,8 +357,7 @@ def stop_trajectory_generator(
     if (
         min_s == s[-1] or (min_s - current_state.s) > current_state.s_d * course_t / 1.5
     ):  # no need to stop
-        if config["VERBOSE"]:
-            print("No need to stop for vehicle %d" % vehicle.id)
+        logging.debug("Vehicle {} No need to stop".format(vehicle.id))
         if (min_s - current_state.s) < 5.0 / 3.6 * course_t:
             target_s = min_s
         else:
@@ -382,8 +377,7 @@ def stop_trajectory_generator(
     elif (min_s - current_state.s) < max(
         current_state.s_d ** 2 / (2 * max_acc), car_length / 4
     ):  # need emergency stop
-        if config["VERBOSE"]:
-            print("Emergency Brake for vehicle %d" % vehicle.id)
+        logging.debug("Vehicle {} Emergency Brake".format(vehicle.id))
         path = frenet_optimal_planner.calc_stop_path(
             current_state, config["MAX_ACCEL"], course_t, dt, config
         )
@@ -398,8 +392,7 @@ def stop_trajectory_generator(
         return path
 
     # normal stop
-    if config["VERBOSE"]:
-        print("Normal stopping for vehicle %d" % vehicle.id)
+    logging.debug("Vehicle {} Normal stopping".format(vehicle.id))
     paths = []
     if (min_s - current_state.s) < car_length:
         sample_d = [current_state.d]
@@ -488,11 +481,11 @@ def lanekeeping_trajectory_generator(
         for path in center_paths:
             if check_path(path, config):
                 bestpath = deepcopy(path)
-                if config["VERBOSE"]:
-                    print(
-                        "find a lanekeeping CENTER path with minimum cost:",
-                        bestpath.cost,
+                logging.debug(
+                    "Vehicle {} finds a lanekeeping CENTER path with minimum cost: {}".format(
+                        vehicle.id, bestpath.cost
                     )
+                )
                 return bestpath
 
     """
@@ -516,18 +509,18 @@ def lanekeeping_trajectory_generator(
         for path in paths:
             if check_path(path, config):
                 bestpath = deepcopy(path)
-                if config["VERBOSE"]:
-                    print(
-                        "find a lanekeeping NUDGE path with minimum cost:",
-                        bestpath.cost,
+                logging.debug(
+                    "Vehicle {} finds a lanekeeping NUDGE path with minimum cost: {}".format(
+                        vehicle.id, bestpath.cost
                     )
+                )
                 return bestpath
 
     """
     Step 4: if no nudge path is found, Calculate a emergency stop path
     """
-    print(
-        "No lane keeping path found, Calculate a emergency brake path for vehicle {}".format(
+    logging.debug(
+        "Vehicle {} No lane keeping path found, Calculate a emergency brake path ".format(
             vehicle.id
         )
     )

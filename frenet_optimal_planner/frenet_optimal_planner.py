@@ -12,11 +12,9 @@ Ref:
 
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
-import math
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
-import time
 import os, sys
 import yaml
 
@@ -122,7 +120,6 @@ def calc_stop_path(current_state, acc, T, dt, config):
 def calc_frenet_paths(current_state, sample_d, sample_t, sample_v, dt, config):
     frenet_paths = []
 
-    start = time.time()
     # generate path to each offset goal
     for di in sample_d:
         # Lateral motion planning
@@ -158,16 +155,6 @@ def calc_frenet_paths(current_state, sample_d, sample_t, sample_v, dt, config):
 
                 frenet_paths.append(tfp)
 
-    end = time.time()
-    if config["VERBOSE"]:
-        print(
-            "finish path generation, planning",
-            len(frenet_paths),
-            "paths with an average runtime",
-            (end - start) / len(frenet_paths),
-            "seconds.",
-            float(end - start),
-        )
 
     return frenet_paths
 

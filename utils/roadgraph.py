@@ -7,8 +7,8 @@ Ref:https://www.notion.so/pjlab-adg/Junction-20a800199e06423a90c97ad8d845601e
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 '''
 from abc import ABC, abstractmethod
+import logging
 from math import inf
-import time
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -155,7 +155,7 @@ def left_lane(lanes, lane_id):
     if id in lanes:
         return id
     else:
-        print("\033[31m[ERROR] cannot find left lane of Lane id", lane_id, '\033[0m')
+        logging.error("Cannot find left lane of Lane id {}".format(lane_id))
         return None
 
 
@@ -166,9 +166,7 @@ def right_lane(lanes, lane_id):
     if id in lanes:
         return id
     else:
-        print(
-            "\033[31m[ERROR] cannot find right lane of Lane id", lane_id, '\033[0m',
-        )
+        logging.error("Cannot find right lane of Lane id {}".format(lane_id))
         return None
 
 
@@ -275,6 +273,13 @@ def build_roadgraph(file_path):
             junction_lanes.update(
                 lane.construct_junctionlane(lane_connection, lanes, edges)
             )
+
+    logging.info(
+        'Built road graph with %d edges containing %d lanes and %d junction lanes',
+        len(edges),
+        len(lanes),
+        len(junction_lanes),
+    )
 
     return edges, lanes, junction_lanes
 
