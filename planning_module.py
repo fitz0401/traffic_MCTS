@@ -25,7 +25,7 @@ import yaml
 import single_vehicle_planning as single_vehicle_planner
 from utils.cubic_spline import Spline2D
 from utils.trajectory import State
-from utils.vehicle import Vehicle
+from utils.vehicle import Vehicle, build_vehicle
 import utils.roadgraph as roadgraph
 
 config_file_path = "config.yaml"
@@ -37,7 +37,7 @@ def load_config(config_file_path):
         global config
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    global SIM_LOOP, ROAD_WIDTH, D_ROAD_W, MAX_T, MIN_T, DT, D_T_S, N_S_SAMPLE, MAX_SPEED, MAX_ACCEL, MAX_CURVATURE, ANIMATION, CAR_WIDTH, CAR_LENGTH
+    global SIM_LOOP, ROAD_WIDTH, D_ROAD_W, MAX_T, MIN_T, DT, D_T_S, N_S_SAMPLE, MAX_CURVATURE, ANIMATION
     SIM_LOOP = config["SIM_LOOP"]
     # ROAD_WIDTH = config["MAX_ROAD_WIDTH"]  # maximum road width [m]
     D_ROAD_W = config["D_ROAD_W"]  # road width sampling length [m]
@@ -46,11 +46,7 @@ def load_config(config_file_path):
     DT = config["DT"]  # time tick [s]
     D_T_S = config["D_T_S"] / 3.6  # target longtitude vel sampling length [m/s]
     N_S_SAMPLE = config["N_S_SAMPLE"]  # sampling number of target longtitude vel
-    MAX_SPEED = config["MAX_SPEED"] / 3.6  # maximum speed [m/s]
-    MAX_ACCEL = config["MAX_ACCEL"]  # maximum acceleration [m/s^2]
     MAX_CURVATURE = config["MAX_CURVATURE"]  # maximum curvature [1/m]
-    CAR_WIDTH = config["vehicle"]["truck"]["width"]
-    CAR_LENGTH = config["vehicle"]["truck"]["length"]
     ANIMATION = config["ANIMATION"]
 
 
@@ -116,20 +112,24 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
                 plt.Rectangle(
                     (
                         vehicle.current_state.x
-                        - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
+                        - math.sqrt(
+                            (vehicle.width / 2) ** 2 + (vehicle.length / 2) ** 2
+                        )
                         * math.sin(
-                            math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
+                            math.atan2(vehicle.length / 2, vehicle.width / 2)
                             - vehicle.current_state.yaw
                         ),
                         vehicle.current_state.y
-                        - math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
+                        - math.sqrt(
+                            (vehicle.width / 2) ** 2 + (vehicle.length / 2) ** 2
+                        )
                         * math.cos(
-                            math.atan2(CAR_LENGTH / 2, CAR_WIDTH / 2)
+                            math.atan2(vehicle.length / 2, vehicle.width / 2)
                             - vehicle.current_state.yaw
                         ),
                     ),
-                    CAR_LENGTH,
-                    CAR_WIDTH,
+                    vehicle.length,
+                    vehicle.width,
                     angle=vehicle.current_state.yaw / math.pi * 180,
                     facecolor=colors[vehicle.id],
                     fill=True,
@@ -215,7 +215,7 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
         main_fig.set_facecolor("lightgray")
         main_fig.grid(True)
 
-    focus_car_id = 0
+    focus_car_id = 1
     if focus_car_id in bestpaths and focus_car_id in vehicles:
         t_best = [state.t + T for state in bestpaths[focus_car_id].states[1:]]
         vel_best = [state.vel * 3.6 for state in bestpaths[focus_car_id].states[1:]]
@@ -350,8 +350,8 @@ def planner(
         if predict_veh_id != vehicle.id and predict_veh_id in vehicles:
             dynamic_obs = {
                 "type": "car",
-                "length": config["vehicle"]["truck"]["length"],
-                "width": config["vehicle"]["truck"]["width"],
+                "length": vehicles[predict_veh_id].length,
+                "width": vehicles[predict_veh_id].width,
                 "path": [],
                 "lane_id": vehicles[predict_veh_id].lane_id,
                 "id": predict_veh_id,
@@ -374,14 +374,19 @@ def planner(
     if vehicle.behaviour == "KL":
         # Keep Lane
         course_spline = lanes[vehicle.lane_id].course_spline
-        path = single_vehicle_planner.lanekeeping_trajectory_generator(
-            vehicle, course_spline, road_width, obs_list, config, T,
-        )
+        if vehicle.current_state.s_d >= 10 / 3.6:
+            path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                vehicle, course_spline, road_width, obs_list, config, T,
+            )
+        else:
+            path = single_vehicle_planner.stop_trajectory_generator(
+                vehicle, lanes, road_width, obs_list, config, T,
+            )
     elif vehicle.behaviour == "STOP":
         # Stopping
         course_spline = lanes[vehicle.lane_id].course_spline
         path = single_vehicle_planner.stop_trajectory_generator(
-            vehicle, course_spline, road_width, obs_list, config, T,
+            vehicle, lanes, road_width, obs_list, config, T,
         )
     elif vehicle.behaviour == "LC-L":
         # Turn Left
@@ -417,7 +422,7 @@ def planner(
         # in Junction. for now just stop trajectory
         course_spline = lanes[vehicle.lane_id].course_spline
         path = single_vehicle_planner.stop_trajectory_generator(
-            vehicle, course_spline, road_width, obs_list, config, T,
+            vehicle, lanes, road_width, obs_list, config, T,
         )
     else:
         logging.error(
@@ -453,89 +458,78 @@ def main():
     """
     vehicles = {}
 
-    s0 = 6.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = list(lanes.keys())[0]  # init lane id
-    x0, y0 = lanes[lane_id].course_spline.frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id].course_spline.calc_yaw(s0)
-    cur0 = lanes[lane_id].course_spline.calc_curvature(s0)
-    vehicles[len(vehicles)] = Vehicle(
+    vehicles[len(vehicles)] = build_vehicle(
         id=len(vehicles),
-        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-        lane_id=lane_id,
-        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="LC-L",
+        vtype="truck",
+        s0=12.0,  # initial longtitude position [m]
+        s0_d=25.0 / 3.6,  # initial longtitude speed [m/s]
+        d0=0.0,  # initial lateral position [m]
+        lane_id=list(lanes.keys())[0],  # init lane id
+        target_speed=25.0 / 3.6,  # target longtitude vel [m/s]
+        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+        lanes=lanes,
+        config=config,
     )
-    s0 = 4.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = list(lanes.keys())[1]  # init lane id
-    x0, y0 = lanes[lane_id].course_spline.frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id].course_spline.calc_yaw(s0)
-    cur0 = lanes[lane_id].course_spline.calc_curvature(s0)
-    vehicles[len(vehicles)] = Vehicle(
+
+    vehicles[len(vehicles)] = build_vehicle(
         id=len(vehicles),
-        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-        lane_id=lane_id,
+        vtype="car",
+        s0=2.0,  # initial longtitude position [m]
+        s0_d=30.0 / 3.6,  # initial longtitude speed [m/s]
+        d0=0.0,  # initial lateral position [m]
+        lane_id=list(lanes.keys())[0],  # init lane id
         target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="KL",
+        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+        lanes=lanes,
+        config=config,
     )
-    s0 = 4.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = list(lanes.keys())[5]  # init lane id
-    x0, y0 = lanes[lane_id].course_spline.frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id].course_spline.calc_yaw(s0)
-    cur0 = lanes[lane_id].course_spline.calc_curvature(s0)
-    vehicles[len(vehicles)] = Vehicle(
+    vehicles[len(vehicles)] = build_vehicle(
         id=len(vehicles),
-        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-        lane_id=lane_id,
+        vtype="car",
+        s0=0.0,  # initial longtitude position [m]
+        s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+        d0=0.0,  # initial lateral position [m]
+        lane_id=list(lanes.keys())[1],  # init lane id
         target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="KL",
+        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+        lanes=lanes,
+        config=config,
     )
-    s0 = 4.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = list(lanes.keys())[6]  # init lane id
-    x0, y0 = lanes[lane_id].course_spline.frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id].course_spline.calc_yaw(s0)
-    cur0 = lanes[lane_id].course_spline.calc_curvature(s0)
-    vehicles[len(vehicles)] = Vehicle(
+    vehicles[len(vehicles)] = build_vehicle(
         id=len(vehicles),
-        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-        lane_id=lane_id,
+        vtype="car",
+        s0=4.0,  # initial longtitude position [m]
+        s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+        d0=0.0,  # initial lateral position [m]
+        lane_id=list(lanes.keys())[6],  # init lane id
         target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="KL",
+        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+        lanes=lanes,
+        config=config,
     )
-    # s0 = 15.0  # initial longtitude position [m]
-    # s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
-    # d0 = 0.0  # initial lateral position [m]
-    # lane_id = list(lanes.keys())[8]  # init lane id
-    # x0, y0 = lanes[lane_id].course_spline.frenet_to_cartesian1D(s0, d0)
-    # yaw0 = lanes[lane_id].course_spline.calc_yaw(s0)
-    # cur0 = lanes[lane_id].course_spline.calc_curvature(s0)
-    # vehicles[len(vehicles)] = Vehicle(
-    #     id=len(vehicles),
-    #     init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-    #     lane_id=lane_id,
-    #     target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-    #     behaviour="KL",
-    # )
-    s0 = 0.0  # initial longtitude position [m]
-    s0_d = 20.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 0.0  # initial lateral position [m]
-    lane_id = list(lanes.keys())[8]  # init lane id
-    x0, y0 = lanes[lane_id].course_spline.frenet_to_cartesian1D(s0, d0)
-    yaw0 = lanes[lane_id].course_spline.calc_yaw(s0)
-    cur0 = lanes[lane_id].course_spline.calc_curvature(s0)
-    vehicles[len(vehicles)] = Vehicle(
+    vehicles[len(vehicles)] = build_vehicle(
         id=len(vehicles),
-        init_state=State(t=0, s=s0, s_d=s0_d, d=d0, x=x0, y=y0, yaw=yaw0, cur=cur0),
-        lane_id=lane_id,
+        vtype="truck",
+        s0=10.0,  # initial longtitude position [m]
+        s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+        d0=0.0,  # initial lateral position [m]
+        lane_id=list(lanes.keys())[8],  # init lane id
         target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="KL",
+        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+        lanes=lanes,
+        config=config,
+    )
+    vehicles[len(vehicles)] = build_vehicle(
+        id=len(vehicles),
+        vtype="car",
+        s0=0.0,  # initial longtitude position [m]
+        s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+        d0=0.0,  # initial lateral position [m]
+        lane_id=list(lanes.keys())[8],  # init lane id
+        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+        lanes=lanes,
+        config=config,
     )
 
     # color map
@@ -547,22 +541,22 @@ def main():
     static_obs_list = []
     test_obs = {
         "type": "static",
-        "length": 5,
+        "length": 4,
         "width": 3,
-        "pos": {"x": 36, "y": 7.5, "yaw": -0.0},
+        "pos": {"x": 14, "y": -5, "yaw": -0.0},
     }
     pedestrian = {
         "type": "pedestrian",
-        "length": 1,
-        "width": 1,
+        "length": 2,
+        "width": 2,
         "pos": [],
     }
-    start_x, start_y = 30, 7
+    start_x, start_y = 13, -7
     for t in np.arange(1, 7, config["DT"]):
         pedestrian["pos"].append({"t": t, "x": start_x, "y": start_y})
-        start_y += 1.5 * config["DT"]
-    static_obs_list = [test_obs]
-    static_obs_list = []
+        start_y += 1.0 * config["DT"]
+    static_obs_list = [pedestrian]
+    # static_obs_list = []
 
     global T, delta_timestep, delta_t
     T = 0.0

@@ -50,8 +50,6 @@ def load_config(config_file_path):
     MAX_CURVATURE = config["MAX_CURVATURE"]  # maximum curvature [1/m]
     W_COLLISION = config["weights"]["W_COLLISION"]  # SYNC: collision cost
     ANIMATION = config["ANIMATION"]
-    CAR_WIDTH = config["vehicle"]["truck"]["width"]
-    CAR_LENGTH = config["vehicle"]["truck"]["length"]
     CAR_RADIUS = 2.0  # math.sqrt((CAR_WIDTH / 2) ** 2 + (CAR_LENGTH / 2) ** 2)
 
 
@@ -94,7 +92,7 @@ def calc_spec_path(current_state, target_state, T, dt, config):
     return fp
 
 
-def calc_stop_path(current_state, acc, T, dt, config):
+def calc_stop_path(current_state, decel, T, dt, config):
     stop_path = Trajectory()
     t = 0
     s = current_state.s
@@ -102,7 +100,7 @@ def calc_stop_path(current_state, acc, T, dt, config):
     s_d = current_state.s_d
     d_d = 0
     while True:
-        stop_path.states.append(State(t=t, s=s, d=d, s_d=s_d, d_d=d_d, s_dd=-acc))
+        stop_path.states.append(State(t=t, s=s, d=d, s_d=s_d, d_d=d_d, s_dd=decel))
         if s_d <= 1e-10:
             while len(stop_path.states) < T / dt:
                 t += dt
@@ -154,7 +152,6 @@ def calc_frenet_paths(current_state, sample_d, sample_t, sample_v, dt, config):
                     tfp.states[i].s_ddd = lon_qp.calc_third_derivative(tfp.states[i].t)
 
                 frenet_paths.append(tfp)
-
 
     return frenet_paths
 

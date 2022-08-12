@@ -34,17 +34,19 @@ def time(path, weight_config):
     return weight_config["W_T"] * path.states[-1].t
 
 
-def obs(path, obs_list, config, T):
+def obs(vehicle, path, obs_list, config, T):
     # obs_list should be a list of Obstacle objects in frenet coordinates
 
     cost_obs = 0
     for obs in obs_list:
         if obs["type"] == "static":
-            cost_obs += obstacle_cost.calculate_static(obs, path, config)
+            cost_obs += obstacle_cost.calculate_static(vehicle, obs, path, config)
         elif obs["type"] == "car":
-            cost_obs += obstacle_cost.calculate_car(obs, path, config)
+            cost_obs += obstacle_cost.calculate_car(vehicle, obs, path, config)
         elif obs["type"] == "pedestrian":
-            cost_obs += obstacle_cost.calculate_pedestrian(obs, path, config, T)
+            cost_obs += obstacle_cost.calculate_pedestrian(
+                vehicle, obs, path, config, T
+            )
 
     return cost_obs
 

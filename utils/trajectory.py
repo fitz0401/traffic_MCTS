@@ -84,6 +84,7 @@ class Trajectory:
             self.states[i].x = x
             self.states[i].y = y
             if self.states[i].s_d < 1e-5:
+                self.states[i].s_d = 1e-5
                 self.states[i].vel = 0
                 self.states[i].yaw = ryaw
             else:
@@ -94,7 +95,12 @@ class Trajectory:
             self.states[i].acc = (self.states[i + 1].vel - self.states[i].vel) / (
                 self.states[i + 1].t - self.states[i].t
             )
-        self.states[-1].acc = self.states[-2].acc
+        try:
+            self.states[-1].acc = self.states[-2].acc
+        except IndexError:
+            self.states[0].acc = 0
+            print(len(self.states))
+            exit()
 
         # https://blog.csdn.net/m0_37454852/article/details/86514444
         # https://baike.baidu.com/item/%E6%9B%B2%E7%8E%87/9985286

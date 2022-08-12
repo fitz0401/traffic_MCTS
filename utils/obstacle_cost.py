@@ -71,15 +71,16 @@ def check_collsion_new(
         return False, obs_relative_corner[index][0]
 
 
-def calculate_static(obs, path, config):
+def calculate_static(vehicle, obs, path, config):
     cost = 0
-    car_width = config["vehicle"]["truck"]["width"]
-    car_length = config["vehicle"]["truck"]["length"]
+    car_width = vehicle.width
+    car_length = vehicle.length
     dist_thershold = math.hypot(car_length + obs["length"], car_width + obs["width"])
 
     # rotate and translate the obstacle
     for i in range(0, len(path.states), 2):
         state = path.states[i]
+        # todo: can change to AABB filt
         dist = math.hypot(state.x - obs["pos"]["x"], state.y - obs["pos"]["y"],)
         if dist > dist_thershold:
             continue
@@ -111,18 +112,18 @@ def calculate_static(obs, path, config):
     return cost
 
 
-def calculate_pedestrian(obs, path, config, T):
+def calculate_pedestrian(vehicle, obs, path, config, T):
     reaction_time = 2.0  # important param for avoid pedestrian
     cost = 0
 
-    car_width = config["vehicle"]["truck"]["width"]
-    car_length = config["vehicle"]["truck"]["length"]
+    car_width = vehicle.width
+    car_length = vehicle.length
 
     dist_to_collide = (
         reaction_time * path.states[0].vel
         + 1 * car_length  # Reaction dist + Hard Collision
     )
-    for i in range(0, int(reaction_time / config["DT"]), 2):
+    for i in range(0, min(len(path.states), int(reaction_time / config["DT"])), 2):
         dist = math.hypot(
             path.states[i].x - obs["pos"]["x"], path.states[i].y - obs["pos"]["y"],
         )
@@ -168,10 +169,10 @@ def calculate_pedestrian(obs, path, config, T):
     return cost
 
 
-def calculate_car(obs, path, config):
+def calculate_car(vehicle, obs, path, config):
     cost = 0
-    car_length = config["vehicle"]["truck"]["length"]
-    car_width = config["vehicle"]["truck"]["width"]
+    car_length = vehicle.length
+    car_width = vehicle.width
 
     # ATTENSION: for speed up, we only check every 3 points
     for i in range(0, min(len(path.states), len(obs["path"])), 3):
