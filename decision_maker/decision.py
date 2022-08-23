@@ -50,6 +50,7 @@ class Vehicle:
         return s
 
 
+# FIXME: need to modify this class
 class State:
     NUM_TURNS = 10
     GOAL = 0
@@ -154,6 +155,64 @@ def main():
                 veh.vel = max(0, veh.vel + acc * dt)
                 veh.s = veh.s + veh.vel * dt
 
+    # construct vel_limit3d
+    s_resolution, d_resolution = 1, 1
+    vel_lim_3d = [
+        [
+            [[0, 20] for k in range(int(scenario_size[1] / d_resolution))]
+            for j in range(int(scenario_size[0] / s_resolution))
+        ]
+        for i in range(int(prediction_time / dt))
+    ]
+    for veh in flow:
+        if veh.vtype == 'ego':
+            continue
+        for t in range(int(prediction_time / dt)):
+            veh_s_int, veh_d_int, veh_vel = (
+                round(predictions[veh.id][t][1] / s_resolution),
+                round(predictions[veh.id][t][2] / d_resolution),
+                predictions[veh.id][t][3],
+            )
+            for d in range(
+                max(0, veh_d_int - int(veh.width / d_resolution)),
+                min(
+                    veh_d_int + int(veh.width / d_resolution),
+                    int(scenario_size[1] / d_resolution),
+                ),
+            ):
+                # 以下包括车中、车前、车后的栅格场景速度限制
+                reaction_dist_int = veh_s_int + round(
+                    (veh.length / 2 + 0.5 * veh_vel) / s_resolution
+                )
+                for s in range(
+                    max(veh_s_int - int(veh.length / 2 / s_resolution), 0),
+                    min(reaction_dist_int, int(scenario_size[0] / s_resolution),),
+                ):
+                    vel_lim_3d[t][s][d] = [-1, -1]
+                for s in range(
+                    reaction_dist_int, int(scenario_size[0] / s_resolution),
+                ):
+                    if veh_vel - (s - reaction_dist_int) / 3 >= 0:
+                        vel_lim_3d[t][s][d][0] = max(
+                            vel_lim_3d[t][s][d][0],
+                            veh_vel - (s - reaction_dist_int) / 3,
+                        )
+                    else:
+                        break
+                for s in range(
+                    0,
+                    min(
+                        veh_s_int - int(veh.length / 2 / s_resolution),
+                        int(scenario_size[0] / s_resolution),
+                    ),
+                ):
+                    delta_s = veh_s_int - int(veh.length / 2 / s_resolution) - s
+                    vel_lim_3d[t][s][d][1] = min(
+                        vel_lim_3d[t][s][d][1],
+                        (delta_s + 3 * veh_vel) / 3.5,
+                        2 * delta_s,
+                    )
+
     # plot predictions
     plt.ion()
     fig, ax = plt.subplots()
@@ -177,7 +236,22 @@ def main():
                     alpha=0.5,
                 )
             )
-        # plot y=2 line
+        grid = np.zeros([scenario_size[0], scenario_size[1]])
+        for i in range(scenario_size[0]):
+            for j in range(scenario_size[1]):
+                grid[i][j] = vel_lim_3d[t][int(i / s_resolution)][
+                    int(j / d_resolution)
+                ][1]
+        im = ax.imshow(
+            grid.T,
+            cmap='gist_gray',
+            interpolation='none',
+            origin='lower',
+            alpha=0.6,
+            zorder=1,
+        )
+        if t == 0:
+            fig.colorbar(im, orientation='vertical')
         ax.plot([0, scenario_size[0]], [0, 0], 'k', linewidth=1)
         ax.plot([0, scenario_size[0]], [4, 4], 'b--', linewidth=1)
         ax.plot([0, scenario_size[0]], [8, 8], 'b--', linewidth=1)
