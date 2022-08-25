@@ -1,3 +1,9 @@
+'''
+Author: Licheng Wen
+Date: 2022-08-22 15:24:31
+Description: 
+Copyright (c) 2022 by PJLab, All Rights Reserved. 
+'''
 import copy
 import hashlib
 import random
@@ -17,7 +23,7 @@ PAR = 0.6
 
 # decision param
 scenario_size = [150, 12]
-s_resolution, d_resolution = 1, 1
+s_resolution, d_resolution = 0.5, 0.5
 LANE_WIDTH = 4
 prediction_time = 14  # seconds
 DT = 0.5  # decision interval (second)
@@ -95,6 +101,7 @@ class VehicleState:
                 s += vel * DT + 0.5 * self.ACC * DT * DT
             elif action == 'DC':
                 vel -= self.ACC * DT
+                vel = max(vel, 0)
                 s += vel * DT - 0.5 * self.ACC * DT * DT
             elif action == 'LCL':
                 d += self.CHANGE_LANE_D
@@ -110,22 +117,27 @@ class VehicleState:
                 continue
 
             action_safe = True
+            # check action satisify vel limit on longitudinal axis
             for si in range(
                 int((self.s - self.LENGTH / 2) / s_resolution),
-                min(int((s + self.LENGTH / 2) / s_resolution) + 1, scenario_size[0]),
+                min(
+                    int((s + self.LENGTH / 2) / s_resolution) + 1,
+                    int(scenario_size[0] / s_resolution),
+                ),
             ):
-                di = int((d + self.d) / 2)
+                di = int(self.d / d_resolution)
                 vel_limit = vel_lim_3d[int(t / DT)][si][di]
                 if vel < vel_limit[0] or vel > vel_limit[1]:
                     action_safe = False
                     break
+            # check action satisify vel limit on lateral axis
             if action_safe:
                 d_lower, d_upper = min(d, self.d), max(d, self.d)
                 for di in range(
                     max(int((d_lower - self.WIDTH / 2) / d_resolution), 0),
                     min(
                         int((d_upper + self.WIDTH / 2) / d_resolution) + 1,
-                        scenario_size[1],
+                        int(scenario_size[1] / d_resolution),
                     ),
                 ):
                     si = min(
@@ -139,9 +151,11 @@ class VehicleState:
                 self.next_action[action] = [t, s, d, vel]
         self.num_moves = len(self.next_action)
 
-    # todo: add  tried set support
-    def next_state(self, tried_set=[]):
+    def next_state(self, tried_children_node=[]):
+        tried_action_set = set([tuple(c.actions) for c in tried_children_node])
         next_action = random.choice(list(self.next_action.keys()))
+        while tuple(self.actions + [next_action]) in tried_action_set:
+            next_action = random.choice(list(self.next_action.keys()))
         next_state = self.next_action[next_action]
         return VehicleState(
             self.id, self.states + [next_state], self.actions + [next_action]
@@ -157,9 +171,16 @@ class VehicleState:
     def reward(self):  # reward have to have their support in [0, 1]
         reward = 1.0
         # todo:
+
+        if self.t >= self.TIME_LIMIT - 1 and self.s < self.MAX_DIST:
+            reward -= 0.9
+        if (self.t >= self.TIME_LIMIT - 1 or self.s >= self.MAX_DIST) and abs(
+            self.d - (0.5 + self.TARGET_LANE) * LANE_WIDTH
+        ) > 0.5:
+            reward -= 0.9
         for i in range(len(self.actions)):
             move = self.actions[i]
-            # speed > 10 acc should be punished
+            # speed > 10, acc should be punished
             if move == 'AC' and self.states[i][3] > 10:
                 reward -= 0.5 / (self.TIME_LIMIT / DT)
             if move == 'DC':
@@ -174,9 +195,9 @@ class VehicleState:
                 reward -= 1 / (self.TIME_LIMIT / DT)
         # if self.t >= self.TIME_LIMIT / 2:
         #     reward -= (self.t - self.TIME_LIMIT / 2) / (self.TIME_LIMIT / DT)
-        reward -= 1 - (self.s / self.MAX_DIST)
-        if self.s >= self.MAX_DIST:
-            reward += 1 - self.t / self.TIME_LIMIT
+        # reward -= 1 - (self.s / self.MAX_DIST)
+        # if self.s >= self.MAX_DIST:
+        #     reward += 1 - self.t / self.TIME_LIMIT
         return max(0, min(1.0, reward))
 
     def __hash__(self):
@@ -201,9 +222,10 @@ class VehicleState:
 def main():
     ego_vehicle = Vehicle(id=0, state=[30, 0, 8], lane_id=1, vtype='ego')
     other_vehicle = Vehicle(id=1, state=[45, 0, 5], lane_id=1)
+    other_vehicle2 = Vehicle(id=2, state=[10, 0, 5], lane_id=1)
 
     # create a list of vehicles
-    flow = [copy.deepcopy(ego_vehicle), other_vehicle]
+    flow = [copy.deepcopy(ego_vehicle), other_vehicle, other_vehicle2]
     flow_num = 5  # max allow vehicle number
     while len(flow) < flow_num:
         is_safe = False
@@ -227,7 +249,7 @@ def main():
     current_lane_id = -1
     for i in range(len(flow)):
         veh = flow[i]
-        if veh.lane_id != current_lane_id:  # leading vehicle
+        if veh.lane_id != current_lane_id or False:  # leading vehicle
             current_lane_id = veh.lane_id
             predictions[veh.id] = []
             for t in range(int(prediction_time / DT)):
@@ -330,7 +352,7 @@ def main():
     for t in range(int(prediction_time / DT)):
         print("-------------t=%d----------------" % t)
         old_node = current_node
-        current_node = mcts.uct_search(100 / (t + 1), current_node)
+        current_node = mcts.uct_search(100 / (t / 2 + 1), current_node)
         print("Num Children: %d\n--------" % len(old_node.children))
         for i, c in enumerate(old_node.children):
             print(i, c)
@@ -339,7 +361,8 @@ def main():
         while temp_best.children != []:
             temp_best = mcts.best_child(temp_best, 0)
         print("Temp Best Route: %s\nActions" % temp_best.state, temp_best.state.actions)
-        if temp_best.state.terminal():
+        print("temp best reward", temp_best.state.reward())
+        if current_node.state.terminal():
             break
         # current_node = mcts.Node(
         #     VehicleState(

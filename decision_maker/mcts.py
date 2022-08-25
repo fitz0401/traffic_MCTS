@@ -126,11 +126,11 @@ def tree_policy(node, num_moves_lambda):
     return node
 
 
-# fixme: 此处可以将tried_children作为参数传入，减少重复计算
 def expand(node):
     tried_children = [c.state for c in node.children]
-    new_state = node.state.next_state()
+    new_state = node.state.next_state(tried_children)
     while new_state in tried_children and new_state.terminal() == False:
+        print("should not be here!!!")
         new_state = node.state.next_state()
     node.add_child(new_state)
     return node.children[-1]
