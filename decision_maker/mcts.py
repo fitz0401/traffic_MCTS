@@ -15,11 +15,10 @@ import hashlib
 import logging
 import argparse
 import time
-from tracemalloc import start
 
 
 # MCTS scalar.  Larger scalar will increase exploitation, smaller will increase exploration.
-SCALAR = 1 / (2 * math.sqrt(2.0))
+SCALAR = 2 / (2 * math.sqrt(2.0))
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger('MyLogger')

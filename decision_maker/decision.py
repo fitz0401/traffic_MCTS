@@ -170,34 +170,30 @@ class VehicleState:
 
     def reward(self):  # reward have to have their support in [0, 1]
         reward = 1.0
-        # todo:
-
-        if self.t >= self.TIME_LIMIT - 1 and self.s < self.MAX_DIST:
+        if self.t >= self.TIME_LIMIT - 1 and self.s < self.MAX_DIST * 0.9:
             reward -= 0.9
-        if (self.t >= self.TIME_LIMIT - 1 or self.s >= self.MAX_DIST) and abs(
-            self.d - (0.5 + self.TARGET_LANE) * LANE_WIDTH
-        ) > 0.5:
+        if abs(self.d - (0.5 + self.TARGET_LANE) * LANE_WIDTH) > 0.5:
             reward -= 0.9
+        max_action_num = int(self.TIME_LIMIT / DT) * 4
         for i in range(len(self.actions)):
             move = self.actions[i]
-            # speed > 10, acc should be punished
-            if move == 'AC' and self.states[i][3] > 10:
-                reward -= 0.5 / (self.TIME_LIMIT / DT)
-            if move == 'DC':
-                reward -= 0.3 / (self.TIME_LIMIT / DT)
+            # speed > speed_limit, acc should be punished
+            if self.states[i][3] > 10:
+                reward -= 2 / max_action_num
             if move == 'LCL' or move == 'LCR':
-                reward -= 0.5 / (self.TIME_LIMIT / DT)
-        for state in self.states:
-            center_dist = (
-                state[2] - int(state[2] / LANE_WIDTH) * LANE_WIDTH - LANE_WIDTH / 2
-            )
-            if abs(center_dist) > 0.5:
-                reward -= 1 / (self.TIME_LIMIT / DT)
-        # if self.t >= self.TIME_LIMIT / 2:
-        #     reward -= (self.t - self.TIME_LIMIT / 2) / (self.TIME_LIMIT / DT)
-        # reward -= 1 - (self.s / self.MAX_DIST)
-        # if self.s >= self.MAX_DIST:
-        #     reward += 1 - self.t / self.TIME_LIMIT
+                reward -= 1 / max_action_num
+            if i > 0 and move != self.actions[i - 1]:
+                reward -= 1 / max_action_num
+            if (
+                abs(
+                    self.states[i][2]
+                    - int(self.states[i][2] / LANE_WIDTH) * LANE_WIDTH
+                    - LANE_WIDTH / 2
+                )
+                > 0.5
+            ):
+                reward -= 1 / max_action_num
+
         return max(0, min(1.0, reward))
 
     def __hash__(self):
