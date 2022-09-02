@@ -25,8 +25,8 @@ PAR = 0.6
 scenario_size = [150, 12]
 s_resolution, d_resolution = 0.5, 0.5
 LANE_WIDTH = 4
-prediction_time = 14  # seconds
-DT = 0.5  # decision interval (second)
+prediction_time = 20  # seconds
+DT = 1  # decision interval (second)
 
 
 class Vehicle:
@@ -53,6 +53,25 @@ class Vehicle:
             return False
         return True
 
+    def check_vel_bound(self, other_s, other_d, other_vel) -> bool:
+        # Assume other_veh is in the same lane
+        if other_s > self.s:  # self is the behind car
+            reaction_dist = self.length + 0.5 * self.vel
+            delta_s = other_s - self.s
+            if delta_s < reaction_dist:
+                return False
+            vel_lower_limit = self.vel - (delta_s - reaction_dist) / 3.0
+            if other_vel < vel_lower_limit:
+                return False
+        else:  # self is the front car
+            delta_s = self.s - other_s
+            if delta_s < self.length:
+                return False
+            vel_upper_limit = min((2.5 * self.vel + delta_s) / 3.5, 2.0 * delta_s)
+            if other_vel > vel_upper_limit:
+                return False
+        return True
+
     def __repr__(self) -> str:
         s = "Vehicle %d: s=%f, d=%f, vel=%f, lane_id=%d\n" % (
             self.id,
@@ -68,8 +87,8 @@ ACTION_LIST = ['KS', 'AC', 'DC', 'LCL', 'LCR']
 
 
 class VehicleState:
-    MAX_DIST = 120
-    TARGET_LANE = 1
+    MAX_DIST = 100
+    TARGET_LANE = 2
     TIME_LIMIT = prediction_time
 
     ACC = 1  # m/s^2
@@ -78,14 +97,20 @@ class VehicleState:
     LENGTH = 5
     WIDTH = 2
 
-    def __init__(self, id, states, actions=[]) -> None:
+    def __init__(self, id, states, actions=[], flow=[]) -> None:
         self.id = id
         self.states = states
         self.t = self.states[-1][0]
         self.s = self.states[-1][1]  # under frenet coordinate
         self.d = self.states[-1][2]
+        self.lane_id = int(self.d / LANE_WIDTH)
         self.vel = self.states[-1][3]
         self.actions = actions
+        self.flow = flow
+        self.flow.sort(key=lambda x: (x.lane_id, -x.s))
+
+        # update flow
+        self.predicted_flow, surround_car = self.predict_flow()
 
         # filt available actions
         self.next_action = {}
@@ -116,39 +141,25 @@ class VehicleState:
                 self.next_action[action] = [t, s, d, vel]
                 continue
 
-            action_safe = True
-            # check action satisify vel limit on longitudinal axis
-            for si in range(
-                int((self.s - self.LENGTH / 2) / s_resolution),
-                min(
-                    int((s + self.LENGTH / 2) / s_resolution) + 1,
-                    int(scenario_size[0] / s_resolution),
-                ),
+            front_veh = surround_car['cur_lane'].get('front', None)
+            back_veh = surround_car['cur_lane'].get('back', None)
+            if (front_veh and front_veh.check_vel_bound(s, d, vel) == False) or (
+                back_veh and back_veh.check_vel_bound(s, d, vel) == False
             ):
-                di = int(self.d / d_resolution)
-                vel_limit = vel_lim_3d[int(t / DT)][si][di]
-                if vel < vel_limit[0] or vel > vel_limit[1]:
-                    action_safe = False
-                    break
-            # check action satisify vel limit on lateral axis
-            if action_safe:
-                d_lower, d_upper = min(d, self.d), max(d, self.d)
-                for di in range(
-                    max(int((d_lower - self.WIDTH / 2) / d_resolution), 0),
-                    min(
-                        int((d_upper + self.WIDTH / 2) / d_resolution) + 1,
-                        int(scenario_size[1] / d_resolution),
-                    ),
+                continue
+            if int(d / LANE_WIDTH) != self.lane_id:
+                if action == 'LCL':
+                    target_lane = 'left_lane'
+                elif action == 'LCR':
+                    target_lane = 'right_lane'
+                front_veh = surround_car[target_lane].get('front', None)
+                back_veh = surround_car[target_lane].get('back', None)
+                if (front_veh and front_veh.check_vel_bound(s, d, vel) == False) or (
+                    back_veh and back_veh.check_vel_bound(s, d, vel) == False
                 ):
-                    si = min(
-                        int((s + self.LENGTH / 2) / s_resolution) + 1, scenario_size[0]
-                    )
-                    vel_limit = vel_lim_3d[int(t / DT)][si][di]
-                    if vel < vel_limit[0] or vel > vel_limit[1]:
-                        action_safe = False
-                        break
-            if action_safe:
-                self.next_action[action] = [t, s, d, vel]
+                    continue
+
+            self.next_action[action] = [t, s, d, vel]
         self.num_moves = len(self.next_action)
 
     def next_state(self, tried_children_node=[]):
@@ -158,7 +169,18 @@ class VehicleState:
             next_action = random.choice(list(self.next_action.keys()))
         next_state = self.next_action[next_action]
         return VehicleState(
-            self.id, self.states + [next_state], self.actions + [next_action]
+            self.id,
+            self.states + [next_state],
+            self.actions + [next_action],
+            self.predicted_flow
+            + [
+                Vehicle(
+                    self.id,
+                    next_state[1:],
+                    int(next_state[2] / LANE_WIDTH),
+                    vtype='ego',
+                )
+            ],
         )
 
     def terminal(self):
@@ -170,10 +192,10 @@ class VehicleState:
 
     def reward(self):  # reward have to have their support in [0, 1]
         reward = 1.0
-        if self.t >= self.TIME_LIMIT - 1 and self.s < self.MAX_DIST * 0.9:
-            reward -= 0.9
+        # if self.t >= self.TIME_LIMIT - 1 and self.s < self.MAX_DIST * 0.9:
+        #     reward -= 0.9
         if abs(self.d - (0.5 + self.TARGET_LANE) * LANE_WIDTH) > 0.5:
-            reward -= 0.9
+            reward -= 1.0
         max_action_num = int(self.TIME_LIMIT / DT) * 4
         for i in range(len(self.actions)):
             move = self.actions[i]
@@ -181,7 +203,7 @@ class VehicleState:
             if self.states[i][3] > 10:
                 reward -= 2 / max_action_num
             if move == 'LCL' or move == 'LCR':
-                reward -= 1 / max_action_num
+                reward -= 5 / max_action_num
             if i > 0 and move != self.actions[i - 1]:
                 reward -= 1 / max_action_num
             if (
@@ -192,9 +214,83 @@ class VehicleState:
                 )
                 > 0.5
             ):
-                reward -= 1 / max_action_num
+                reward -= 5 / max_action_num
 
         return max(0, min(1.0, reward))
+
+    def predict_flow(self):
+        predict_flow = []
+        current_lane_id = -1
+        ego_index = -1
+        for i in range(len(self.flow)):
+            veh = self.flow[i]
+            if veh.id == self.id:  # ego
+                predict_flow.append(
+                    Vehicle(
+                        id=veh.id,
+                        state=[veh.s + veh.vel * DT, veh.d, veh.vel],
+                        lane_id=veh.lane_id,
+                        vtype=veh.vtype,
+                    )
+                )
+                ego_index = i
+            elif veh.lane_id != current_lane_id:  # leading vehicle
+                current_lane_id = veh.lane_id
+                predict_flow.append(
+                    Vehicle(
+                        id=veh.id,
+                        state=[veh.s + veh.vel * DT, veh.d, veh.vel],
+                        lane_id=veh.lane_id,
+                        vtype=veh.vtype,
+                    )
+                )
+            else:  # following vehicle use IDM prediction
+                leading_veh = self.flow[i - 1]
+                delta_v = veh.vel - leading_veh.vel
+                s = leading_veh.s - veh.s - veh.length
+                s_star_raw = (
+                    SAFE_DIST
+                    + veh.vel * REACTION_TIME
+                    + (veh.vel * delta_v) / (2 * SQRT_AB)
+                )
+                s_star = max(s_star_raw, SAFE_DIST)
+                acc = PAR * (
+                    1 - np.power(veh.vel / veh.exp_vel, 4) - (s_star ** 2) / (s ** 2)
+                )
+                acc = max(acc, veh.max_decel)
+                vel = max(0, veh.vel + acc * DT)
+                predict_flow.append(
+                    Vehicle(
+                        id=veh.id,
+                        state=[veh.s + vel * DT, veh.d, vel],
+                        lane_id=veh.lane_id,
+                        vtype=veh.vtype,
+                    )
+                )
+        if ego_index == -1:
+            raise Exception("Ego not found")
+        del predict_flow[ego_index]
+
+        # predict_flow.sort(key=lambda x: (x.lane_id, -x.s))
+
+        surround_car = {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}
+        for veh in predict_flow:
+            if veh.lane_id == self.lane_id:
+                if veh.s > self.s:
+                    surround_car['cur_lane']['front'] = veh
+                elif veh.s <= self.s and 'back' not in surround_car['cur_lane']:
+                    surround_car['cur_lane']['back'] = veh
+            elif veh.lane_id == self.lane_id - 1:
+                if veh.s > self.s:
+                    surround_car['right_lane']['front'] = veh
+                elif veh.s <= self.s and 'back' not in surround_car['right_lane']:
+                    surround_car['right_lane']['back'] = veh
+            elif veh.lane_id == self.lane_id + 1:
+                if veh.s > self.s:
+                    surround_car['left_lane']['front'] = veh
+                elif veh.s <= self.s and 'back' not in surround_car['left_lane']:
+                    surround_car['left_lane']['back'] = veh
+        return predict_flow, surround_car
 
     def __hash__(self):
         return int(hashlib.md5(str(self.actions).encode('utf-8')).hexdigest(), 16)
@@ -208,7 +304,7 @@ class VehicleState:
         # get action -1 considering actions maybe empty
         s = "Vehicle %d: state=%s, actions=%s, next_actions=%s" % (
             self.id,
-            str([self.t, self.s, self.d, self.vel]),
+            str([self.t, self.s, self.d, self.vel, self.lane_id]),
             str(self.actions[-1] if len(self.actions) > 0 else ''),
             str(self.next_action.keys()),
         )
@@ -218,17 +314,25 @@ class VehicleState:
 def main():
     ego_vehicle = Vehicle(id=0, state=[30, 0, 8], lane_id=1, vtype='ego')
     other_vehicle = Vehicle(id=1, state=[45, 0, 5], lane_id=1)
-    other_vehicle2 = Vehicle(id=2, state=[10, 0, 5], lane_id=1)
+    other_vehicle2 = Vehicle(id=2, state=[20, 0, 5], lane_id=1)
+    other_vehicle3 = Vehicle(id=3, state=[30, 0, 6], lane_id=2)
+    other_vehicle4 = Vehicle(id=4, state=[40, 0, 6], lane_id=2)
 
     # create a list of vehicles
-    flow = [copy.deepcopy(ego_vehicle), other_vehicle, other_vehicle2]
+    flow = [
+        copy.deepcopy(ego_vehicle),
+        other_vehicle,
+        other_vehicle2,
+        other_vehicle3,
+        other_vehicle4,
+    ]
     flow_num = 5  # max allow vehicle number
     while len(flow) < flow_num:
         is_safe = False
         while not is_safe:
             s = random.uniform(5, 100)
             d = random.uniform(-0.5, 0.5)
-            vel = random.uniform(3, 7)
+            vel = random.uniform(5, 10)
             lane_id = random.randint(0, 2)
             is_safe = True
             for other_veh in flow:
@@ -239,101 +343,7 @@ def main():
     # sort flow first by lane_id and then by s decreasingly
     flow.sort(key=lambda x: (x.lane_id, -x.s))
     print('flow:', flow)
-
-    # get predictions for each vehicle
-    predictions = {}
-    current_lane_id = -1
-    for i in range(len(flow)):
-        veh = flow[i]
-        if veh.lane_id != current_lane_id or False:  # leading vehicle
-            current_lane_id = veh.lane_id
-            predictions[veh.id] = []
-            for t in range(int(prediction_time / DT)):
-                predictions[veh.id].append(
-                    [t * DT, veh.s, veh.d + (veh.lane_id + 0.5) * LANE_WIDTH, veh.vel]
-                )
-                veh.s = veh.s + veh.vel * DT
-        else:  # following vehicle use IDM prediction
-            predictions[veh.id] = []
-            leading_veh_id = flow[i - 1].id
-            for t in range(int(prediction_time / DT)):
-                predictions[veh.id].append(
-                    [t * DT, veh.s, veh.d + (veh.lane_id + 0.5) * LANE_WIDTH, veh.vel]
-                )
-                # IDM
-                leading_veh = predictions[leading_veh_id][t]
-                delta_v = veh.vel - leading_veh[3]
-                s = leading_veh[1] - veh.s - veh.length
-                s_star_raw = (
-                    SAFE_DIST
-                    + veh.vel * REACTION_TIME
-                    + (veh.vel * delta_v) / (2 * SQRT_AB)
-                )
-                s_star = max(s_star_raw, SAFE_DIST)
-                acc = PAR * (
-                    1 - np.power(veh.vel / veh.exp_vel, 4) - (s_star ** 2) / (s ** 2)
-                )
-                acc = max(acc, veh.max_decel)
-                veh.vel = max(0, veh.vel + acc * DT)
-                veh.s = veh.s + veh.vel * DT
-
-    # construct vel_limit3d
-    global vel_lim_3d
-    vel_lim_3d = [
-        [
-            [[0, 20] for k in range(int(scenario_size[1] / d_resolution) + 1)]
-            for j in range(int(scenario_size[0] / s_resolution))
-        ]
-        for i in range(int(prediction_time / DT))
-    ]
-    for veh in flow:
-        if veh.vtype == 'ego':
-            continue
-        for t in range(int(prediction_time / DT)):
-            veh_s_int, veh_d_int, veh_vel = (
-                round(predictions[veh.id][t][1] / s_resolution),
-                round(predictions[veh.id][t][2] / d_resolution),
-                predictions[veh.id][t][3],
-            )
-            for d in range(
-                max(0, veh_d_int - int(veh.width / d_resolution)),
-                min(
-                    veh_d_int + int(veh.width / d_resolution),
-                    int(scenario_size[1] / d_resolution),
-                ),
-            ):
-                # 以下包括车中、车前、车后的栅格场景速度限制
-                reaction_dist_int = veh_s_int + round(
-                    (veh.length / 2 + 0.5 * veh_vel) / s_resolution
-                )
-                for s in range(
-                    max(veh_s_int - int(veh.length / 2 / s_resolution), 0),
-                    min(reaction_dist_int, int(scenario_size[0] / s_resolution),),
-                ):
-                    vel_lim_3d[t][s][d] = [-1, -1]
-                for s in range(
-                    reaction_dist_int, int(scenario_size[0] / s_resolution),
-                ):
-                    if veh_vel - (s - reaction_dist_int) / 3 >= 0:
-                        vel_lim_3d[t][s][d][0] = max(
-                            vel_lim_3d[t][s][d][0],
-                            veh_vel - (s - reaction_dist_int) / 3,
-                        )
-                    else:
-                        break
-                for s in range(
-                    0,
-                    min(
-                        veh_s_int - int(veh.length / 2 / s_resolution),
-                        int(scenario_size[0] / s_resolution),
-                    ),
-                ):
-                    delta_s = veh_s_int - int(veh.length / 2 / s_resolution) - s
-                    vel_lim_3d[t][s][d][1] = min(
-                        vel_lim_3d[t][s][d][1],
-                        (delta_s + 3 * veh_vel) / 3.5,
-                        2 * delta_s,
-                    )
+    flow_copy = copy.deepcopy(flow)
 
     # mcts
     ego_state = [
@@ -343,12 +353,14 @@ def main():
         ego_vehicle.vel,
     ]
     start_time = time.time()
-    current_node = mcts.Node(VehicleState(ego_vehicle.id, [ego_state]))
+    current_node = mcts.Node(
+        VehicleState(ego_vehicle.id, [ego_state], actions=[], flow=flow_copy)
+    )
     print("root_node:", current_node)
     for t in range(int(prediction_time / DT)):
         print("-------------t=%d----------------" % t)
         old_node = current_node
-        current_node = mcts.uct_search(100 / (t / 2 + 1), current_node)
+        current_node = mcts.uct_search(200 / (t + 1), current_node)
         print("Num Children: %d\n--------" % len(old_node.children))
         for i, c in enumerate(old_node.children):
             print(i, c)
@@ -360,15 +372,15 @@ def main():
         print("temp best reward", temp_best.state.reward())
         if current_node.state.terminal():
             break
-        # current_node = mcts.Node(
-        #     VehicleState(
-        #         ego_vehicle.id, current_node.state.states, current_node.state.actions
-        #     )
-        # )
-        # print(temp_best.state.states)
 
     print("Time: %f" % (time.time() - start_time))
     ego_state = temp_best.state.states
+    flows = []
+    while temp_best is not None:
+        flows.insert(0, temp_best.state.flow)
+        # vel_limits.insert(0, temp_best.state.vel_lim)
+        temp_best = temp_best.parent
+    # print("ego_state_compare:", flows)
 
     # plot predictions
     plt.ion()
@@ -377,13 +389,13 @@ def main():
     plt.pause(0.5)
     for t in range(min(int(prediction_time / DT), len(ego_state))):
         ax.cla()
-        for veh_id in predictions:
-            veh = predictions[veh_id][t]
-            if veh_id == 0:
-                facecolor = "red"
+        flow = flows[t]
+        for veh in flow:
+            if veh.vtype != 'ego':
+                facecolor = "green"
                 ax.add_patch(
                     patches.Rectangle(
-                        (ego_state[t][1] - 2.5, ego_state[t][2] - 1),
+                        (veh.s - 2.5, veh.d + (veh.lane_id + 0.5) * LANE_WIDTH - 1),
                         5,
                         2,
                         linewidth=1,
@@ -392,35 +404,19 @@ def main():
                         alpha=0.5,
                     )
                 )
-            else:
-                facecolor = "blue"
-                ax.add_patch(
-                    patches.Rectangle(
-                        (veh[1] - 2.5, veh[2] - 1),
-                        5,
-                        2,
-                        linewidth=1,
-                        facecolor=facecolor,
-                        zorder=3,
-                        alpha=0.5,
-                    )
-                )
-        grid = np.zeros([scenario_size[0], scenario_size[1]])
-        for i in range(scenario_size[0]):
-            for j in range(scenario_size[1]):
-                grid[i][j] = vel_lim_3d[t][int(i / s_resolution)][
-                    int(j / d_resolution)
-                ][1]
-        im = ax.imshow(
-            grid.T,
-            cmap='gist_gray',
-            interpolation='none',
-            origin='lower',
-            alpha=0.6,
-            zorder=1,
+        facecolor = "black"
+        ax.add_patch(
+            patches.Rectangle(
+                (ego_state[t][1] - 2.5, ego_state[t][2] - 1),
+                5,
+                2,
+                linewidth=1,
+                facecolor=facecolor,
+                zorder=3,
+                alpha=0.9,
+            )
         )
-        if t == 0:
-            fig.colorbar(im, orientation='vertical')
+
         ax.plot([0, scenario_size[0]], [0, 0], 'k', linewidth=1)
         ax.plot([0, scenario_size[0]], [4, 4], 'b--', linewidth=1)
         ax.plot([0, scenario_size[0]], [8, 8], 'b--', linewidth=1)
@@ -430,22 +426,6 @@ def main():
         ax.axis(xmin=0, xmax=scenario_size[0], ymin=0, ymax=15)
         plt.pause(0.2)
     plt.show()
-
-    # # MCTS
-    # # current_node = mcts.Node(State())  # root node
-    # for l in range(1):
-    #     root_node = current_node
-    #     current_node = mcts.uct_search(1000 / (l + 1), current_node)
-    #     print("level %d" % l)
-    #     print("Num Children: %d" % len(root_node.children))
-    #     for i, c in enumerate(root_node.children):
-    #         print(i, c)
-    #     print("Best Child: %s" % current_node.state)
-
-    #     temp_best = current_node
-    #     while temp_best.children != []:
-    #         temp_best = mcts.best_child(temp_best, 0)
-    #     print("Temp Best Child: %s" % temp_best.state)
 
 
 if __name__ == "__main__":
