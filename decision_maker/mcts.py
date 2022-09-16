@@ -88,7 +88,7 @@ class Node:
         return False
 
     def __repr__(self):
-        s = "Node;%s children: %d; visits: %d; reward: %f, exploit: %f" % (
+        s = "Node: %s\n\tChildren: %d; visits: %d; reward: %f, exploit: %f" % (
             self.state,
             len(self.children),
             self.visits,
@@ -108,7 +108,11 @@ def uct_search(budget, root, num_moves_lambda=None):
         backpropagation(front, reward)
 
     return best_child(root, 0)
-
+    
+def default_policy(state):
+    while state.terminal() == False:
+        state = state.next_state()
+    return state.reward()
 
 def tree_policy(node, num_moves_lambda):
     # a hack to force 'exploitation' in a game where there are many options, and you may never/not want to fully expand first
@@ -154,10 +158,7 @@ def best_child(
     return random.choice(bestchildren)
 
 
-def default_policy(state):
-    while state.terminal() == False:
-        state = state.next_state()
-    return state.reward()
+
 
 
 def backpropagation(node, reward):
