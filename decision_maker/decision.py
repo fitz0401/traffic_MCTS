@@ -105,11 +105,23 @@ def main():
     for veh_id, veh_state in ego_state[0].items():
         if veh_id == 'time':
             continue
+        decision_state_for_planning = []
         print("Action for vehicle", veh_id, end=": ")
         for i in range(len(current_node.state.actions)):
             # print with 3 char space
             print(current_node.state.actions[i][index], end="->")
+            if (i + 1) < len(current_node.state.actions) and (
+                current_node.state.actions[i][index]
+                != current_node.state.actions[i + 1][index]
+            ):
+                decision_state_for_planning.append(
+                    (ego_state[i + 1]["time"], ego_state[i + 1][veh_id])
+                )
+        decision_state_for_planning.append(
+            (ego_state[-1]["time"], ego_state[-1][veh_id])
+        )
         print("")
+        print("Decision state for planning", decision_state_for_planning)
         index += 1
 
     flows = []

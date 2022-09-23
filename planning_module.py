@@ -105,8 +105,38 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
     vel_fig.cla()
     acc_fig.cla()
 
+    for edge in edges.values():
+        for lane_index in range(edge.lane_num):
+            lane_id = edge.id + '_' + str(lane_index)
+            lane = lanes[lane_id]
+            try:
+                main_fig.plot(*zip(*lane.center_line), "w:", linewidth=1.5)
+            except:
+                lane.center_line, lane.left_bound, lane.right_bound = [], [], []
+                s = np.linspace(0, lane.course_spline.s[-1], num=50)
+                for si in s:
+                    lane.center_line.append(lane.course_spline.calc_position(si))
+                    lane.left_bound.append(
+                        lane.course_spline.frenet_to_cartesian1D(si, lane.width / 2)
+                    )
+                    lane.right_bound.append(
+                        lane.course_spline.frenet_to_cartesian1D(si, -lane.width / 2)
+                    )
+                main_fig.plot(*zip(*lane.center_line), "w:", linewidth=1.5)
+            if lane_index == edge.lane_num - 1:
+                main_fig.plot(*zip(*lane.left_bound), "k", linewidth=1.5)
+            else:
+                main_fig.plot(*zip(*lane.left_bound), "k--", linewidth=1)
+            if lane_index == 0:
+                main_fig.plot(*zip(*lane.right_bound), "k", linewidth=1.5)
+
     for vehicle_id in vehicles:
         vehicle = vehicles[vehicle_id]
+        vehicle_color = colors[vehicle.id]
+        if vehicle.behaviour == "Decision":
+            vehicle_color = "orangered"
+        else:
+            vehicle_color = "green"
         if vehicle.id in bestpaths:
             main_fig.add_patch(
                 plt.Rectangle(
@@ -131,10 +161,10 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
                     vehicle.length,
                     vehicle.width,
                     angle=vehicle.current_state.yaw / math.pi * 180,
-                    facecolor=colors[vehicle.id],
+                    facecolor=vehicle_color,
                     fill=True,
                     alpha=0.7,
-                    zorder=2,
+                    zorder=3,
                 )
             )
             main_fig.annotate(
@@ -145,6 +175,18 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
                 fontsize=10,
                 ha='center',
                 va='center',
+                zorder=5,
+            )
+            pathx = [state.x for state in bestpaths[vehicle.id].states[1::2]]
+            pathy = [state.y for state in bestpaths[vehicle.id].states[1::2]]
+            main_fig.plot(
+                pathx,
+                pathy,
+                "-o",
+                markersize=2,
+                linewidth=1.5,
+                color=vehicle_color,
+                zorder=2,
             )
 
     for obs in static_obs_list:
@@ -182,44 +224,17 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
                     zorder=3,
                 )
             )
-    for edge in edges.values():
-        for lane_index in range(edge.lane_num):
-            lane_id = edge.id + '_' + str(lane_index)
-            lane = lanes[lane_id]
-            try:
-                main_fig.plot(*zip(*lane.center_line), "w:", linewidth=1.5)
-            except:
-                lane.center_line, lane.left_bound, lane.right_bound = [], [], []
-                s = np.linspace(0, lane.course_spline.s[-1], num=50)
-                for si in s:
-                    lane.center_line.append(lane.course_spline.calc_position(si))
-                    lane.left_bound.append(
-                        lane.course_spline.frenet_to_cartesian1D(si, lane.width / 2)
-                    )
-                    lane.right_bound.append(
-                        lane.course_spline.frenet_to_cartesian1D(si, -lane.width / 2)
-                    )
-                main_fig.plot(*zip(*lane.center_line), "w:", linewidth=1.5)
-            if lane_index == edge.lane_num - 1:
-                main_fig.plot(*zip(*lane.left_bound), "k", linewidth=1.5)
-            else:
-                main_fig.plot(*zip(*lane.left_bound), "k--", linewidth=1)
-            if lane_index == 0:
-                main_fig.plot(*zip(*lane.right_bound), "k", linewidth=1.5)
 
-    for id, path in bestpaths.items():
-        pathx = [state.x for state in path.states[1::2]]
-        pathy = [state.y for state in path.states[1::2]]
-        main_fig.plot(pathx, pathy, "-o", markersize=2, linewidth=1.5, color=colors[id])
-        main_fig.set_title("Time:" + str(T)[0:4] + "s")
-        main_fig.set_facecolor("lightgray")
-        main_fig.grid(True)
+    main_fig.set_title("Time:" + str(T)[0:4] + "s")
+    main_fig.set_facecolor("lightgray")
+    main_fig.grid(True)
 
-    focus_car_id = 1
+    focus_car_id = 3
     if focus_car_id in bestpaths and focus_car_id in vehicles:
         t_best = [state.t + T for state in bestpaths[focus_car_id].states[1:]]
         vel_best = [state.vel * 3.6 for state in bestpaths[focus_car_id].states[1:]]
         vel_fig.plot(t_best, vel_best, lw=1)
+        vel_fig.set_ylim(10, 30)
         vel_fig.set_title(
             "Vehicle id:"
             + str(focus_car_id)
@@ -235,7 +250,7 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
         )
         acc_fig.grid(True)
 
-        area = 8
+        area = 18
         main_fig.axis("equal")
         main_fig.axis(
             xmin=bestpaths[focus_car_id].states[1].x - area / 2,
@@ -278,6 +293,20 @@ def update_behaviour(vehicle_id, vehicles, lanes):
             right_lane_id, lanes[right_lane_id].course_spline
         )
         vehicles[vehicle_id].behaviour = "KL"
+    if (
+        vehicle.behaviour == "Decision"
+        and abs(vehicle.current_state.d) > lanes[vehicle.lane_id].width / 1.5
+    ):
+        logging.info(
+            "Vehicle {} change lane via decision successfully".format(vehicle_id)
+        )
+        if vehicle.current_state.d > 0:
+            target_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
+        else:
+            target_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
+        vehicles[vehicle_id] = vehicle.change_to_next_lane(
+            target_lane_id, lanes[target_lane_id].course_spline
+        )
 
     # in junction behaviour
     if vehicle.current_state.s > lanes[vehicle.lane_id].next_s:
@@ -320,7 +349,7 @@ def update_behaviour(vehicle_id, vehicles, lanes):
 
 
 def planner(
-    vehicle_id, vehicles, predictions, lanes, static_obs_list, T, target_state=None,
+    vehicle_id, vehicles, predictions, lanes, static_obs_list, T, decision_states=None,
 ):
     start = time.time()
     vehicle = vehicles[vehicle_id]
@@ -424,10 +453,39 @@ def planner(
         path = single_vehicle_planner.stop_trajectory_generator(
             vehicle, lanes, road_width, obs_list, config, T,
         )
+    elif vehicle.behaviour == "Decision":
+        temp_decision_states = []
+        for decision_state in decision_states[vehicle.id]:
+            t = decision_state[0]
+            if t <= T:
+                continue
+            state = (
+                decision_state[1][0],
+                decision_state[1][1]
+                - (int(vehicle.lane_id[vehicle.lane_id.find('_') + 1 :]) + 0.5) * 4,
+                decision_state[1][2],
+            )
+            temp_decision_states.append((t - T, state))
+            if t - T >= config["MIN_T"]:
+                break
+        # print("temp_decision_states:", temp_decision_states)
+        if temp_decision_states == [] or t - T < 0.5:
+            vehicle.behaviour = "KL"
+        course_spline = lanes[vehicle.lane_id].course_spline
+        path = single_vehicle_planner.decision_trajectory_generator(
+            vehicle,
+            course_spline,
+            road_width,
+            obs_list,
+            config,
+            T,
+            temp_decision_states,
+        )
     else:
         logging.error(
             "Vehicle {} Unknown behaviour: {}".format(vehicle.id, vehicle.behaviour)
         )
+        raise ValueError("Unknown behaviour: {}".format(vehicle.behaviour))
 
     logging.debug("Vehicle {} Planning time:{}".format(vehicle.id, time.time() - start))
     return vehicle_id, path, vehicle.behaviour
@@ -458,84 +516,101 @@ def main():
     """
     vehicles = {}
 
-    vehicles[len(vehicles)] = build_vehicle(
-        id=len(vehicles),
-        vtype="truck",
-        s0=12.0,  # initial longtitude position [m]
-        s0_d=25.0 / 3.6,  # initial longtitude speed [m/s]
+    v_id = 1
+    vehicles[v_id] = build_vehicle(
+        id=v_id,
+        vtype="car",
+        s0=45.0,  # initial longtitude position [m]
+        s0_d=7.0,  # initial longtitude speed [m/s]
         d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[0],  # init lane id
-        target_speed=25.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+        lane_id=list(lanes.keys())[1],  # init lane id
+        target_speed=9.0,  # target longtitude vel [m/s]
+        behaviour="Decision",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
         lanes=lanes,
         config=config,
     )
 
-    vehicles[len(vehicles)] = build_vehicle(
-        id=len(vehicles),
+    v_id = 3
+    vehicles[v_id] = build_vehicle(
+        id=v_id,
         vtype="car",
-        s0=2.0,  # initial longtitude position [m]
-        s0_d=30.0 / 3.6,  # initial longtitude speed [m/s]
+        s0=25.0,  # initial longtitude position [m]
+        s0_d=6.0,  # initial longtitude speed [m/s]
         d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[0],  # init lane id
-        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+        lane_id=list(lanes.keys())[2],  # init lane id
+        target_speed=6.0,  # target longtitude vel [m/s]
+        behaviour="Decision",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
         lanes=lanes,
         config=config,
     )
-    vehicles[len(vehicles)] = build_vehicle(
-        id=len(vehicles),
+    v_id = 2
+    vehicles[v_id] = build_vehicle(
+        id=v_id,
         vtype="car",
-        s0=0.0,  # initial longtitude position [m]
-        s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+        s0=20.0,  # initial longtitude position [m]
+        s0_d=6.0,  # initial longtitude speed [m/s]
         d0=0.0,  # initial lateral position [m]
         lane_id=list(lanes.keys())[1],  # init lane id
-        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+        target_speed=7.0,  # target longtitude vel [m/s]
         behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
         lanes=lanes,
         config=config,
     )
-    vehicles[len(vehicles)] = build_vehicle(
-        id=len(vehicles),
+    v_id = 0
+    vehicles[v_id] = build_vehicle(
+        id=v_id,
         vtype="car",
-        s0=4.0,  # initial longtitude position [m]
-        s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+        s0=30.0,  # initial longtitude position [m]
+        s0_d=8.0,  # initial longtitude speed [m/s]
         d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[6],  # init lane id
-        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+        lane_id=list(lanes.keys())[1],  # init lane id
+        target_speed=8.0,  # target longtitude vel [m/s]
         behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
         lanes=lanes,
         config=config,
     )
-    vehicles[len(vehicles)] = build_vehicle(
-        id=len(vehicles),
-        vtype="truck",
-        s0=10.0,  # initial longtitude position [m]
-        s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
-        d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[8],  # init lane id
-        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-        lanes=lanes,
-        config=config,
-    )
-    vehicles[len(vehicles)] = build_vehicle(
-        id=len(vehicles),
+    v_id = 4
+    vehicles[v_id] = build_vehicle(
+        id=v_id,
         vtype="car",
-        s0=0.0,  # initial longtitude position [m]
-        s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+        s0=45.0,  # initial longtitude position [m]
+        s0_d=7.0,  # initial longtitude speed [m/s]
         d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[8],  # init lane id
-        target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+        lane_id=list(lanes.keys())[2],  # init lane id
+        target_speed=7.0,  # target longtitude vel [m/s]
         behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
         lanes=lanes,
         config=config,
     )
+    # vehicles[len(vehicles)] = build_vehicle(
+    #     id=len(vehicles),
+    #     vtype="truck",
+    #     s0=10.0,  # initial longtitude position [m]
+    #     s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+    #     d0=0.0,  # initial lateral position [m]
+    #     lane_id=list(lanes.keys())[8],  # init lane id
+    #     target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+    #     behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+    #     lanes=lanes,
+    #     config=config,
+    # )
+    # vehicles[len(vehicles)] = build_vehicle(
+    #     id=len(vehicles),
+    #     vtype="car",
+    #     s0=0.0,  # initial longtitude position [m]
+    #     s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+    #     d0=0.0,  # initial lateral position [m]
+    #     lane_id=list(lanes.keys())[8],  # init lane id
+    #     target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
+    #     behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+    #     lanes=lanes,
+    #     config=config,
+    # )
 
     # color map
     global colors
     color_map = plt.get_cmap("spring")
-    colors = [color_map(i) for i in np.linspace(0, 1, len(vehicles))]
+    colors = [color_map(i) for i in np.linspace(0, 1, 5)]
 
     # static obstacle lists
     static_obs_list = []
@@ -556,13 +631,31 @@ def main():
         pedestrian["pos"].append({"t": t, "x": start_x, "y": start_y})
         start_y += 1.0 * config["DT"]
     static_obs_list = [pedestrian]
-    # static_obs_list = []
+    static_obs_list = []
 
     global T, delta_timestep, delta_t
     T = 0.0
-    delta_timestep = 1
+    delta_timestep = 3
     delta_t = delta_timestep * config["DT"]
     predictions = {}
+
+    ## fixme: temp state:
+    decision_states = {
+        1: [
+            (3, (66.0, 6.0, 7)),
+            (4.5, (78.525, 6.0, 7.9)),
+            (6, (90.375, 4.0, 7.9)),
+            (9, (119.475, 4.0, 9.7)),
+            (10.5, (134.025, 2.0, 9.7)),
+        ],
+        3: [
+            (1.5, (31.975, 10.0, 5.1)),
+            (3, (39.625, 8.0, 5.1)),
+            (4.5, (49.3, 8.0, 6.0)),
+            (6, (56.275, 8.0, 5.1)),
+            (10.5, (79.225, 2.0, 5.1)),
+        ],
+    }
 
     # write current state to csv file
     if config["CSV"]:
@@ -578,15 +671,13 @@ def main():
         """
         Update/Get States
         """
-        T = i * delta_t
+        T = i * config["DT"]
         for vehicle_id, vehicle in vehicles.items():
             if vehicle_id in predictions:
                 #  TODO:
-                vehicle.current_state = deepcopy(
-                    predictions[vehicle_id].states[delta_timestep]
-                )
+                vehicle.current_state = deepcopy(predictions[vehicle_id].states[1])
+                del predictions[vehicle_id].states[0]
                 vehicle.current_state.t = T
-
             else:
                 logging.warning("Vehicle {} not in predictions".format(vehicle_id))
 
@@ -622,41 +713,52 @@ def main():
             logging.info("All vehicles reached goal")
             break
 
-        """
-        Update Behavior
-        """
-        for vehicle_id, vehicle in vehicles.items():
-            update_behaviour(vehicle_id, vehicles, lanes)
+        if i % delta_timestep == 0:
+            """
+            Update Behavior
+            """
+            for vehicle_id, vehicle in vehicles.items():
+                update_behaviour(vehicle_id, vehicles, lanes)
 
-        """
-        Planner
-        """
-        param_list = []
-        for vehicle_id in vehicles:
-            if vehicles[vehicle_id].current_state.t <= T:
-                param_list.append(
-                    (vehicle_id, vehicles, predictions, lanes, static_obs_list, T,)
-                )
-        pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-        results = pool.starmap(planner, param_list)
-        pool.close()
+            """
+            Planner
+            """
+            param_list = []
+            for vehicle_id in vehicles:
+                if vehicles[vehicle_id].current_state.t <= T:
+                    param_list.append(
+                        (
+                            vehicle_id,
+                            vehicles,
+                            predictions,
+                            lanes,
+                            static_obs_list,
+                            T,
+                            decision_states,
+                        )
+                    )
+            pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+            results = pool.starmap(planner, param_list)
+            pool.close()
 
-        """
-        Update prediction
-        """
-        # ATTENSION:prdiction must have vel to be used in calculate cost
-        predictions.clear()
-        for result_path in results:
-            vehicle_id = result_path[0]
-            predictions[vehicle_id] = result_path[1]
-        end = time.time()
+            """
+            Update prediction
+            """
+            # ATTENSION:prdiction must have vel to be used in calculate cost
+            predictions.clear()
+            for result_path in results:
+                vehicle_id = result_path[0]
+                predictions[vehicle_id] = result_path[1]
+                vehicles[vehicle_id].behaviour = result_path[2]
+
+            end = time.time()
+            # logging.info("------------------------------")
+            logging.info("Sim Time:%f,One loop Time: %f", T, end - start)
+            logging.info("------------------------------")
 
         if ANIMATION:
             plot_trajectory(vehicles, static_obs_list, predictions, lanes, edges, T)
 
-        # logging.info("------------------------------")
-        logging.info("One loop Time: %f", end - start)
-        logging.info("------------------------------")
     exitplot()
 
 

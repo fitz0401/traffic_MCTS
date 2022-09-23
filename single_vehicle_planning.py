@@ -136,6 +136,75 @@ def check_path(vehicle, path, config):
         return True
 
 
+"""
+decision action: [(t_1,state),(t_2,state),...]
+state: (s,d,vel)
+state.d should be  calculated based on course_spline
+"""
+
+
+def decision_trajectory_generator(
+    vehicle, course_spline, road_width, obs_list, config, T, decision_states
+) -> Trajectory:
+    d_road_w = config["D_ROAD_W"]
+    d_vel = config["D_T_S"] / 3.6
+    dt = config["DT"]
+
+    fullpath = Trajectory()
+    current_state = vehicle.current_state
+    for (i, state) in enumerate(decision_states):
+        seg_time = [state[0] - decision_states[i - 1][0]] if i > 0 else [state[0]]
+        seg_target_state = state[1]
+        sample_d = np.linspace(
+            seg_target_state[1] - d_road_w, seg_target_state[1] + d_road_w, 5
+        )
+        sample_vel = np.linspace(
+            max(1e-9, seg_target_state[2] - d_vel), seg_target_state[2] + d_vel, 5
+        )
+        seg_paths = frenet_optimal_planner.calc_frenet_paths(
+            current_state, sample_d, seg_time, sample_vel, dt, config
+        )
+        for path in seg_paths:
+            path.frenet_to_cartesian(course_spline)
+            path.cost = (
+                cost.smoothness(path, course_spline, config["weights"]) * dt
+                + cost.acc(path, config["weights"]) * dt
+                + cost.jerk(path, config["weights"]) * dt
+                + cost.obs(vehicle, path, obs_list, config, T)
+            )
+        seg_paths.sort(key=lambda x: x.cost)
+        bestpath = None
+        for path in seg_paths:
+            if check_path(vehicle, path, config):
+                bestpath = deepcopy(path)
+                logging.debug(
+                    "Vehicle {} finds a seg-{}/{} path with minimum cost: {}".format(
+                        vehicle.id, i + 1, len(decision_states), bestpath.cost
+                    )
+                )
+                break
+
+        if bestpath != None:
+            current_state = bestpath.states[-1]
+            fullpath.concatenate(bestpath)
+        else:
+            fullpath = None
+            break
+
+    if fullpath != None:
+        return fullpath
+    else:
+        # if no possible trajectory, return normal keep_lane
+        logging.warning(
+            "Vehicle {} cannot find a decision path, return keep_lane path".format(
+                vehicle.id
+            )
+        )
+        return lanekeeping_trajectory_generator(
+            vehicle, course_spline, road_width, obs_list, config, T,
+        )
+
+
 def lanechange_trajectory_generator(
     vehicle,
     LC_vehicle,

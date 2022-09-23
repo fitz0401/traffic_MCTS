@@ -15,10 +15,10 @@ PAR = 0.6
 # decision param
 scenario_size = [150, 12]
 LANE_WIDTH = 4
-prediction_time = 10  # seconds
-DT = 1  # decision interval (second)
+prediction_time = 20  # seconds
+DT = 1.5  # decision interval (second)
 
-TARGET_LANE = {0: 1, 2: 1, 1: 2, 3: 1}
+TARGET_LANE = {0: 0, 1: 0, 2: 0, 3: 0, 4: 1}
 
 
 def check_vel_bound(
@@ -86,7 +86,7 @@ ACTION_LIST = ['KS', 'AC', 'DC', 'LCL', 'LCR']
 class VehicleState:
     TIME_LIMIT = prediction_time
 
-    ACC = 1  # m/s^2
+    ACC = 0.6  # m/s^2
     STOP_DEC = -4.5  # maximum deceleration (m/s^2)
     CHANGE_LANE_D = 2  # m
     LENGTH = 5
@@ -352,7 +352,7 @@ class VehicleState:
                 predict_flow.append(
                     Vehicle(
                         id=veh.id,
-                        state=[veh.s + vel * DT, veh.d, vel],
+                        state=[veh.s + (vel + veh.vel) / 2 * DT, veh.d, vel],
                         lane_id=veh.lane_id,
                     )
                 )

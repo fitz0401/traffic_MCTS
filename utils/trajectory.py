@@ -7,6 +7,7 @@ Trajectory base class
 Copyright (c) 2022 by PJLab, All Rights Reserved. 
 """
 
+from copy import deepcopy
 from math import *
 import warnings
 import numpy as np
@@ -68,6 +69,17 @@ class Trajectory:
         self.states = []
         # costs
         self.cost = 0.0
+
+    def concatenate(self, other_traj):
+        if self.states != []:
+            t = self.states[-1].t
+        else:
+            t = 0
+            self.states.append(other_traj.states[0])
+        for i in range(1, len(other_traj.states)):
+            self.states.append(other_traj.states[i])
+            self.states[-1].t += t
+        self.cost += other_traj.cost
 
     def frenet_to_cartesian(self, csp):
         warnings.filterwarnings('error')
