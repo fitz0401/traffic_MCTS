@@ -1,8 +1,10 @@
 from copy import deepcopy
 import hashlib
 import itertools
+from string import printable
 import numpy as np
 import random
+from constant import TARGET_LANE
 
 # IDM param
 SAFE_DIST = 2  # least safe distance between two cars
@@ -17,8 +19,6 @@ scenario_size = [150, 12]
 LANE_WIDTH = 4
 prediction_time = 20  # seconds
 DT = 1.5  # decision interval (second)
-
-TARGET_LANE = {0: 0, 1: 0, 2: 0, 3: 0, 4: 1}
 
 
 def check_vel_bound(
@@ -96,10 +96,11 @@ class VehicleState:
     state:[{'time':t,'id1':(s,d,v),'id2':(s,d,v),...},{...},...]
     s,d are frenet coordinate
 
-    actions:[(id1_action,id2_action,...),(id1_action,id2_action,...),...]
+    actions:{'id1':[action1,action2,...],'id2':[action1,action2,...],...}
+    # actions:[(id1_action,id2_action,...),(id1_action,id2_action,...),...]
     """
 
-    def __init__(self, states, actions=[], flow=[]) -> None:
+    def __init__(self, states, actions={}, flow=[]) -> None:
         self.states = states
         self.t = self.states[-1]['time']
         self.decision_vehicles = deepcopy(self.states[-1])
@@ -122,74 +123,103 @@ class VehicleState:
         # filt available actions
         self.action_for_each = {}
         t = self.t + DT
-        for veh_id, veh_state in self.decision_vehicles.items():
-            self.action_for_each[veh_id] = {}
+        for veh in self.flow:
             if t >= self.TIME_LIMIT:
                 break
-            for action in ACTION_LIST:
-                s, d, vel, lane_id = (
-                    veh_state[0],
-                    veh_state[1],
-                    veh_state[2],
-                    veh_state[3],
-                )
-                if action == 'KS':
-                    s += vel * DT
-                elif action == 'AC':
-                    vel += self.ACC * DT
-                    s += vel * DT + 0.5 * self.ACC * DT * DT
-                elif action == 'DC':
-                    vel -= self.ACC * DT
-                    vel = max(vel, 0)
-                    s += vel * DT - 0.5 * self.ACC * DT * DT
-                elif action == 'LCL':
-                    d += self.CHANGE_LANE_D
-                    s += vel * DT
-                elif action == 'LCR':
-                    d -= self.CHANGE_LANE_D
-                    s += vel * DT
+            veh_id = veh.id
+            if veh_id in self.decision_vehicles:
+                veh_state = self.decision_vehicles[veh_id]
+                self.action_for_each[veh_id] = {}
+                for action in ACTION_LIST:
+                    s, d, vel, lane_id = (
+                        veh_state[0],
+                        veh_state[1],
+                        veh_state[2],
+                        veh_state[3],
+                    )
+                    if action == 'KS':
+                        s += vel * DT
+                    elif action == 'AC':
+                        vel += self.ACC * DT
+                        s += vel * DT + 0.5 * self.ACC * DT * DT
+                    elif action == 'DC':
+                        vel -= self.ACC * DT
+                        vel = max(vel, 0)
+                        s += vel * DT - 0.5 * self.ACC * DT * DT
+                    elif (
+                        abs(d - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH)
+                        > LANE_WIDTH / 4
+                    ):
+                        if action == 'LCL':
+                            d += self.CHANGE_LANE_D
+                            s += vel * DT
+                        elif action == 'LCR':
+                            d -= self.CHANGE_LANE_D
+                            s += vel * DT
+                    else:
+                        continue
 
-                if d <= 0 or d >= scenario_size[1]:
-                    continue
-                if action == 'DC':
-                    self.action_for_each[veh_id][action] = (s, d, vel)
-                    continue
+                    if d <= 0 or d >= scenario_size[1]:
+                        continue
+                    # if action == 'DC':
+                    #     self.action_for_each[veh_id][action] = (s, d, vel)
+                    #     continue
 
-                front_veh = surround_cars[veh_id]['cur_lane'].get('front', None)
-                back_veh = surround_cars[veh_id]['cur_lane'].get('back', None)
+                    front_veh = surround_cars[veh_id]['cur_lane'].get('front', None)
+                    back_veh = surround_cars[veh_id]['cur_lane'].get('back', None)
 
-                if (
-                    front_veh
-                    # and (front_veh.id not in self.decision_vehicles.keys())
-                    and front_veh.check_vel(s, d, vel) == False
-                ) or (
-                    back_veh
-                    # and (back_veh.id not in self.decision_vehicles.keys())
-                    and back_veh.check_vel(s, d, vel) == False
-                ):
-                    continue
-
-                if int(d / LANE_WIDTH) != lane_id:
-                    if action == 'LCL':
-                        target_lane = 'left_lane'
-                    elif action == 'LCR':
-                        target_lane = 'right_lane'
-                    front_veh = surround_cars[veh_id][target_lane].get('front', None)
-                    back_veh = surround_cars[veh_id][target_lane].get('back', None)
-                    if (front_veh and front_veh.check_vel(s, d, vel) == False) or (
-                        back_veh and back_veh.check_vel(s, d, vel) == False
+                    if (
+                        front_veh
+                        # and (front_veh.id not in self.decision_vehicles.keys())
+                        and front_veh.check_vel(s, d, vel) == False
+                    ) or (
+                        back_veh
+                        # and (back_veh.id not in self.decision_vehicles.keys())
+                        and back_veh.check_vel(s, d, vel) == False
                     ):
                         continue
-                self.action_for_each[veh_id][action] = (s, d, vel)
+
+                    if int(d / LANE_WIDTH) != lane_id:
+                        if action == 'LCL':
+                            target_lane = 'left_lane'
+                        elif action == 'LCR':
+                            target_lane = 'right_lane'
+                        front_veh = surround_cars[veh_id][target_lane].get(
+                            'front', None
+                        )
+                        back_veh = surround_cars[veh_id][target_lane].get('back', None)
+                        if (front_veh and front_veh.check_vel(s, d, vel) == False) or (
+                            back_veh and back_veh.check_vel(s, d, vel) == False
+                        ):
+                            continue
+                    self.action_for_each[veh_id][action] = (s, d, vel)
+            else:
+                for predict_veh in self.predicted_flow:
+                    if predict_veh.id == veh_id:
+                        if predict_veh.vel >= veh.vel:
+                            self.action_for_each[veh_id] = {
+                                'KL_AC': (predict_veh.s, predict_veh.d, predict_veh.vel)
+                            }
+                        else:
+                            self.action_for_each[veh_id] = {
+                                'KL_DC': (predict_veh.s, predict_veh.d, predict_veh.vel)
+                            }
+                        break
 
         actions_list = [list(value.keys()) for value in self.action_for_each.values()]
         self.next_action = list(itertools.product(*actions_list))
 
         self.num_moves = len(self.next_action)
+        self.surrond_cars = surround_cars
         return
 
     def next_state(self, tried_children_node=[]):
-        tried_action_set = set([tuple(c.actions[-1]) for c in tried_children_node])
+        tried_action_set = set(
+            [
+                tuple(action[-1] for action in c.actions.values())
+                for c in tried_children_node
+            ]
+        )
         if len(tried_action_set) >= self.num_moves:
             raise Exception('ERROR: no more moves')
 
@@ -200,16 +230,19 @@ class VehicleState:
         next_state = {}
         next_state['time'] = self.t + DT
         predicted_decision_vehicles = []
+        actions_copy = deepcopy(self.actions)
         for i, veh_id in enumerate(self.action_for_each.keys()):
-            next_state[veh_id] = self.action_for_each[veh_id][next_action[i]]
-            lane_id = int(next_state[veh_id][1] / LANE_WIDTH)
-            predicted_decision_vehicles.append(
-                Vehicle(veh_id, list(next_state[veh_id]), lane_id,)
-            )
+            if veh_id in self.decision_vehicles:
+                next_state[veh_id] = self.action_for_each[veh_id][next_action[i]]
+                lane_id = int(next_state[veh_id][1] / LANE_WIDTH)
+                predicted_decision_vehicles.append(
+                    Vehicle(veh_id, list(next_state[veh_id]), lane_id,)
+                )
+            actions_copy[veh_id].append(next_action[i])
 
         return VehicleState(
             self.states + [next_state],
-            self.actions + [next_action],
+            actions_copy,
             self.predicted_flow + predicted_decision_vehicles,
         )
 
@@ -225,17 +258,18 @@ class VehicleState:
     def reward(self):  # reward have to have their support in [0, 1]
         if self.num_moves == 0:
             return 0.0
-        reward = 0.0
-        veh_index = 0
+        gamma = {1: 0.0, 2: 1.0, 3: 1.0}
+        rewards = []
         for veh_id, veh_state in self.decision_vehicles.items():
-            cur_reward = 0.0
+            self_reward = 0.0
             s, d = veh_state[0], veh_state[1]
             if abs(d - (0.5 + TARGET_LANE[veh_id]) * LANE_WIDTH) < 0.5:
-                cur_reward += 0.8
-            max_action_num = int(self.TIME_LIMIT / DT)
+                self_reward += 0.8
+            # max_action_num = int(self.TIME_LIMIT / DT)
+            max_action_num = len(self.actions[veh_id])
             moves = []
-            for i in range(len(self.actions)):
-                move = self.actions[i][veh_index]
+            for i in range(len(self.actions[veh_id])):
+                move = self.actions[veh_id][i]
                 moves.append(move)
                 if (
                     abs(
@@ -244,7 +278,7 @@ class VehicleState:
                     )
                     < 0.5
                 ):
-                    cur_reward += 0.3 / max_action_num
+                    self_reward += 0.3 / max_action_num
                 if (
                     abs(
                         self.states[i][veh_id][1]
@@ -253,13 +287,28 @@ class VehicleState:
                     )
                     < 0.5
                 ):
-                    cur_reward += 0.1 / max_action_num
+                    self_reward += 0.1 / max_action_num
                 if i > 0 and moves[-1] == moves[-2]:
-                    cur_reward += 0.2 / max_action_num
-            reward += float(min(1.0, cur_reward) / len(self.decision_vehicles))
-            veh_index += 1
+                    self_reward += 0.2 / max_action_num
+            other_reward = 1.0
+            back_veh = self.surrond_cars[veh_id]['cur_lane'].get('back', None)
+            if back_veh:
+                for action in self.actions[back_veh.id]:
+                    if action == 'DC' or action == 'KL_DC':
+                        other_reward -= 0.1
+            cur_reward = (
+                max(0, min(1.0, self_reward)) + max(0, other_reward) * gamma[veh_id]
+            ) / (1 + gamma[veh_id])
+            rewards.append(cur_reward)
 
-        return max(0, min(1.0, reward))
+        flow_reward = 0.0
+        if len(rewards) > 0:
+            flow_reward = sum(rewards) / len(rewards)
+        # for i in range(len(rewards)):
+        #     reward += gamma[i] * rewards[i] / sum(gamma)
+        #     # reward += float(min(1.0, cur_reward) / len(self.decision_vehicles))
+
+        return max(0, min(1.0, flow_reward))
 
     def predict_flow(self):
         surround_cars = {}
@@ -294,9 +343,6 @@ class VehicleState:
         predict_flow = []
         for i in range(len(self.flow)):
             veh = self.flow[i]
-            # ignore decision_vehicles in predict_flow
-            if veh.id in self.decision_vehicles.keys():
-                continue
             # find leading_car
             leading_car = None
             if 'front' in surround_cars[veh.id]['cur_lane']:
@@ -325,6 +371,9 @@ class VehicleState:
                 and abs(leading_car.d - veh.d) < veh.width * 0.5
             ):
                 return None, None
+            # ignore decision_vehicles in predict_flow
+            if veh.id in self.decision_vehicles.keys():
+                continue
 
             if leading_car is None:
                 predict_flow.append(
