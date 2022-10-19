@@ -15,6 +15,7 @@ import logging
 import math
 import multiprocessing
 import os
+import pickle
 import random
 import subprocess
 import time
@@ -229,7 +230,7 @@ def plot_trajectory(vehicles, static_obs_list, bestpaths, lanes, edges, T):
     main_fig.set_facecolor("lightgray")
     main_fig.grid(True)
 
-    focus_car_id = 3
+    focus_car_id = 0
     if focus_car_id in bestpaths and focus_car_id in vehicles:
         t_best = [state.t + T for state in bestpaths[focus_car_id].states[1:]]
         vel_best = [state.vel * 3.6 for state in bestpaths[focus_car_id].states[1:]]
@@ -272,27 +273,32 @@ def update_behaviour(vehicle_id, vehicles, lanes):
     vehicle = vehicles[vehicle_id]
 
     # Lane change behavior
-    if (
-        vehicle.behaviour == "LC-L"
-        and vehicle.current_state.d > lanes[vehicle.lane_id].width / 1.5
+    if vehicle.behaviour == "LC-L" or (
+        vehicle.behaviour == "Decision" and vehicle.lane_id == "E1_0"
     ):
-        logging.info("Vehicle {} change lane successfully".format(vehicle_id))
         left_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
-        vehicles[vehicle_id] = vehicle.change_to_next_lane(
+        change_lane_vehicle = vehicle.change_to_next_lane(
             left_lane_id, lanes[left_lane_id].course_spline
         )
-        vehicles[vehicle_id].behaviour = "KL"
-    if (
-        vehicle.behaviour == "LC-R"
-        and vehicle.current_state.d < -lanes[vehicle.lane_id].width / 1.5
-    ):
-        logging.info("Vehicle {} change lane successfully".format(vehicle_id))
-        print("Change lane successful!")
+        if abs(change_lane_vehicle.current_state.d) < lanes[left_lane_id].width / 3:
+            logging.info(
+                "Vehicle {} change lane successfully%f,%f".format(vehicle_id),
+                change_lane_vehicle.current_state.d,
+                change_lane_vehicle.current_state.s,
+            )
+            vehicles[vehicle_id] = change_lane_vehicle
+            vehicles[vehicle_id].behaviour = "KL"
+    if vehicle.behaviour == "LC-R":
         right_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
-        vehicles[vehicle_id] = vehicle.change_to_next_lane(
+        change_lane_vehicle = vehicle.change_to_next_lane(
             right_lane_id, lanes[right_lane_id].course_spline
         )
-        vehicles[vehicle_id].behaviour = "KL"
+        if abs(change_lane_vehicle.current_state.d) < lanes[right_lane_id].width / 3:
+            logging.info("Vehicle {} change lane successfully".format(vehicle_id))
+            print("Change lane successful!")
+            right_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
+            vehicles[vehicle_id] = change_lane_vehicle
+            vehicles[vehicle_id].behaviour = "KL"
     if (
         vehicle.behaviour == "Decision"
         and abs(vehicle.current_state.d) > lanes[vehicle.lane_id].width / 1.5
@@ -515,102 +521,43 @@ def main():
     Init vehicles
     """
     vehicles = {}
+    with open("init_state.yaml", "r") as f:
+        init_state = yaml.load(f, Loader=yaml.FullLoader)
+    for vehicle in init_state["vehicles"]:
+        vehicles[vehicle["id"]] = build_vehicle(
+            id=vehicle["id"],
+            vtype="car",
+            s0=vehicle["s"],  # initial longtitude position [m]
+            s0_d=vehicle["vel"],  # initial longtitude speed [m/s]
+            d0=vehicle["d"],  # initial lateral position [m]
+            lane_id=list(lanes.keys())[vehicle["lane_id"]],  # init lane id
+            target_speed=9.0,  # todo: target longtitude vel [m/s]
+            behaviour="Decision"
+            if vehicle["need_decision"]
+            else "KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+            lanes=lanes,
+            config=config,
+        )
 
-    v_id = 1
-    vehicles[v_id] = build_vehicle(
-        id=v_id,
-        vtype="car",
-        s0=45.0,  # initial longtitude position [m]
-        s0_d=7.0,  # initial longtitude speed [m/s]
-        d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[1],  # init lane id
-        target_speed=9.0,  # target longtitude vel [m/s]
-        behaviour="Decision",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-        lanes=lanes,
-        config=config,
-    )
-
-    v_id = 3
-    vehicles[v_id] = build_vehicle(
-        id=v_id,
-        vtype="car",
-        s0=25.0,  # initial longtitude position [m]
-        s0_d=6.0,  # initial longtitude speed [m/s]
-        d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[2],  # init lane id
-        target_speed=6.0,  # target longtitude vel [m/s]
-        behaviour="Decision",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-        lanes=lanes,
-        config=config,
-    )
-    v_id = 2
-    vehicles[v_id] = build_vehicle(
-        id=v_id,
-        vtype="car",
-        s0=20.0,  # initial longtitude position [m]
-        s0_d=6.0,  # initial longtitude speed [m/s]
-        d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[1],  # init lane id
-        target_speed=7.0,  # target longtitude vel [m/s]
-        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-        lanes=lanes,
-        config=config,
-    )
-    v_id = 0
-    vehicles[v_id] = build_vehicle(
-        id=v_id,
-        vtype="car",
-        s0=30.0,  # initial longtitude position [m]
-        s0_d=8.0,  # initial longtitude speed [m/s]
-        d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[1],  # init lane id
-        target_speed=8.0,  # target longtitude vel [m/s]
-        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-        lanes=lanes,
-        config=config,
-    )
-    v_id = 4
-    vehicles[v_id] = build_vehicle(
-        id=v_id,
-        vtype="car",
-        s0=45.0,  # initial longtitude position [m]
-        s0_d=7.0,  # initial longtitude speed [m/s]
-        d0=0.0,  # initial lateral position [m]
-        lane_id=list(lanes.keys())[2],  # init lane id
-        target_speed=7.0,  # target longtitude vel [m/s]
-        behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-        lanes=lanes,
-        config=config,
-    )
-    # vehicles[len(vehicles)] = build_vehicle(
-    #     id=len(vehicles),
-    #     vtype="truck",
-    #     s0=10.0,  # initial longtitude position [m]
-    #     s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
-    #     d0=0.0,  # initial lateral position [m]
-    #     lane_id=list(lanes.keys())[8],  # init lane id
-    #     target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-    #     behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-    #     lanes=lanes,
-    #     config=config,
-    # )
-    # vehicles[len(vehicles)] = build_vehicle(
-    #     id=len(vehicles),
+    # v_id = 1
+    # vehicles[v_id] = build_vehicle(
+    #     id=v_id,
     #     vtype="car",
-    #     s0=0.0,  # initial longtitude position [m]
-    #     s0_d=20.0 / 3.6,  # initial longtitude speed [m/s]
+    #     s0=45.0,  # initial longtitude position [m]
+    #     s0_d=7.0,  # initial longtitude speed [m/s]
     #     d0=0.0,  # initial lateral position [m]
-    #     lane_id=list(lanes.keys())[8],  # init lane id
-    #     target_speed=30.0 / 3.6,  # target longtitude vel [m/s]
-    #     behaviour="KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
+    #     lane_id=list(lanes.keys())[1],  # init lane id
+    #     target_speed=9.0,  # target longtitude vel [m/s]
+    #     behaviour="Decision",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
     #     lanes=lanes,
     #     config=config,
     # )
+
 
     # color map
     global colors
     color_map = plt.get_cmap("spring")
-    colors = [color_map(i) for i in np.linspace(0, 1, 5)]
+    colors = [color_map(i) for i in np.linspace(0, 1, 10)]
 
     # static obstacle lists
     static_obs_list = []
@@ -639,23 +586,8 @@ def main():
     delta_t = delta_timestep * config["DT"]
     predictions = {}
 
-    ## fixme: temp state:
-    decision_states = {
-        1: [
-            (3, (66.0, 6.0, 7)),
-            (4.5, (78.525, 6.0, 7.9)),
-            (6, (90.375, 4.0, 7.9)),
-            (9, (119.475, 4.0, 9.7)),
-            (10.5, (134.025, 2.0, 9.7)),
-        ],
-        3: [
-            (1.5, (31.975, 10.0, 5.1)),
-            (3, (39.625, 8.0, 5.1)),
-            (4.5, (49.3, 8.0, 6.0)),
-            (6, (56.275, 8.0, 5.1)),
-            (10.5, (79.225, 2.0, 5.1)),
-        ],
-    }
+    with open("decision_state.pickle", "rb") as f:
+        decision_states = pickle.load(f)
 
     # write current state to csv file
     if config["CSV"]:

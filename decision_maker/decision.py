@@ -1,9 +1,11 @@
 import copy
+import pickle
 import random
 import time
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import mcts
+import yaml
 from constant import TARGET_LANE
 from vehicle_state import (
     Vehicle,
@@ -16,33 +18,31 @@ from vehicle_state import (
 
 
 def main():
-    lane_id = 1
-    ego_vehicle = Vehicle(
-        id=0, state=[40, 0 + (lane_id + 0.5) * LANE_WIDTH, 8], lane_id=1
-    )
-    lane_id = 1
-    other_vehicle = Vehicle(
-        id=1, state=[65, 0.1 + (lane_id + 0.5) * LANE_WIDTH, 7], lane_id=1
-    )
-    other_vehicle2 = Vehicle(
-        id=2, state=[20, 0 + (lane_id + 0.5) * LANE_WIDTH, 6], lane_id=1
-    )
-    lane_id = 2
-    other_vehicle3 = Vehicle(
-        id=3, state=[20, 0 + (lane_id + 0.5) * LANE_WIDTH, 6], lane_id=2
-    )
-    other_vehicle4 = Vehicle(
-        id=4, state=[40, 0 + (lane_id + 0.5) * LANE_WIDTH, 7], lane_id=2
-    )
+    # Read from init_state.yaml from yaml
+    with open("init_state.yaml", "r") as f:
+        init_state = yaml.load(f, Loader=yaml.FullLoader)
+    flow = []
+    mcts_init_state = {'time': 0}
+    for vehicle in init_state["vehicles"]:
+        flow.append(
+            Vehicle(
+                id=vehicle["id"],
+                state=[
+                    vehicle["s"],
+                    0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
+                    vehicle["vel"],
+                ],
+                lane_id=vehicle["lane_id"],
+            )
+        )
+        if vehicle["need_decision"]:
+            mcts_init_state[vehicle["id"]] = (
+                vehicle["s"],
+                0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
+                vehicle["vel"],
+            )
+            TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
 
-    # create a list of vehicles
-    flow = [
-        copy.deepcopy(ego_vehicle),
-        other_vehicle,
-        other_vehicle2,
-        other_vehicle3,
-        other_vehicle4,
-    ]
     flow_num = 5  # max allow vehicle number
     while len(flow) < flow_num:
         is_safe = False
@@ -64,17 +64,11 @@ def main():
     print('flow:', flow)
     flow_copy = copy.deepcopy(flow)
 
-    # mcts
-    ego_state = {
-        'time': 0,
-        # ego_vehicle.id: (ego_vehicle.s, ego_vehicle.d, ego_vehicle.vel,),
-        other_vehicle.id: (other_vehicle.s, other_vehicle.d, other_vehicle.vel,),
-        other_vehicle2.id: (other_vehicle2.s, other_vehicle2.d, other_vehicle2.vel,),
-        other_vehicle3.id: (other_vehicle3.s, other_vehicle3.d, other_vehicle3.vel,),
-    }
     start_time = time.time()
     actions = {veh.id: [] for veh in flow}
-    current_node = mcts.Node(VehicleState([ego_state], actions=actions, flow=flow_copy))
+    current_node = mcts.Node(
+        VehicleState([mcts_init_state], actions=actions, flow=flow_copy)
+    )
     print("root_node:", current_node)
 
     for t in range(int(prediction_time / DT)):
@@ -97,10 +91,11 @@ def main():
 
     ego_state = current_node.state.states
     print(ego_state)
+    decision_state_for_planning = {}
     for veh_id, veh_state in ego_state[0].items():
         if veh_id == 'time':
             continue
-        decision_state_for_planning = []
+        decision_state = []
         print("Action for vehicle", veh_id, end=": ")
         for i in range(len(current_node.state.actions[veh_id])):
             # print with 3 char space
@@ -109,14 +104,26 @@ def main():
                 current_node.state.actions[veh_id][i]
                 != current_node.state.actions[veh_id][i + 1]
             ):
-                decision_state_for_planning.append(
-                    (ego_state[i + 1]["time"], ego_state[i + 1][veh_id])
-                )
-        decision_state_for_planning.append(
-            (ego_state[-1]["time"], ego_state[-1][veh_id])
-        )
+                if veh_id == 0:
+                    state = ego_state[i + 1][veh_id]
+                    decision_state.append(
+                        (
+                            ego_state[i + 1]["time"],
+                            (
+                                state[0],
+                                (state[1] - 0.5 * LANE_WIDTH) / 3 + 0.5 * LANE_WIDTH,
+                                state[2],
+                            ),
+                        )
+                    )
+                else:
+                    decision_state.append(
+                        (ego_state[i + 1]["time"], ego_state[i + 1][veh_id])
+                    )
+        decision_state.append((ego_state[-1]["time"], ego_state[-1][veh_id]))
         print("")
-        print("Decision state for planning", decision_state_for_planning)
+        print("Decision state for planning", decision_state)
+        decision_state_for_planning[veh_id] = decision_state
     print(current_node.state.actions)
     flows = []
     while current_node is not None:
@@ -124,6 +131,8 @@ def main():
         # vel_limits.insert(0, temp_best.state.vel_lim)
         current_node = current_node.parent
     # print("ego_state_compare:", flows)
+    with open("decision_state.pickle", "wb") as f:
+        pickle.dump(decision_state_for_planning, f)
 
     # plot predictions
     plt.ion()

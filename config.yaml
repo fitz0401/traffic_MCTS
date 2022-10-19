@@ -2,7 +2,7 @@ ANIMATION: True
 VERBOSE: False # print detailed debug message
 VIDEO: False # save plotting as video
 VIDEO_NAME: "demo_dp"
-CSV: False # write trajectories in trajectories.csv
+CSV: True # write trajectories in trajectories.csv
 # ROAD_PATH: "roadgraph_intersect.yaml" # roadgraph yaml path
 ROAD_PATH: "roadgraph.yaml" # roadgraph yaml path
 

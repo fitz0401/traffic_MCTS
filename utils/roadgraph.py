@@ -52,24 +52,32 @@ class Edge:
             waypoints_y=waypoints_y,
         )
 
-    def construct_lanes(self):
+    def construct_lanes(self, edge_yaml):
         lanes = {}
         edge_right = Spline2D(self.waypoints_x, self.waypoints_y)
         s = np.linspace(0, edge_right.s[-1], num=50)
         for lane_index in range(self.lane_num):
             lane = Lane(self.id + '_' + str(lane_index), self.lane_width, self.id)
             center_line = []
-            for si in s:
-                center_line.append(
-                    edge_right.frenet_to_cartesian1D(
-                        si, lane.width / 2 * (2 * lane_index + 1)
+            if lane_index not in edge_yaml["specific_lane"]:
+                for si in s:
+                    center_line.append(
+                        edge_right.frenet_to_cartesian1D(
+                            si, lane.width / 2 * (2 * lane_index + 1)
+                        )
                     )
+                lane.course_spline = Spline2D(
+                    list(zip(*center_line))[0], list(zip(*center_line))[1],
                 )
-            lane.course_spline = Spline2D(
-                list(zip(*center_line))[0], list(zip(*center_line))[1],
-            )
+            else:
+                waypoints_x = [
+                    point['x'] for point in edge_yaml["specific_lane"][lane_index]
+                ]
+                waypoints_y = [
+                    point['y'] for point in edge_yaml["specific_lane"][lane_index]
+                ]
+                lane.course_spline = Spline2D(waypoints_x, waypoints_y)
             lanes[lane.id] = lane
-
         return lanes
 
 
@@ -262,7 +270,7 @@ def build_roadgraph(file_path):
     lanes = {}
     for edge in roadgraph["Edges"]:
         edges[edge["id"]] = Edge.from_yaml(edge)
-        lanes.update(edges[edge["id"]].construct_lanes())
+        lanes.update(edges[edge["id"]].construct_lanes(edge))
 
     # update lane info then  Build junction lanes, update next s
     junction_lanes = {}

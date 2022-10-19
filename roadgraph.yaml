@@ -1,11 +1,11 @@
 Edges:
   - id: E1
-    lane_num: 3
+    lane_num: 4
     lane_width: 4
     from_junction: null
     to_junction: null
     waypoints:
-      - x: -40.0
+      - x: -50.0
         y: 2.0
       - x: -20.0
         y: -1.0
@@ -15,5 +15,13 @@ Edges:
         y: 4.5
       - x: 70.5
         y: 0.0
-      - x: 120.0
+      - x: 160.0
         y: 5.0
+    specific_lane:
+      0:
+        - x: -50.0
+          y: -9.0
+        - x: -20.0
+          y: 1.5
+        - x: 9.5
+          y: 7
