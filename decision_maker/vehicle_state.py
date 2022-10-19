@@ -15,7 +15,8 @@ SQRT_AB = np.sqrt(aMax * bMax)
 PAR = 0.6
 
 # decision param
-scenario_size = [150, 12]
+# todo: width should compromise to
+scenario_size = [150, 16]
 LANE_WIDTH = 4
 prediction_time = 20  # seconds
 DT = 1.5  # decision interval (second)
@@ -150,15 +151,12 @@ class VehicleState:
                         abs(d - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH)
                         > LANE_WIDTH / 4
                     ):
-                        if lane_id != 0 or (s >= 35 and s < 45):
-                            if action == 'LCL':
-                                d += self.CHANGE_LANE_D
-                                s += vel * DT
-                            elif action == 'LCR':
-                                d -= self.CHANGE_LANE_D
-                                s += vel * DT
-                        else:
-                            continue
+                        if action == 'LCL':
+                            d += self.CHANGE_LANE_D
+                            s += vel * DT
+                        elif action == 'LCR':
+                            d -= self.CHANGE_LANE_D
+                            s += vel * DT
                     else:
                         continue
 

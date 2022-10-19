@@ -11,14 +11,14 @@ w = 2
 l = 4
 # https://flatuicolors.com/palette/defo
 colors = {
-    # 'GREEN SEA': '#16a085',
+    'GREEN SEA': '#16a085',
     'NEPHRITIS': '#27ae60',
     'BELIZE HOLE': '#2980b9',
     'WISTERIA': '#8e44ad',
     # 'MIDNIGHT BLUE': '#2c3e50',
     'ORANGE': '#f39c12',
     'PUMPKIN': '#d35400',
-    'POMEGRANATE': '#c0392b',
+    # 'POMEGRANATE': '#c0392b',
     'SILVER': '#bdc3c7',
     'ASBESTOS': '#7f8c8d',
 }
@@ -32,19 +32,12 @@ def plot_roadgraph(edges, lanes, junction_lanes):
 
             lane.center_line, lane.left_bound, lane.right_bound = [], [], []
             s = np.linspace(0, lane.course_spline.s[-1], num=500)
-            lane_width = lane.width if lane_index != 0 else 5
+            lane_width = lane.width
             for si in s:
                 lane.center_line.append(lane.course_spline.calc_position(si))
-                if lane_index != 0:
-                    lane.left_bound.append(
-                        lane.course_spline.frenet_to_cartesian1D(si, lane_width / 2)
-                    )
-                else:
-                    lane.left_bound.append(
-                        lane.course_spline.frenet_to_cartesian1D(
-                            si, lane_width / 2 + 0.5
-                        )
-                    )
+                lane.left_bound.append(
+                    lane.course_spline.frenet_to_cartesian1D(si, lane_width / 2)
+                )
                 lane.right_bound.append(
                     lane.course_spline.frenet_to_cartesian1D(si, -lane_width / 2)
                 )
@@ -54,30 +47,16 @@ def plot_roadgraph(edges, lanes, junction_lanes):
             #     linestyle=(3, (8, 8)),
             #     linewidth=5,
             # )
-            if lane_index == edge.lane_num - 2:
+            ax.plot(
+                *zip(*lane.left_bound[:]),
+                color='lightgrey',
+                linestyle=(3, (10, 10)),
+                linewidth=4,
+            )
+            if lane_index == edge.lane_num - 1:
                 ax.plot(*zip(*lane.left_bound), color='lightgrey', linewidth=5)
-            if lane_index == 1:
-                ax.plot(*zip(*lane.right_bound[254:]), color='lightgrey', linewidth=5)
-                ax.plot(*zip(*lane.right_bound[:165]), color='lightgrey', linewidth=5)
-                ax.plot(
-                    *zip(*lane.left_bound[:]),
-                    color='lightgrey',
-                    linestyle=(3, (10, 10)),
-                    linewidth=4,
-                )
             if lane_index == 0:
                 ax.plot(*zip(*lane.right_bound), color='lightgrey', linewidth=5)
-            if lane_index == edge.lane_num - 1:
-                ax.plot(*zip(*lane.right_bound[8:]), color='lightgrey', linewidth=5)
-                ax.plot(
-                    *zip(*lane.left_bound[150:-100]),
-                    color='lightgrey',
-                    linestyle=(3, (10, 10)),
-                    linewidth=5,
-                )
-    x = [46, 53, 46, 46]
-    y = [1.5, 0, -1.0, 1.5]
-    ax.plot(x, y, color='lightgrey', linewidth=5)
 
     ax.set_facecolor("white")
     # ax.grid(True)
@@ -102,8 +81,8 @@ def plot_body(c_x, c_y, yaw):
     ax.add_patch(
         plt.Rectangle(
             (
-                c_x - ((l / 2) * math.cos(yaw)) + ((w / 2) * math.sin(yaw)),
-                c_y - ((l / 2) * math.sin(yaw)) - ((w / 2) * math.cos(yaw)),
+                c_x - ((l) * math.cos(yaw)) + ((w / 2) * math.sin(yaw)),
+                c_y - ((l) * math.sin(yaw)) - ((w / 2) * math.cos(yaw)),
             ),
             l,
             w,
@@ -123,10 +102,10 @@ def plot_light(c_x, c_y, yaw, pos, color):
         plt.Circle(
             (
                 c_x
-                + pos[0] * ((l / 2) * math.cos(yaw))
+                + pos[0] * ((l) * math.cos(yaw))
                 + pos[1] * ((w / 2) * math.sin(yaw)),
                 c_y
-                + pos[0] * ((l / 2) * math.sin(yaw))
+                + pos[0] * ((l) * math.sin(yaw))
                 - pos[1] * ((w / 2) * math.cos(yaw)),
             ),
             0.4,
@@ -140,9 +119,9 @@ def plot_light(c_x, c_y, yaw, pos, color):
 
 def plot_headlights(c_x, c_y, yaw, light_type):
     pos = {
-        'top_right': [1, 1],
+        'top_right': [0, 1],
         'bottom_right': [-1, 1],
-        'top_left': [1, -1],
+        'top_left': [0, -1],
         'bottom_left': [-1, -1],
     }
     if light_type == 'right':
@@ -172,7 +151,7 @@ with open("init_state.yaml", "r") as f:
 traj = pd.read_csv("trajectories.csv")
 trajectories = traj.groupby('vehicle_id')
 # sort trajectories by 'x' decreasing
-trajectories = sorted(trajectories, key=lambda x: x[1]['x'].iloc[1], reverse=False)
+trajectories = sorted(trajectories, key=lambda x: x[1]['x'].iloc[1], reverse=True)
 trajectories = {k: v for k, v in trajectories}
 print(f"Loaded {len(trajectories)} trajectories")
 
@@ -182,9 +161,9 @@ gradient_color = [
     for c_name, c in colors.items()
 ]
 
-start_time = 4
-end_time = start_time + 35
-pos_time = -4
+start_time = 18
+end_time = start_time + 40
+pos_time = -1
 for i, (vehicle_id, trajectory) in enumerate(trajectories.items()):
     xp = trajectory[start_time:end_time]['x'].values
     yp = trajectory[start_time:end_time]['y'].values
@@ -193,6 +172,7 @@ for i, (vehicle_id, trajectory) in enumerate(trajectories.items()):
     # x = np.linspace(np.min(xp), np.max(xp), 100)
     # y = np.interp(x, xp, yp)
     # yaw = np.interp(x, xp, yawp)
+    # color = gradient_color[i % len(gradient_color)]
     if (
         vehicle_id < len(init_state['vehicles'])
         and init_state['vehicles'][vehicle_id]['need_decision']
@@ -200,25 +180,25 @@ for i, (vehicle_id, trajectory) in enumerate(trajectories.items()):
         color = gradient_color[i % len(gradient_color)]
     else:
         color = gradient_color[-1]
+    if vehicle_id == 0:
+        color = gradient_color[5]
+    if vehicle_id == 1:
+        color = gradient_color[2]
     plot_traj(xp, yp, color)
 
     c_x = xp[pos_time]
     c_y = yp[pos_time]
     yaw = yawp[pos_time]
-    if vehicle_id == 3:
-        c_x = xp[pos_time - 1]
-        c_y = yp[pos_time - 1]
-    if vehicle_id == 2:
-        c_x = xp[pos_time + 1]
-        c_y = yp[pos_time + 1]
     plot_body(c_x, c_y, yaw)
-    plot_headlights
-    if vehicle_id == 2:
-        plot_headlights(c_x, c_y, yaw, 'left')
-    if vehicle_id == 3:
-        plot_headlights(c_x, c_y, yaw, 'left')
-    if vehicle_id == 4:
+    # plot_headlights
+    if vehicle_id == 0:
         plot_headlights(c_x, c_y, yaw, 'right')
+    if vehicle_id == 1:
+        plot_headlights(c_x, c_y, yaw, 'left')
+    if vehicle_id == 2:
+        plot_headlights(c_x, c_y, yaw, 'stop')
+    # if vehicle_id == 4:
+    #     plot_headlights(c_x, c_y, yaw, 'stop')
 
 # pos_time = -10
 # xp = trajectories[4][start_time - 40 : end_time - 40]['x'].values - 10
@@ -234,7 +214,7 @@ for i, (vehicle_id, trajectory) in enumerate(trajectories.items()):
 # yaw = yaw[pos_time]
 # plot_body(c_x, c_y, yaw)
 
-ax.set_xlim(25, 63)
+ax.set_xlim(30, 80)
 ax.set_aspect(1.0)
 plt.xticks([])
 plt.yticks([])

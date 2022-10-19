@@ -43,7 +43,7 @@ def main():
             )
             TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
 
-    flow_num = 5  # max allow vehicle number
+    flow_num = 6  # max allow vehicle number
     while len(flow) < flow_num:
         is_safe = False
         while not is_safe:
