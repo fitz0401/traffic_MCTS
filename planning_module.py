@@ -273,12 +273,63 @@ def update_behaviour(vehicle_id, vehicles, lanes):
     vehicle = vehicles[vehicle_id]
 
     # Lane change behavior
-    if vehicle.behaviour == "LC-L" or (
-        vehicle.behaviour == "Decision" and vehicle.lane_id == "E1_0"
-    ):
+    if vehicle.behaviour == "Decision" and vehicle.lane_id == "E1_0":
         left_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
         change_lane_vehicle = vehicle.change_to_next_lane(
             left_lane_id, lanes[left_lane_id].course_spline
+        )
+        print(
+            "Vehicle",
+            vehicle_id,
+            "is changing lane to the left",
+            left_lane_id,
+            change_lane_vehicle.current_state.d,
+        )
+        if abs(change_lane_vehicle.current_state.d) < lanes[left_lane_id].width * 2:
+            logging.info(
+                "Vehicle {} change lane successfully%f,%f".format(vehicle_id),
+                change_lane_vehicle.current_state.d,
+                change_lane_vehicle.current_state.s,
+            )
+            vehicles[vehicle_id] = change_lane_vehicle
+            vehicles[vehicle_id].behaviour = "KL"
+            if vehicle_id == 2:
+                vehicles[vehicle_id].behaviour = "LC-L"
+    if vehicle_id == 4 and vehicle.lane_id == "E1_1":
+        left_lane_id = 'E1_3'
+        change_lane_vehicle = vehicle.change_to_next_lane(
+            left_lane_id, lanes[left_lane_id].course_spline
+        )
+        print(
+            "Vehicle",
+            vehicle_id,
+            "is changing lane to the RIGHT",
+            left_lane_id,
+            change_lane_vehicle.current_state.d,
+        )
+        if (
+            change_lane_vehicle.current_state.d > -lanes[left_lane_id].width / 3.5
+            and change_lane_vehicle.current_state.d < 0
+        ):
+            logging.info(
+                "Vehicle {} change lane successfully%f,%f".format(vehicle_id),
+                change_lane_vehicle.current_state.d,
+                change_lane_vehicle.current_state.s,
+            )
+            vehicles[vehicle_id] = change_lane_vehicle
+            vehicles[vehicle_id].behaviour = "KL"
+    # Lane change behavior
+    if vehicle.behaviour == "LC-L":
+        left_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
+        change_lane_vehicle = vehicle.change_to_next_lane(
+            left_lane_id, lanes[left_lane_id].course_spline
+        )
+        print(
+            "Vehicle",
+            vehicle_id,
+            "is changing lane to the left",
+            left_lane_id,
+            change_lane_vehicle.current_state.d,
         )
         if abs(change_lane_vehicle.current_state.d) < lanes[left_lane_id].width / 3:
             logging.info(
@@ -552,7 +603,6 @@ def main():
     #     lanes=lanes,
     #     config=config,
     # )
-
 
     # color map
     global colors

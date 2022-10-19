@@ -150,7 +150,7 @@ class VehicleState:
                         abs(d - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH)
                         > LANE_WIDTH / 4
                     ):
-                        if lane_id != 0 or (s >= 30 and s < 50):
+                        if lane_id != 0 or (s >= 35 and s < 45):
                             if action == 'LCL':
                                 d += self.CHANGE_LANE_D
                                 s += vel * DT
@@ -261,7 +261,7 @@ class VehicleState:
     def reward(self):  # reward have to have their support in [0, 1]
         if self.num_moves == 0:
             return 0.0
-        gamma = {0: 1.0, 1: 0.0, 2: 1.0, 3: 1.0}
+        gamma = {0: 1.0, 1: 0.0, 2: 1.0, 3: 1.0, 4: 1.0}
         rewards = []
         for veh_id, veh_state in self.decision_vehicles.items():
             self_reward = 0.0

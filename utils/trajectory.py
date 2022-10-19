@@ -8,6 +8,7 @@ Copyright (c) 2022 by PJLab, All Rights Reserved.
 """
 
 from copy import deepcopy
+import logging
 from math import *
 import warnings
 import numpy as np
@@ -111,7 +112,7 @@ class Trajectory:
             self.states[-1].acc = self.states[-2].acc
         except IndexError:
             self.states[0].acc = 0
-            print(len(self.states))
+            logging.error("Trajectory is empty at frenet_to_cartesian()")
             exit()
 
         # https://blog.csdn.net/m0_37454852/article/details/86514444
