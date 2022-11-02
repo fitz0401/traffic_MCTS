@@ -1,4 +1,5 @@
 import copy
+from math import sqrt
 import pickle
 import random
 import time
@@ -43,7 +44,7 @@ def main():
             )
             TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
 
-    flow_num = 6  # max allow vehicle number
+    flow_num = 3  # max allow vehicle number
     while len(flow) < flow_num:
         is_safe = False
         while not is_safe:
@@ -78,7 +79,8 @@ def main():
         print("Num Children: %d\n--------" % len(old_node.children))
         # for i, c in enumerate(old_node.children):
         #     print(i, c)
-        print("Best Child: %s" % current_node)
+        # print("Best Child:%s" % current_node)
+        print("Best Child: ", current_node.visits / (500 / (t / 2 + 1)) * 100, "%")
         temp_best = current_node
         while temp_best.children != []:
             temp_best = mcts.best_child(temp_best, 0)
@@ -104,28 +106,16 @@ def main():
                 current_node.state.actions[veh_id][i]
                 != current_node.state.actions[veh_id][i + 1]
             ):
-                if veh_id == 0:
-                    state = ego_state[i + 1][veh_id]
-                    decision_state.append(
-                        (
-                            ego_state[i + 1]["time"],
-                            (
-                                state[0],
-                                (state[1] - 0.5 * LANE_WIDTH) / 3 + 0.5 * LANE_WIDTH,
-                                state[2],
-                            ),
-                        )
-                    )
-                else:
-                    decision_state.append(
-                        (ego_state[i + 1]["time"], ego_state[i + 1][veh_id])
-                    )
+                decision_state.append(
+                    (ego_state[i + 1]["time"], ego_state[i + 1][veh_id])
+                )
         decision_state.append((ego_state[-1]["time"], ego_state[-1][veh_id]))
         print("")
         print("Decision state for planning", decision_state)
         decision_state_for_planning[veh_id] = decision_state
     print(current_node.state.actions)
     flows = []
+    final_node = copy.deepcopy(current_node)
     while current_node is not None:
         flows.insert(0, current_node.state.flow)
         # vel_limits.insert(0, temp_best.state.vel_lim)
@@ -133,6 +123,61 @@ def main():
     # print("ego_state_compare:", flows)
     with open("decision_state.pickle", "wb") as f:
         pickle.dump(decision_state_for_planning, f)
+
+    # Experimental indicators
+    # finish time
+    print(final_node.state.states)
+    finish_time = {}
+    for i in range(len(final_node.state.states)):
+        for veh_id, veh_state in final_node.state.states[i].items():
+            if veh_id == "time":
+                continue
+            if (
+                veh_id not in finish_time
+                and int(veh_state[1] / LANE_WIDTH) == TARGET_LANE[veh_id]
+            ):
+                finish_time[veh_id] = final_node.state.states[i]["time"]
+    print("finish_time:", finish_time)
+    average_finish_time = []
+    for veh_id, f_time in finish_time.items():
+        if f_time != 0:
+            average_finish_time += [f_time]
+    average_finish_time = sum(average_finish_time) / len(average_finish_time)
+    print("average_finish_time:", average_finish_time)
+    print("expand node num:", mcts.EXPAND_NODE)
+    # calculate success
+    success = 1
+    for veh_id, veh_state in final_node.state.states[-1].items():
+        if veh_id == "time":
+            continue
+        d = veh_state[1]
+        if abs(d - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH) > 0.5:
+            success = 0
+            print("Veh don't success! veh_id", veh_id, "d", d)
+            break
+    print("success:", success)
+    # calculate minimum distance
+    min_distance = 100
+    for i in range(len(final_node.state.states)):
+        for veh_id, veh_state in final_node.state.states[i].items():
+            if veh_id == "time":
+                continue
+            for other_veh_id, other_veh_state in final_node.state.states[i].items():
+                if other_veh_id == "time" or other_veh_id == veh_id:
+                    continue
+                if (
+                    abs(veh_state[1] - other_veh_state[1]) < 2.0
+                    and sqrt(
+                        (veh_state[0] - other_veh_state[0]) ** 2
+                        + (veh_state[1] - other_veh_state[1]) ** 2
+                    )
+                    < min_distance
+                ):
+                    min_distance = sqrt(
+                        (veh_state[0] - other_veh_state[0]) ** 2
+                        + (veh_state[1] - other_veh_state[1]) ** 2
+                    )
+    print("min_distance:", min_distance - 5)
 
     # plot predictions
     plt.ion()

@@ -23,6 +23,8 @@ SCALAR = 2 / (2 * math.sqrt(2.0))
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger('MyLogger')
 
+EXPAND_NODE = 0
+
 
 class State:
     NUM_TURNS = 10
@@ -100,7 +102,7 @@ class Node:
 
 def uct_search(budget, root, num_moves_lambda=None):
     for iter in range(int(budget)):
-        if iter % 10000 == 9999:
+        if iter % 100 == 0:
             logger.info("simulation: %d" % iter)
             logger.info(root)
         front = tree_policy(root, num_moves_lambda)
@@ -108,11 +110,13 @@ def uct_search(budget, root, num_moves_lambda=None):
         backpropagation(front, reward)
 
     return best_child(root, 0)
-    
+
+
 def default_policy(state):
     while state.terminal() == False:
         state = state.next_state()
     return state.reward()
+
 
 def tree_policy(node, num_moves_lambda):
     # a hack to force 'exploitation' in a game where there are many options, and you may never/not want to fully expand first
@@ -133,9 +137,11 @@ def expand(node):
     tried_children = [c.state for c in node.children]
     new_state = node.state.next_state(tried_children)
     while new_state in tried_children and new_state.terminal() == False:
-        print("should not be here!!!")
+        # print("should not be here!!!")
         new_state = node.state.next_state()
     node.add_child(new_state)
+    global EXPAND_NODE
+    EXPAND_NODE += 1
     return node.children[-1]
 
 
@@ -156,9 +162,6 @@ def best_child(
     if len(bestchildren) == 0:
         logger.warn("OOPS: no best child found, probably fatal")
     return random.choice(bestchildren)
-
-
-
 
 
 def backpropagation(node, reward):

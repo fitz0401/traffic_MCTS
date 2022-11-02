@@ -1,7 +1,6 @@
 from copy import deepcopy
 import hashlib
 import itertools
-from string import printable
 import numpy as np
 import random
 from constant import TARGET_LANE
@@ -89,7 +88,7 @@ class VehicleState:
 
     ACC = 0.6  # m/s^2
     STOP_DEC = -4.5  # maximum deceleration (m/s^2)
-    CHANGE_LANE_D = 2  # m
+    CHANGE_LANE_D = LANE_WIDTH / 3.0 * DT  # m
     LENGTH = 5
     WIDTH = 2
 
@@ -309,6 +308,8 @@ class VehicleState:
         #     reward += gamma[i] * rewards[i] / sum(gamma)
         #     # reward += float(min(1.0, cur_reward) / len(self.decision_vehicles))
 
+        # if flow_reward > 0:
+        #     print("Get a simulation reward of ", flow_reward)
         return max(0, min(1.0, flow_reward))
 
     def predict_flow(self):
