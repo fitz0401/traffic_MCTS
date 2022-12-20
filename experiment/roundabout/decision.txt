@@ -1,0 +1,4 @@
+Action for vehicle 1: DC->KS->AC->DC->LCL->KS->LCL->KS->AC->AC->
+Action for vehicle 2: KS->LCL->KS->AC->KS->LCL->AC->AC->LCL->LCL->
+Action for vehicle 3: DC->KS->DC->LCL->DC->LCL->AC->KS->KS->AC->
+Action for vehicle 4: KS->DC->LCL->LCR->LCR->LCR->DC->DC->AC->AC->
