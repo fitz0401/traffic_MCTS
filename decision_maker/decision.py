@@ -20,7 +20,7 @@ from vehicle_state import (
 
 def main():
     # Read from init_state.yaml from yaml
-    with open("init_state.yaml", "r") as f:
+    with open("../init_state.yaml", "r") as f:
         init_state = yaml.load(f, Loader=yaml.FullLoader)
     flow = []
     mcts_init_state = {'time': 0}
@@ -43,7 +43,7 @@ def main():
                 vehicle["vel"],
             )
             TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-
+    # QUE: 这段代码的作用？为什么至少要让flow中有三辆车
     flow_num = 3  # max allow vehicle number
     while len(flow) < flow_num:
         is_safe = False
@@ -82,7 +82,7 @@ def main():
         # print("Best Child:%s" % current_node)
         print("Best Child: ", current_node.visits / (500 / (t / 2 + 1)) * 100, "%")
         temp_best = current_node
-        while temp_best.children != []:
+        while temp_best.children:
             temp_best = mcts.best_child(temp_best, 0)
         # print("Temp Best Route: %s\nActions" % temp_best.state, temp_best.state.actions)
         print("Temp best reward", temp_best.state.reward())
@@ -217,16 +217,15 @@ def main():
         ax.plot([0, scenario_size[0]], [0, 0], 'k', linewidth=1)
         ax.plot([0, scenario_size[0]], [4, 4], 'b--', linewidth=1)
         ax.plot([0, scenario_size[0]], [8, 8], 'b--', linewidth=1)
-        ax.plot([0, scenario_size[0]], [12, 12], 'k', linewidth=1)
+        ax.plot([0, scenario_size[0]], [12, 12], 'b--', linewidth=1)
+        ax.plot([0, scenario_size[0]], [16, 16], 'k', linewidth=1)
         ax.set_facecolor((0.9, 0.9, 0.9))
         ax.axis("equal")
         ax.axis(xmin=0, xmax=scenario_size[0], ymin=0, ymax=15)
         plt.pause(0.5)
 
-        plt.savefig("./output_video" + "/frame%02d.png" % frame_id)
+        plt.savefig("../output_video" + "/frame%02d.png" % frame_id)
         frame_id += 1
-    plt.show()
-
 
 if __name__ == "__main__":
     main()
