@@ -11,8 +11,10 @@ PAR = 0.6
 
 # decision param
 # todo: width should compromise to
-scenario_size = [150, 16]
 LANE_WIDTH = 4
+LANE_NUMS = 4
+scenario_size = [150, LANE_WIDTH * LANE_NUMS]
+
 prediction_time = 20  # seconds
 DT = 1.5  # decision interval (second)
 T_group = 3    # Update group interval (second)
