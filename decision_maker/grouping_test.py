@@ -1,4 +1,5 @@
 import yaml
+import time
 import random
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -14,9 +15,9 @@ def main():
     target_decision = {}
 
     # Randomly generate vehicles
-    random.seed(10)
+    random.seed(1)
     while len(flow) < 20:
-        s = random.uniform(5, 145)
+        s = random.uniform(5, 95)
         lane_id = random.randint(0, LANE_NUMS - 1)
         d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
         vel = random.uniform(5, 10)
@@ -69,6 +70,7 @@ def main():
     #         target_decision[vehicle["id"]] = "turn_right"
 
     # sort flow first by s decreasingly
+    start_time = time.time()
     flow.sort(key=lambda x: (-x.s, x.lane_id))
     print('flow:', flow)
 
@@ -77,6 +79,7 @@ def main():
     group_info, group_interaction_info = grouping(flow, interaction_info)
     print("group_info:", group_info)
     print("group_interaction_info:", group_interaction_info)
+    print("Grouping Time: %f\n" % (time.time() - start_time))
 
     # Plot flow
     plot_flow(flow, target_decision)
@@ -114,6 +117,13 @@ def judge_interaction(flow, target_decision):
                       target_decision[veh_j.id] in {"keep", "turn_right"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
+                # TODO: 弱交互逻辑的设置
+                # # 弱交互：后车左右换道，放宽安全距离
+                # elif veh_j.lane_id == veh_i.lane_id:
+                #     safe_s_mild = max(T_group * (veh_j.vel - veh_i.vel + 0.45 * T_group) + SAFE_DIST, SAFE_DIST)
+                #     if veh_i.s - veh_j.s >= safe_s_mild:
+                #         interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
+                #         continue
             # 无交互：前车左变道，右后方车直行或右变道
             if target_decision[veh_i.id] == "turn_left":
                 if (veh_j.lane_id - veh_i.lane_id == -1 and
@@ -171,11 +181,15 @@ def grouping(flow, interaction_info):
                     for groups in group_interaction_info:
                         i_existed = groups.count(veh_i.group_idx)
                         j_existed = groups.count(veh_j.group_idx)
-                        is_existed = False if i_existed + j_existed == 0 else True
+                        if i_existed and j_existed:
+                            is_existed = True
+                            break
                         if i_existed and not j_existed:
+                            is_existed = True
                             groups.append(veh_j.group_idx)
                             break
                         elif not i_existed and j_existed:
+                            is_existed = True
                             groups.append(veh_i.group_idx)
                             break
                     if not is_existed:
