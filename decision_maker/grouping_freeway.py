@@ -15,7 +15,7 @@ def main():
     target_decision = {}
 
     # Randomly generate vehicles
-    random.seed(1)
+    random.seed(0)
     while len(flow) < 20:
         s = random.uniform(5, 95)
         lane_id = random.randint(0, LANE_NUMS - 1)
