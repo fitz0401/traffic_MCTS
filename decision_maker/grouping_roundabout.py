@@ -6,7 +6,6 @@ import utils.roadgraph as roadgraph
 from constant import *
 from vehicle_state import (
     Vehicle,
-    LANE_WIDTH,
 )
 
 
@@ -193,8 +192,7 @@ def plot_flow(flow, target_decision=None):
         config = yaml.load(f, Loader=yaml.FullLoader)
     plt.ion()  # 将 figure 设置为交互模式，figure 不用 plt.show() 也可以显示
     # 道路绘制
-    edges, lanes, junction_lanes = roadgraph.build_roadgraph("../roadgraph.yaml")
-    print(junction_lanes.keys())
+    edges, lanes, junction_lanes = roadgraph.build_roadgraph("roadgraph_roundabout.yaml")
     ax = roadgraph.plot_roadgraph(edges, lanes, junction_lanes)
     # 绘制车流
     for vehicle in flow:

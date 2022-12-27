@@ -59,7 +59,26 @@ class Edge:
         for lane_index in range(self.lane_num):
             lane = Lane(self.id + '_' + str(lane_index), self.lane_width, self.id)
             center_line = []
-            if lane_index not in edge_yaml["specific_lane"]:
+            if "specific_lane" in edge_yaml:
+                if lane_index not in edge_yaml["specific_lane"]:
+                    for si in s:
+                        center_line.append(
+                            edge_right.frenet_to_cartesian1D(
+                                si, lane.width / 2 * (2 * lane_index + 1)
+                            )
+                        )
+                    lane.course_spline = Spline2D(
+                        list(zip(*center_line))[0], list(zip(*center_line))[1],
+                    )
+                else:
+                    waypoints_x = [
+                        point['x'] for point in edge_yaml["specific_lane"][lane_index]
+                    ]
+                    waypoints_y = [
+                        point['y'] for point in edge_yaml["specific_lane"][lane_index]
+                    ]
+                    lane.course_spline = Spline2D(waypoints_x, waypoints_y)
+            else:
                 for si in s:
                     center_line.append(
                         edge_right.frenet_to_cartesian1D(
@@ -69,14 +88,6 @@ class Edge:
                 lane.course_spline = Spline2D(
                     list(zip(*center_line))[0], list(zip(*center_line))[1],
                 )
-            else:
-                waypoints_x = [
-                    point['x'] for point in edge_yaml["specific_lane"][lane_index]
-                ]
-                waypoints_y = [
-                    point['y'] for point in edge_yaml["specific_lane"][lane_index]
-                ]
-                lane.course_spline = Spline2D(waypoints_x, waypoints_y)
             lanes[lane.id] = lane
         return lanes
 

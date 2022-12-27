@@ -3,8 +3,8 @@ vehicles:
     s: 30.0
     vel: 7
     d: 0
-    lane_id: -1
-    target_lane: 0
+    lane_id: 3
+    target_lane: 2
     need_decision: True
   - id: 1
     s: 5.0
@@ -17,8 +17,8 @@ vehicles:
     s: 15.0
     vel: 5.0
     d: 0
-    lane_id: -1
-    target_lane: 0
+    lane_id: 3
+    target_lane: 2
     need_decision: True
   - id: 3
     s: 20.0
