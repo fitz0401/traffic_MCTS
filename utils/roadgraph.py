@@ -259,7 +259,7 @@ def plot_roadgraph(edges, lanes, junction_lanes):
     ax.grid(True)
     ax.axis("equal")
     plt.show()
-
+    return ax
 
 def build_roadgraph(file_path):
     with open(file_path, "r") as f:
@@ -293,7 +293,7 @@ def build_roadgraph(file_path):
 
 
 def main():
-    file_path = "roadgraph.yaml"
+    file_path = "../roadgraph.yaml"
     # file_path = "roadgraph_intersect.yaml"
     edges, lanes, junction_lanes = build_roadgraph(file_path)
     print(junction_lanes.keys())
