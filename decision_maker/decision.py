@@ -7,18 +7,15 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import mcts
 import yaml
-from constant import TARGET_LANE
+from constant import *
 from vehicle_state import (
     Vehicle,
     VehicleState,
-    LANE_WIDTH,
-    prediction_time,
-    DT,
-    scenario_size,
 )
 
 
 def main():
+    random.seed(0)
     # Read from init_state.yaml from yaml
     with open("../init_state.yaml", "r") as f:
         init_state = yaml.load(f, Loader=yaml.FullLoader)
@@ -36,6 +33,7 @@ def main():
                 lane_id=vehicle["lane_id"],
             )
         )
+        # mcts_state中只存放需要决策的车辆
         if vehicle["need_decision"]:
             mcts_init_state[vehicle["id"]] = (
                 vehicle["s"],
@@ -46,20 +44,19 @@ def main():
     # QUE: 这段代码的作用？为什么至少要让flow中有三辆车
     flow_num = 3  # max allow vehicle number
     while len(flow) < flow_num:
-        is_safe = False
-        while not is_safe:
-            s = random.uniform(5, 100)
-            vel = random.uniform(5, 10)
-            lane_id = random.randint(0, 2)
-            d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
-            is_safe = True
-            for other_veh in flow:
-                is_safe &= not other_veh.is_collide(
-                    Vehicle(id=0, state=[s, d, vel], lane_id=lane_id)
-                )
-        flow.append(
-            Vehicle(id=random.randint(1000, 9999), state=[s, d, vel], lane_id=lane_id)
-        )
+        s = random.uniform(5, 100)
+        vel = random.uniform(5, 10)
+        lane_id = random.randint(0, 2)
+        d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
+        veh = Vehicle(id=random.randint(1000, 9999), state=[s, d, vel], lane_id=lane_id)
+        is_valid_veh = True
+        for other_veh in flow:
+            if other_veh.is_collide(veh):
+                is_valid_veh = False
+                break
+        if not is_valid_veh:
+            continue
+        flow.append(veh)
     # sort flow first by lane_id and then by s decreasingly
     flow.sort(key=lambda x: (x.lane_id, -x.s))
     print('flow:', flow)
@@ -226,6 +223,7 @@ def main():
 
         plt.savefig("../output_video" + "/frame%02d.png" % frame_id)
         frame_id += 1
+
 
 if __name__ == "__main__":
     main()

@@ -1,20 +1,17 @@
-'''
+"""
 Author: haroldsultan
 Modified by Licheng Wen
 Date: 2022-08-22 14:33:58
-Description: 
+Description:
 A quick Monte Carlo Tree Search implementation.
-For more details on MCTS see http://www.incompleteideas.net/609%20dropbox/other%20readings%20and%20resources/MCTS-survey.pdf
+For more details on MCTS see
+http://www.incompleteideas.net/609%20dropbox/other%20readings%20and%20resources/MCTS-survey.pdf
 
-Copyright (c) 2022 by PJLab, All Rights Reserved. 
-'''
-#!/usr/bin/env python
+Copyright (c) 2022 by PJLab, All Rights Reserved.
+"""
 import random
 import math
-import hashlib
 import logging
-import argparse
-import time
 
 
 # MCTS scalar.  Larger scalar will increase exploitation, smaller will increase exploration.
@@ -24,45 +21,6 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger('MyLogger')
 
 EXPAND_NODE = 0
-
-# Class State -> See VehicleState
-# class State:
-#     NUM_TURNS = 10
-#     GOAL = 0
-#     MOVES = [2, -2, 3, -3]
-#     MAX_VALUE = (5.0 * (NUM_TURNS - 1) * NUM_TURNS) / 2
-#     num_moves = len(MOVES)
-
-#     def __init__(self, value=0, moves=[], turn=NUM_TURNS):
-#         self.value = value
-#         self.turn = turn
-#         self.moves = moves
-
-#     def next_state(self):
-#         nextmove = random.choice([x * self.turn for x in self.MOVES])
-#         next = State(self.value + nextmove, self.moves + [nextmove], self.turn - 1)
-#         return next
-
-#     def terminal(self):
-#         if self.turn == 0:
-#             return True
-#         return False
-
-#     def reward(self):  # reward have to have their support in [0, 1]
-#         r = 1 - (abs(self.value - self.GOAL) / self.MAX_VALUE)
-#         return r
-
-#     def __hash__(self):
-#         return int(hashlib.md5(str(self.moves).encode('utf-8')).hexdigest(), 16)
-
-#     def __eq__(self, other):
-#         if hash(self) == hash(other):
-#             return True
-#         return False
-
-#     def __repr__(self):
-#         s = "Value: %d; Moves: %s" % (self.value, self.moves)
-#         return s
 
 
 class Node:
@@ -83,7 +41,7 @@ class Node:
 
     def fully_expanded(self, num_moves_lambda):
         num_moves = self.state.num_moves
-        if num_moves_lambda != None:
+        if num_moves_lambda is not None:
             num_moves = num_moves_lambda(self)
         if len(self.children) == num_moves:
             return True
@@ -101,9 +59,9 @@ class Node:
 
 
 def uct_search(budget, root, num_moves_lambda=None):
-    for iter in range(int(budget)):
-        if iter % 100 == 0:
-            logger.info("simulation: %d" % iter)
+    for iteration in range(int(budget)):
+        if iteration % 100 == 0:
+            logger.info("simulation: %d" % iteration)
             logger.info(root)
         front = tree_policy(root, num_moves_lambda)
         reward = default_policy(front.state)  # can parallelize here
@@ -113,20 +71,21 @@ def uct_search(budget, root, num_moves_lambda=None):
 
 
 def default_policy(state):
-    while state.terminal() == False:
+    while not state.terminal():
         state = state.next_state()
     return state.reward()
 
 
 def tree_policy(node, num_moves_lambda):
-    # a hack to force 'exploitation' in a game where there are many options, and you may never/not want to fully expand first
-    while node.state.terminal() == False:
+    # a hack to force 'exploitation' in a game where there are many options,
+    # and you may never/not want to fully expand first
+    while not node.state.terminal():
         if len(node.children) == 0:
             return expand(node)
         elif random.uniform(0, 1) < 0.5:
             node = best_child(node, SCALAR)
         else:
-            if node.fully_expanded(num_moves_lambda) == False:
+            if not node.fully_expanded(num_moves_lambda):
                 return expand(node)
             else:
                 node = best_child(node, SCALAR)
@@ -134,9 +93,10 @@ def tree_policy(node, num_moves_lambda):
 
 
 def expand(node):
-    tried_children = [c.state for c in node.children]
+    tried_children = [child.state for child in node.children]
+    # TODO: 此处的代码逻辑有问题，已经在next_state中传入了tried_children，但仍会进入while循环
     new_state = node.state.next_state(tried_children)
-    while new_state in tried_children and new_state.terminal() == False:
+    while new_state in tried_children and not new_state.terminal():
         # print("should not be here!!!")
         new_state = node.state.next_state()
     node.add_child(new_state)
@@ -145,59 +105,27 @@ def expand(node):
     return node.children[-1]
 
 
-def best_child(
-    node, scalar
-):  # current this uses the most vanilla MCTS formula it is worth experimenting with THRESHOLD ASCENT (TAGS)
-    bestscore = 0.0
-    bestchildren = []
-    for c in node.children:
-        exploit = c.reward / c.visits
-        explore = math.sqrt(2.0 * math.log(node.visits) / float(c.visits))
+def best_child(node, scalar):
+    # current this uses the most vanilla MCTS formula it is worth experimenting with THRESHOLD ASCENT (TAGS)
+    best_score = 0.0
+    best_children = []
+    for child in node.children:
+        exploit = child.reward / child.visits
+        explore = math.sqrt(2.0 * math.log(node.visits) / float(child.visits))
         score = exploit + scalar * explore
-        if score == bestscore:
-            bestchildren.append(c)
-        if score > bestscore:
-            bestchildren = [c]
-            bestscore = score
-    if len(bestchildren) == 0:
-        logger.warn("OOPS: no best child found, probably fatal")
-    return random.choice(bestchildren)
+        if score == best_score:
+            best_children.append(child)
+        if score > best_score:
+            best_children = [child]
+            best_score = score
+    if len(best_children) == 0:
+        logger.warning("OOPS: no best child found, probably fatal")
+    return random.choice(best_children)
 
 
 def backpropagation(node, reward):
-    while node != None:
+    while node is not None:
         node.visits += 1
         node.reward += reward
         node = node.parent
     return
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='MCTS research code')
-    parser.add_argument('--num_sims', action="store", required=True, type=int)
-    parser.add_argument(
-        '--levels',
-        action="store",
-        required=True,
-        type=int,
-        choices=range(State.NUM_TURNS + 1),
-    )
-    args = parser.parse_args()
-
-    current_node = Node(State())  # root node
-    for l in range(args.levels):
-        start_time = time.time()
-        old_node = current_node
-        current_node = uct_search(args.num_sims / (l + 1), current_node)
-        print("level %d" % l)
-        print("Num Children: %d" % len(old_node.children))
-        for i, c in enumerate(old_node.children):
-            print(i, c)
-        print("Best Child: %s" % current_node.state)
-
-        temp_best = current_node
-        while temp_best.children != []:
-            temp_best = best_child(temp_best, 0)
-        print("Temp Best Child: %s" % temp_best.state)
-
-        print("-------------", time.time() - start_time, "-------------------")
