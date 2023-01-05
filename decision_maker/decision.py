@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import mcts
 import yaml
+import gol
 from constant import *
 from vehicle_state import (
     Vehicle,
@@ -15,40 +16,17 @@ from vehicle_state import (
 
 
 def main():
-    random.seed(0)
-    # Read from init_state.yaml from yaml
-    with open("../init_state.yaml", "r") as f:
-        init_state = yaml.load(f, Loader=yaml.FullLoader)
+    # 初始化全局变量
+    gol.init()
     flow = []
     mcts_init_state = {'time': 0}
-    for vehicle in init_state["vehicles"]:
-        flow.append(
-            Vehicle(
-                id=vehicle["id"],
-                state=[
-                    vehicle["s"],
-                    0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-                    vehicle["vel"],
-                ],
-                lane_id=vehicle["lane_id"],
-            )
-        )
-        # mcts_state中只存放需要决策的车辆
-        if vehicle["need_decision"]:
-            mcts_init_state[vehicle["id"]] = (
-                vehicle["s"],
-                0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-                vehicle["vel"],
-            )
-            TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-    # QUE: 这段代码的作用？为什么至少要让flow中有三辆车
-    flow_num = 3  # max allow vehicle number
-    while len(flow) < flow_num:
-        s = random.uniform(5, 100)
-        vel = random.uniform(5, 10)
-        lane_id = random.randint(0, 2)
-        d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
-        veh = Vehicle(id=random.randint(1000, 9999), state=[s, d, vel], lane_id=lane_id)
+    random.seed(0)
+    while len(flow) < 8:
+        s = random.uniform(0, 50)
+        lane_id = random.randint(0, LANE_NUMS - 1)
+        d = (lane_id + 0.5) * LANE_WIDTH
+        vel = random.uniform(5, 7)
+        veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
         is_valid_veh = True
         for other_veh in flow:
             if other_veh.is_collide(veh):
@@ -57,11 +35,66 @@ def main():
         if not is_valid_veh:
             continue
         flow.append(veh)
+        if veh.lane_id == 0:
+            TARGET_LANE[veh.id] = veh.lane_id + 1
+        elif veh.lane_id == LANE_NUMS - 1:
+            TARGET_LANE[veh.id] = veh.lane_id - 1
+        else:
+            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 1))
+        mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
+
+    # # Read from init_state.yaml from yaml
+    # with open("../init_state.yaml", "r") as f:
+    #     init_state = yaml.load(f, Loader=yaml.FullLoader)
+    # for vehicle in init_state["vehicles"]:
+    #     flow.append(
+    #         Vehicle(
+    #             id=vehicle["id"],
+    #             state=[
+    #                 vehicle["s"],
+    #                 0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
+    #                 vehicle["vel"],
+    #             ],
+    #             lane_id=vehicle["lane_id"],
+    #         )
+    #     )
+    #     # mcts_state中只存放需要决策的车辆
+    #     if vehicle["need_decision"]:
+    #         mcts_init_state[vehicle["id"]] = (
+    #             vehicle["s"],
+    #             0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
+    #             vehicle["vel"],
+    #         )
+    #         TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
+    # # QUE: 这段代码的作用？为什么至少要让flow中有三辆车
+    # flow_num = 3  # max allow vehicle number
+    # while len(flow) < flow_num:
+    #     s = random.uniform(5, 100)
+    #     vel = random.uniform(5, 10)
+    #     lane_id = random.randint(0, 2)
+    #     d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
+    #     veh = Vehicle(id=random.randint(1000, 9999), state=[s, d, vel], lane_id=lane_id)
+    #     is_valid_veh = True
+    #     for other_veh in flow:
+    #         if other_veh.is_collide(veh):
+    #             is_valid_veh = False
+    #             break
+    #     if not is_valid_veh:
+    #         continue
+    #     flow.append(veh)
     # sort flow first by lane_id and then by s decreasingly
     flow.sort(key=lambda x: (x.lane_id, -x.s))
     print('flow:', flow)
-    flow_copy = copy.deepcopy(flow)
 
+    # TODO: 优化group_idx的存储方式
+    vehicle_types = {i: ["decision"] for i in range(len(flow))}
+    gol.set_value('vehicle_types', vehicle_types)
+    group_idx = {}
+    for veh in flow:
+        group_idx[veh.id] = veh.group_idx
+    gol.set_value('group_idx', group_idx)
+
+    flow_copy = copy.deepcopy(flow)
     start_time = time.time()
     actions = {veh.id: [] for veh in flow}
     current_node = mcts.Node(

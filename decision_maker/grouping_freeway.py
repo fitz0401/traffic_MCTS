@@ -249,7 +249,7 @@ def plot_flow(flow, target_decision=None):
     ax.set_facecolor((0.9, 0.9, 0.9))
     ax.axis("equal")
     ax.axis(xmin=0, xmax=scenario_size[0], ymin=0, ymax=15)
-    plt.pause(0)
+    plt.pause(2)
 
 
 if __name__ == "__main__":
