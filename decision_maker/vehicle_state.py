@@ -187,19 +187,19 @@ class VehicleState:
         return
 
     def next_state(self, tried_children_node=None):
-        if tried_children_node is None:
-            tried_children_node = []
-        tried_action_set = set(
-            [
-                tuple(action[-1] for action in c.actions.values())
-                for c in tried_children_node
-            ]
-        )
-        if len(tried_action_set) >= self.num_moves:
-            raise Exception('ERROR: no more moves')
-        # TODO: tried_action_set每一次都要构造吗，是否可以优化
-        next_action = random.choice(self.next_action)
-        while tuple(next_action) in tried_action_set:
+        if tried_children_node is not None:
+            tried_action_set = set(
+                [
+                    tuple(action[-1] for action in c.actions.values())
+                    for c in tried_children_node
+                ]
+            )
+            if len(tried_action_set) >= self.num_moves:
+                raise Exception('ERROR: no more moves')
+            next_action = random.choice(self.next_action)
+            while tuple(next_action) in tried_action_set:
+                next_action = random.choice(self.next_action)
+        else:
             next_action = random.choice(self.next_action)
         # 从next_action中选择一组，查询当前state的action_for_each，获取该动作序列下决策车新时刻信息
         next_state = {'time': self.t + DT}

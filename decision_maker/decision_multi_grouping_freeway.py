@@ -14,7 +14,7 @@ def main():
     flow = []
     target_decision = {}
     # Randomly generate vehicles
-    random.seed(0)
+    random.seed(5)
     while len(flow) < 8:
         s = random.uniform(0, 50)
         lane_id = random.randint(0, LANE_NUMS - 1)
@@ -35,13 +35,6 @@ def main():
             TARGET_LANE[veh.id] = veh.lane_id - 1
         else:
             TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 1))
-        # 获取target_decision：turn_left / turn_right / keep
-        if TARGET_LANE[veh.id] == veh.lane_id:
-            target_decision[veh.id] = "keep"
-        elif TARGET_LANE[veh.id] > veh.lane_id:
-            target_decision[veh.id] = "turn_left"
-        else:
-            target_decision[veh.id] = "turn_right"
 
     # # Read from init_state.yaml from yaml
     # with open("../init_state.yaml", "r") as f:
@@ -68,120 +61,103 @@ def main():
     #     else:
     #         target_decision[vehicle["id"]] = "turn_right"
 
-    vehicle_types = {i: ["decision"] for i in range(len(flow))}
-    gol.set_value('vehicle_types', vehicle_types)
-    # sort flow first by s decreasingly
+    cur_flow = copy.deepcopy(flow)
+    final_node = []     # 记录每次决策时最后一组的决策结果
+    flow_plot = {t: [] for t in range(int(prediction_time / DT))}   # 记录全部决策结果用于绘图
+    flow_plot[0] = cur_flow
     start_time = time.time()
-    flow.sort(key=lambda x: (-x.s, x.lane_id))
-    print('flow:', flow)
+    for t in range(0, int(prediction_time/DT), int(T_group/DT)):
+        print('——————————t: %d——————————:\n' % t)
+        vehicle_types = {i: ["decision"] for i in range(len(cur_flow))}
+        gol.set_value('vehicle_types', vehicle_types)
+        cur_flow.sort(key=lambda x: (-x.s, x.lane_id))
+        print('cur_flow:', cur_flow)
 
-    # Interaction judge & Grouping
-    interaction_info = judge_interaction(flow, target_decision)
-    group_info, group_interaction_info = grouping(flow, interaction_info)
-    print("group_info:", group_info)
-    print("group_interaction_info:", group_interaction_info)
-    print("Grouping Time: %f\n" % (time.time() - start_time))
-
-    # Plot flow
-    plot_flow(flow, target_decision)
-
-    # TODO: 优化group_idx的存储方式
-    group_idx = {}
-    for veh in flow:
-        group_idx[veh.id] = veh.group_idx
-    gol.set_value('group_idx', group_idx)
-
-    # 分组决策
-    final_nodes = {}
-    flow_record = {i: {} for i in group_info.keys()}
-    gol.set_value('flow_record', flow_record)
-    flow_groups = {i: [] for i in group_info.keys()}
-    for vehicle in flow:
-        flow_groups[vehicle.group_idx].append(vehicle)
-    start_time = time.time()
-    finish_time = 0
-    former_flow = []
-    # 决策结果记录
-    finish_times = []
-    for idx, group in flow_groups.items():
-        print("group_idx:", idx)
-        mcts_init_state = {'time': 0}
-        local_flow = group + former_flow
-        actions = {veh.id: [] for veh in local_flow}
-        for veh in group:
-            mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
-        current_node = mcts.Node(
-            VehicleState([mcts_init_state], actions=actions, flow=local_flow)
-        )
-        print("root_node:", current_node)
-        # MCTS
-        for t in range(int(prediction_time / DT)):
-            print("-------------t=%d----------------" % t)
-            old_node = current_node
-            current_node = mcts.uct_search(100 / (t / 2 + 1), current_node)
-            print("Num Children: %d\n--------" % len(old_node.children))
-            print("Best Child: ", current_node.visits / (100 / (t / 2 + 1)) * 100, "%")
-            temp_best = current_node
-            while temp_best.children:
-                temp_best = mcts.best_child(temp_best, 0)
-            print("Temp best reward", temp_best.state.reward())
-            if current_node.state.terminal():
-                break
-        # 决策完成的车辆设置为查询模式
-        for veh in group:
-            vehicle_types[veh.id][0] = "query"
-            vehicle_types[veh.id].append(current_node.state.t)
-        print("Group %d Time: %f\n" % (idx, time.time() - start_time))
-        final_nodes[idx] = copy.deepcopy(current_node)
-        finish_time = max(finish_time, final_nodes[idx].state.t)
-        finish_times.append(final_nodes[idx].state.t)
-        # 结果打印
-        print(final_nodes[idx].state.states)
-        print(final_nodes[idx].state.actions)
-        # 过程回放
-        while current_node is not None:
-            flow_record[idx][current_node.state.t/DT] = current_node.state.flow
-            current_node = current_node.parent
-        # 记录当前组信息，置入下一个组的决策过程
-        former_flow += group
-    print("finish_time:", finish_time)
-
-    # Experimental indicators
-    print("average_finish_time:", sum(finish_times) / len(finish_times))
-    print("expand node num:", mcts.EXPAND_NODE)
-    success = 1
-    for idx, final_node in final_nodes.items():
-        for veh_id, veh_state in final_node.state.states[-1].items():
-            if veh_id == "time":
-                continue
-            d = veh_state[1]
-            if abs(d - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH) > 0.5:
-                success = 0
-                print("Veh don't success! veh_id", veh_id, "group_idx", idx)
-                break
-    print("success:", success)
-
-    # 预测交通流至最长预测时间
-    flow_plot = {t: [] for t in range(int(prediction_time / DT))}
-    flow_plot[0] = flow
-    for t in range(int(prediction_time / DT)):
-        flow_plot[t + 1] = predict_flow(flow_plot[t], t, vehicle_types, flow_record, group_idx)
-
-    # 分组情况展示
-    print("group_info:", group_info)
-    for t in range(2, int(prediction_time / DT), 2):
-        flow_t = flow_plot[t]
-        flow_t.sort(key=lambda x: (-x.s, x.lane_id))
-        for veh in flow_t:
+        # Interaction judge & Grouping
+        for veh in cur_flow:
+            veh.group_idx = 0
             if TARGET_LANE[veh.id] == veh.lane_id:
                 target_decision[veh.id] = "keep"
             elif TARGET_LANE[veh.id] > veh.lane_id:
                 target_decision[veh.id] = "turn_left"
             else:
                 target_decision[veh.id] = "turn_right"
-        interaction_info = judge_interaction(flow_t, target_decision)
-        group_info, group_interaction_info = grouping(flow_t, interaction_info)
+        interaction_info = judge_interaction(cur_flow, target_decision)
+        group_info, group_interaction_info = grouping(cur_flow, interaction_info)
         print("group_info:", group_info)
+        print("group_interaction_info:", group_interaction_info)
+
+        # Plot flow
+        # plot_flow(cur_flow, target_decision)
+
+        # TODO: 优化group_idx的存储方式
+        group_idx = {}
+        for veh in cur_flow:
+            group_idx[veh.id] = veh.group_idx
+        gol.set_value('group_idx', group_idx)
+
+        # 分组决策
+        flow_record = {i: {} for i in group_info.keys()}
+        gol.set_value('flow_record', flow_record)
+        flow_groups = {i: [] for i in group_info.keys()}
+        for vehicle in cur_flow:
+            flow_groups[vehicle.group_idx].append(vehicle)
+        former_flow = []
+        for idx, group in flow_groups.items():
+            local_flow = group + former_flow
+            # TODO: 换道决策信息（是否成功等）的全局信息管理
+            # 组内车辆若全部决策完成，无需决策，直接预测
+            is_finish = True
+            for veh in group:
+                if not veh.lane_id == TARGET_LANE[veh.id]:
+                    is_finish = False
+                    break
+                else:
+                    vehicle_types[veh.id][0] = "cruise"
+            if is_finish:
+                continue
+            mcts_init_state = {'time': t * DT}
+            actions = {veh.id: [] for veh in local_flow}
+            for veh in group:
+                mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
+            current_node = mcts.Node(
+                VehicleState([mcts_init_state], actions=actions, flow=local_flow)
+            )
+            print("root_node:", current_node)
+            # MCTS
+            for cnt in range(t, int(prediction_time/DT)):
+                current_node = mcts.uct_search(100 / (cnt / 2 + 1), current_node)
+                temp_best = current_node
+                while temp_best.children:
+                    temp_best = mcts.best_child(temp_best, 0)
+                if current_node.state.terminal():
+                    break
+            # 决策完成的车辆设置为查询模式
+            for veh in group:
+                vehicle_types[veh.id][0] = "query"
+                vehicle_types[veh.id].append(current_node.state.t)
+            # 过程回放
+            while current_node is not None:
+                flow_record[idx][current_node.state.t/DT] = current_node.state.flow
+                current_node = current_node.parent
+            # 记录当前组信息，置入下一个组的决策过程
+            former_flow += group
+        # 预测两帧交通流
+        for cnt in range(int(T_group / DT)):
+            flow_plot[t + cnt + 1] = predict_flow(flow_plot[t + cnt], t + cnt, vehicle_types, flow_record, group_idx)
+        print(flow_plot[t + int(T_group / DT)])
+        cur_flow = flow_plot[t + int(T_group / DT)]
+    print("Finish Time: %f\n" % (time.time() - start_time))
+
+    # Experimental indicators
+    print("expand node num:", mcts.EXPAND_NODE)
+    success = 1
+    for veh in flow_plot[int(prediction_time/DT)]:
+        if abs(veh.d - (TARGET_LANE[veh.id] + 0.5) * LANE_WIDTH) > 0.5:
+            success = 0
+            print("Veh don't success! veh_id", veh.id)
+            break
+    print("success:", success)
 
     # plot predictions
     plt.ion()
@@ -254,7 +230,8 @@ def predict_flow(flow, t, vehicle_types, flow_record, group_idx):
         surround_cars[veh_i.id] = cur_surround_car
     # query or predict
     for veh in flow:
-        if (t + 1) * DT <= vehicle_types[veh.id][1]:
+        if vehicle_types[veh.id][0] == "query" and \
+                (t + 1) * DT <= vehicle_types[veh.id][1]:
             query_flow = flow_record[group_idx[veh.id]][t + 1]
             for query_veh in query_flow:
                 if query_veh.id == veh.id:
