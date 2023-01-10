@@ -94,7 +94,7 @@ def tree_policy(node, num_moves_lambda):
 
 def expand(node):
     tried_children = [child.state for child in node.children]
-    # TODO: 姝ゅ鐨勪唬鐮侀�昏緫鏈夐棶棰橈紝宸茬粡鍦╪ext_state涓紶鍏ヤ簡tried_children锛屼絾浠嶄細杩涘叆while寰幆
+    # TODO: 此处的代码逻辑有问题，已经在next_state中传入了tried_children，但仍会进入while循环
     new_state = node.state.next_state(tried_children)
     while new_state in tried_children and not new_state.terminal():
         # print("should not be here!!!")

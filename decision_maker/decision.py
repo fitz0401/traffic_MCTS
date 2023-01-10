@@ -16,7 +16,7 @@ from vehicle_state import (
 
 
 def main():
-    # åˆå§‹åŒ–å…¨å±€å˜é‡
+    # ³õÊ¼»¯È«¾Ö±äÁ¿
     gol.init()
     flow = []
     mcts_init_state = {'time': 0}
@@ -58,7 +58,7 @@ def main():
     #             lane_id=vehicle["lane_id"],
     #         )
     #     )
-    #     # mcts_stateä¸­åªå­˜æ”¾éœ€è¦å†³ç­–çš„è½¦è¾†
+    #     # mcts_stateÖĞÖ»´æ·ÅĞèÒª¾ö²ßµÄ³µÁ¾
     #     if vehicle["need_decision"]:
     #         mcts_init_state[vehicle["id"]] = (
     #             vehicle["s"],
@@ -66,7 +66,7 @@ def main():
     #             vehicle["vel"],
     #         )
     #         TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-    # # QUE: è¿™æ®µä»£ç çš„ä½œç”¨ï¼Ÿä¸ºä»€ä¹ˆè‡³å°‘è¦è®©flowä¸­æœ‰ä¸‰è¾†è½¦
+    # # QUE: Õâ¶Î´úÂëµÄ×÷ÓÃ£¿ÎªÊ²Ã´ÖÁÉÙÒªÈÃflowÖĞÓĞÈıÁ¾³µ
     # flow_num = 3  # max allow vehicle number
     # while len(flow) < flow_num:
     #     s = random.uniform(5, 100)
@@ -86,7 +86,7 @@ def main():
     flow.sort(key=lambda x: (x.lane_id, -x.s))
     print('flow:', flow)
 
-    # TODO: ä¼˜åŒ–group_idxçš„å­˜å‚¨æ–¹å¼
+    # TODO: ÓÅ»¯group_idxµÄ´æ´¢·½Ê½
     vehicle_types = {i: ["decision"] for i in range(len(flow))}
     gol.set_value('vehicle_types', vehicle_types)
     group_idx = {}
