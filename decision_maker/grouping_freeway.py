@@ -142,10 +142,12 @@ def judge_interaction(flow, target_decision):
 
 
 def grouping(flow, interaction_info):
+    ''' group_idx: [车号|组号]; group_info：[组号|组内车流] '''
     # 从flow中的第一辆车开始进行聚类，依据车辆之间的交互可能性
     max_group_size = 3
-    group_info = {1: [flow[0].id]}
-    flow[0].group_idx = 1
+    group_info = {1: [flow[0]]}
+    group_idx = {i: 0 for i in range(len(flow))}
+    group_idx[flow[0].id] = 1
     # 依据交互可能性进行分组
     group_interaction_info = []  # 记录组与组之间的交互信息
     for i, veh_i in enumerate(flow[1:], start=1):
@@ -153,59 +155,61 @@ def grouping(flow, interaction_info):
         for j in range(i - 1, -1, -1):
             veh_j = flow[j]
             # j所在分组已满
-            if len(group_info[veh_j.group_idx]) >= max_group_size:
+            if len(group_info[group_idx[veh_j.id]]) >= max_group_size:
                 continue
             # 无交互可能性
             if interaction_info[veh_i.id][veh_j.id] == 0:
                 continue
             # 存在交互可能性：分组后跳出循环，防止i被重复分组
             elif interaction_info[veh_i.id][veh_j.id] == 1:
-                veh_i.group_idx = veh_j.group_idx
-                group_info[veh_i.group_idx].append(veh_i.id)
+                group_idx[veh_i.id] = group_idx[veh_j.id]
+                group_info[group_idx[veh_i.id]].append(veh_i)
                 break
         # 若i仍未被分组(潜在交互车辆所在分组已满 或 与其它车辆均无交互关系)，则单独分为一组
-        if veh_i.group_idx == 0:
-            veh_i.group_idx = len(group_info) + 1
-            group_info[veh_i.group_idx] = [veh_i.id]
+        if group_idx[veh_i.id] == 0:
+            group_idx[veh_i.id] = len(group_info) + 1
+            group_info[group_idx[veh_i.id]] = [veh_i]
     # 生成组间交互信息group_interaction_info
     for i, veh_i in enumerate(flow):
         if len(np.where(interaction_info[veh_i.id] == 1)[0]) == 0:
-            group_interaction_info.append([veh_i.group_idx])
+            group_interaction_info.append([group_idx[veh_i.id]])
             continue
         for veh_j in flow[i+1:]:
             if interaction_info[veh_i.id, veh_j.id] == 1:
-                if veh_i.group_idx == veh_j.group_idx:
+                if group_idx[veh_i.id] == group_idx[veh_j.id]:
                     continue
                 else:
                     is_existed = False
                     for groups in group_interaction_info:
-                        i_existed = groups.count(veh_i.group_idx)
-                        j_existed = groups.count(veh_j.group_idx)
+                        i_existed = groups.count(group_idx[veh_i.id])
+                        j_existed = groups.count(group_idx[veh_j.id])
                         if i_existed and j_existed:
                             is_existed = True
                             break
                         if i_existed and not j_existed:
                             is_existed = True
-                            groups.append(veh_j.group_idx)
+                            groups.append(group_idx[veh_j.id])
                             break
                         elif not i_existed and j_existed:
                             is_existed = True
-                            groups.append(veh_i.group_idx)
+                            groups.append(group_idx[veh_i.id])
                             break
                     if not is_existed:
-                        group_interaction_info.append([veh_i.group_idx, veh_j.group_idx])
-    for group_idx in group_info:
+                        group_interaction_info.append([group_idx[veh_i.id], group_idx[veh_j.id]])
+    for idx in group_info.keys():
         is_existed = False
         for groups in group_interaction_info:
-            if groups.count(group_idx):
+            if groups.count(idx):
                 is_existed = True
                 break
         if not is_existed:
-            group_interaction_info.append([group_idx])
-    return group_info, group_interaction_info
+            group_interaction_info.append([idx])
+    print("group_info: \n", group_info)
+    print("group_interaction_info:", group_interaction_info)
+    return group_idx, group_info
 
 
-def plot_flow(flow, target_decision=None):
+def plot_flow(flow, group_idx, target_decision=None):
     if target_decision is None:
         target_decision = []
     plt.ion()  # 将 figure 设置为交互模式，figure 不用 plt.show() 也可以显示
@@ -218,7 +222,7 @@ def plot_flow(flow, target_decision=None):
                 5,
                 2,
                 linewidth=1,
-                facecolor=plt.cm.tab20(vehicle.group_idx),
+                facecolor=plt.cm.tab20(group_idx[vehicle.id]),
                 zorder=3,
                 alpha=0.5,
             )
@@ -226,7 +230,7 @@ def plot_flow(flow, target_decision=None):
         ax.text(
             vehicle.s,
             vehicle.d,
-            "%d,G%d" % (vehicle.id, vehicle.group_idx),
+            "%d,G%d" % (vehicle.id, group_idx[vehicle.id]),
             fontsize=8,
             horizontalalignment="center",
             verticalalignment="center",

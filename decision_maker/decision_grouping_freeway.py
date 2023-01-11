@@ -10,12 +10,17 @@ from vehicle_state import (
 
 def main():
     # 初始化全局变量
+    len_flow = 8
     gol.init()
+    '''decision_info : [id: vehicle_type, decision_interval]'''
+    decision_info = {i: ["decision"] for i in range(len_flow)}
+    gol.set_value('decision_info', decision_info)
+
     flow = []
     target_decision = {}
     # Randomly generate vehicles
     random.seed(0)
-    while len(flow) < 8:
+    while len(flow) < len_flow:
         s = random.uniform(0, 50)
         lane_id = random.randint(0, LANE_NUMS - 1)
         d = (lane_id + 0.5) * LANE_WIDTH
@@ -34,10 +39,11 @@ def main():
         elif veh.lane_id == LANE_NUMS - 1:
             TARGET_LANE[veh.id] = veh.lane_id - 1
         else:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 1))
+            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
         # 获取target_decision：turn_left / turn_right / keep
         if TARGET_LANE[veh.id] == veh.lane_id:
             target_decision[veh.id] = "keep"
+            decision_info[veh.id][0] = "cruise"
         elif TARGET_LANE[veh.id] > veh.lane_id:
             target_decision[veh.id] = "turn_left"
         else:
@@ -68,8 +74,6 @@ def main():
     #     else:
     #         target_decision[vehicle["id"]] = "turn_right"
 
-    vehicle_types = {i: ["decision"] for i in range(len(flow))}
-    gol.set_value('vehicle_types', vehicle_types)
     # sort flow first by s decreasingly
     start_time = time.time()
     flow.sort(key=lambda x: (-x.s, x.lane_id))
@@ -77,27 +81,17 @@ def main():
 
     # Interaction judge & Grouping
     interaction_info = judge_interaction(flow, target_decision)
-    group_info, group_interaction_info = grouping(flow, interaction_info)
-    print("group_info:", group_info)
-    print("group_interaction_info:", group_interaction_info)
+    group_idx, flow_groups = grouping(flow, interaction_info)
+    gol.set_value('group_idx', group_idx)
     print("Grouping Time: %f\n" % (time.time() - start_time))
 
     # Plot flow
-    plot_flow(flow, target_decision)
-
-    # TODO: 优化group_idx的存储方式
-    group_idx = {}
-    for veh in flow:
-        group_idx[veh.id] = veh.group_idx
-    gol.set_value('group_idx', group_idx)
+    plot_flow(flow, group_idx, target_decision)
 
     # 分组决策
     final_nodes = {}
-    flow_record = {i: {} for i in group_info.keys()}
+    flow_record = {i: {} for i in flow_groups.keys()}
     gol.set_value('flow_record', flow_record)
-    flow_groups = {i: [] for i in group_info.keys()}
-    for vehicle in flow:
-        flow_groups[vehicle.group_idx].append(vehicle)
     start_time = time.time()
     finish_time = 0
     former_flow = []
@@ -109,6 +103,8 @@ def main():
         local_flow = group + former_flow
         actions = {veh.id: [] for veh in local_flow}
         for veh in group:
+            if decision_info[veh.id][0] == "cruise":
+                continue
             mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
         current_node = mcts.Node(
             VehicleState([mcts_init_state], actions=actions, flow=local_flow)
@@ -117,9 +113,7 @@ def main():
         # MCTS
         for t in range(int(prediction_time / DT)):
             print("-------------t=%d----------------" % t)
-            old_node = current_node
             current_node = mcts.uct_search(100 / (t / 2 + 1), current_node)
-            print("Num Children: %d\n--------" % len(old_node.children))
             print("Best Child: ", current_node.visits / (100 / (t / 2 + 1)) * 100, "%")
             temp_best = current_node
             while temp_best.children:
@@ -129,8 +123,8 @@ def main():
                 break
         # 决策完成的车辆设置为查询模式
         for veh in group:
-            vehicle_types[veh.id][0] = "query"
-            vehicle_types[veh.id].append(current_node.state.t)
+            decision_info[veh.id][0] = "query"
+            decision_info[veh.id].append(current_node.state.t)
         print("Group %d Time: %f\n" % (idx, time.time() - start_time))
         final_nodes[idx] = copy.deepcopy(current_node)
         finish_time = max(finish_time, final_nodes[idx].state.t)
@@ -165,23 +159,7 @@ def main():
     flow_plot = {t: [] for t in range(int(prediction_time / DT))}
     flow_plot[0] = flow
     for t in range(int(prediction_time / DT)):
-        flow_plot[t + 1] = predict_flow(flow_plot[t], t, vehicle_types, flow_record, group_idx)
-
-    # 分组情况展示
-    print("group_info:", group_info)
-    for t in range(2, int(prediction_time / DT), 2):
-        flow_t = flow_plot[t]
-        flow_t.sort(key=lambda x: (-x.s, x.lane_id))
-        for veh in flow_t:
-            if TARGET_LANE[veh.id] == veh.lane_id:
-                target_decision[veh.id] = "keep"
-            elif TARGET_LANE[veh.id] > veh.lane_id:
-                target_decision[veh.id] = "turn_left"
-            else:
-                target_decision[veh.id] = "turn_right"
-        interaction_info = judge_interaction(flow_t, target_decision)
-        group_info, group_interaction_info = grouping(flow_t, interaction_info)
-        print("group_info:", group_info)
+        flow_plot[t + 1] = predict_flow(flow_plot[t], t, decision_info, flow_record, group_idx)
 
     # plot predictions
     plt.ion()
@@ -224,37 +202,29 @@ def main():
         frame_id += 1
 
 
-def predict_flow(flow, t, vehicle_types, flow_record, group_idx):
+def predict_flow(flow, t, decision_info, flow_record, group_idx):
     next_flow = []
-    surround_cars = {}
-    # todo: this loop can be optimized
     # find surround car
-    for veh_i in flow:
-        cur_surround_car = {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}
-        for veh_j in flow:
-            if veh_i.id == veh_j.id:
-                continue
+    surround_cars = {veh.id: {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}
+                     for veh in flow}
+    # flow 已按照s降序排列
+    for i, veh_i in enumerate(flow):
+        for veh_j in flow[i + 1:]:
             if veh_j.lane_id == veh_i.lane_id:
-                if veh_j.s > veh_i.s:
-                    cur_surround_car['cur_lane']['front'] = veh_j
-                elif veh_j.s <= veh_i.s and 'back' not in cur_surround_car['cur_lane']:
-                    cur_surround_car['cur_lane']['back'] = veh_j
+                if 'back' not in surround_cars[veh_i.id]['cur_lane']:
+                    surround_cars[veh_i.id]['cur_lane']['back'] = veh_j
+                    surround_cars[veh_j.id]['cur_lane']['front'] = veh_i
             elif veh_j.lane_id == veh_i.lane_id - 1:
-                if veh_j.s > veh_i.s:
-                    cur_surround_car['right_lane']['front'] = veh_j
-                elif (
-                        veh_j.s <= veh_i.s and 'back' not in cur_surround_car['right_lane']
-                ):
-                    cur_surround_car['right_lane']['back'] = veh_j
+                if 'back' not in surround_cars[veh_i.id]['right_lane']:
+                    surround_cars[veh_i.id]['right_lane']['back'] = veh_j
+                    surround_cars[veh_j.id]['right_lane']['front'] = veh_i
             elif veh_j.lane_id == veh_i.lane_id + 1:
-                if veh_j.s > veh_i.s:
-                    cur_surround_car['left_lane']['front'] = veh_j
-                elif veh_j.s <= veh_i.s and 'back' not in cur_surround_car['left_lane']:
-                    cur_surround_car['left_lane']['back'] = veh_j
-        surround_cars[veh_i.id] = cur_surround_car
+                if 'back' not in surround_cars[veh_i.id]['left_lane']:
+                    surround_cars[veh_i.id]['left_lane']['back'] = veh_j
+                    surround_cars[veh_j.id]['left_lane']['front'] = veh_i
     # query or predict
     for veh in flow:
-        if (t + 1) * DT <= vehicle_types[veh.id][1]:
+        if decision_info[veh.id][0] == "query" and (t + 1) * DT <= decision_info[veh.id][1]:
             query_flow = flow_record[group_idx[veh.id]][t + 1]
             for query_veh in query_flow:
                 if query_veh.id == veh.id:
@@ -318,7 +288,7 @@ def predict_flow(flow, t, vehicle_types, flow_record, group_idx):
                         lane_id=veh.lane_id,
                     )
                 )
-    next_flow.sort(key=lambda x: (x.lane_id, -x.s))
+    next_flow.sort(key=lambda x: (-x.s, x.lane_id))
     return next_flow
 
 

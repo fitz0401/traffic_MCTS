@@ -39,11 +39,8 @@ class Node:
         self.reward += reward
         self.visits += 1
 
-    def fully_expanded(self, num_moves_lambda):
-        num_moves = self.state.num_moves
-        if num_moves_lambda is not None:
-            num_moves = num_moves_lambda(self)
-        if len(self.children) == num_moves:
+    def fully_expanded(self):
+        if len(self.children) == self.state.num_moves:
             return True
         return False
 
@@ -58,12 +55,12 @@ class Node:
         return s
 
 
-def uct_search(budget, root, num_moves_lambda=None):
+def uct_search(budget, root):
     for iteration in range(int(budget)):
         if iteration % 100 == 0:
             logger.info("simulation: %d" % iteration)
             logger.info(root)
-        front = tree_policy(root, num_moves_lambda)
+        front = tree_policy(root)
         reward = default_policy(front.state)  # can parallelize here
         backpropagation(front, reward)
 
@@ -76,7 +73,7 @@ def default_policy(state):
     return state.reward()
 
 
-def tree_policy(node, num_moves_lambda):
+def tree_policy(node):
     # a hack to force 'exploitation' in a game where there are many options,
     # and you may never/not want to fully expand first
     while not node.state.terminal():
@@ -85,7 +82,7 @@ def tree_policy(node, num_moves_lambda):
         elif random.uniform(0, 1) < 0.5:
             node = best_child(node, SCALAR)
         else:
-            if not node.fully_expanded(num_moves_lambda):
+            if not node.fully_expanded():
                 return expand(node)
             else:
                 node = best_child(node, SCALAR)
@@ -93,12 +90,8 @@ def tree_policy(node, num_moves_lambda):
 
 
 def expand(node):
-    tried_children = [child.state for child in node.children]
-    # TODO: 此处的代码逻辑有问题，已经在next_state中传入了tried_children，但仍会进入while循环
-    new_state = node.state.next_state(tried_children)
-    while new_state in tried_children and not new_state.terminal():
-        # print("should not be here!!!")
-        new_state = node.state.next_state()
+    # 扩展节点时，可传入已扩展的子节点，加快去重
+    new_state = node.state.next_state(node.children)
     node.add_child(new_state)
     global EXPAND_NODE
     EXPAND_NODE += 1

@@ -14,7 +14,7 @@ def main():
     flow = []
     target_decision = {}
     # Randomly generate vehicles
-    random.seed(5)
+    random.seed(0)
     while len(flow) < 8:
         s = random.uniform(0, 50)
         lane_id = random.randint(0, LANE_NUMS - 1)
@@ -34,7 +34,7 @@ def main():
         elif veh.lane_id == LANE_NUMS - 1:
             TARGET_LANE[veh.id] = veh.lane_id - 1
         else:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 1))
+            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
 
     # # Read from init_state.yaml from yaml
     # with open("../init_state.yaml", "r") as f:
@@ -202,32 +202,23 @@ def main():
 
 def predict_flow(flow, t, vehicle_types, flow_record, group_idx):
     next_flow = []
-    surround_cars = {}
-    # todo: this loop can be optimized
+    surround_cars = {veh.id: {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}
+                     for veh in flow}
     # find surround car
-    for veh_i in flow:
-        cur_surround_car = {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}
-        for veh_j in flow:
-            if veh_i.id == veh_j.id:
-                continue
+    for i, veh_i in enumerate(flow):
+        for veh_j in flow[i + 1:]:
             if veh_j.lane_id == veh_i.lane_id:
-                if veh_j.s > veh_i.s:
-                    cur_surround_car['cur_lane']['front'] = veh_j
-                elif veh_j.s <= veh_i.s and 'back' not in cur_surround_car['cur_lane']:
-                    cur_surround_car['cur_lane']['back'] = veh_j
+                if 'back' not in surround_cars[veh_i.id]['cur_lane']:
+                    surround_cars[veh_i.id]['cur_lane']['back'] = veh_j
+                    surround_cars[veh_j.id]['cur_lane']['front'] = veh_i
             elif veh_j.lane_id == veh_i.lane_id - 1:
-                if veh_j.s > veh_i.s:
-                    cur_surround_car['right_lane']['front'] = veh_j
-                elif (
-                        veh_j.s <= veh_i.s and 'back' not in cur_surround_car['right_lane']
-                ):
-                    cur_surround_car['right_lane']['back'] = veh_j
+                if 'back' not in surround_cars[veh_i.id]['right_lane']:
+                    surround_cars[veh_i.id]['right_lane']['back'] = veh_j
+                    surround_cars[veh_j.id]['right_lane']['front'] = veh_i
             elif veh_j.lane_id == veh_i.lane_id + 1:
-                if veh_j.s > veh_i.s:
-                    cur_surround_car['left_lane']['front'] = veh_j
-                elif veh_j.s <= veh_i.s and 'back' not in cur_surround_car['left_lane']:
-                    cur_surround_car['left_lane']['back'] = veh_j
-        surround_cars[veh_i.id] = cur_surround_car
+                if 'back' not in surround_cars[veh_i.id]['left_lane']:
+                    surround_cars[veh_i.id]['left_lane']['back'] = veh_j
+                    surround_cars[veh_j.id]['left_lane']['front'] = veh_i
     # query or predict
     for veh in flow:
         if vehicle_types[veh.id][0] == "query" and \
