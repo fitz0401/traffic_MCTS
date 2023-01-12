@@ -1,5 +1,4 @@
 import mcts
-import copy
 import gol
 from grouping_freeway import *
 from vehicle_state import (
@@ -10,7 +9,7 @@ from vehicle_state import (
 
 def main():
     # 初始化全局变量
-    len_flow = 8
+    len_flow = 10
     gol.init()
     '''decision_info : [id: vehicle_type, decision_interval]'''
     decision_info = {i: ["decision"] for i in range(len_flow)}
@@ -21,9 +20,9 @@ def main():
     # Randomly generate vehicles
     random.seed(0)
     while len(flow) < len_flow:
-        s = random.uniform(0, 50)
+        s = random.uniform(0, 60)
         lane_id = random.randint(0, LANE_NUMS - 1)
-        d = (lane_id + 0.5) * LANE_WIDTH
+        d = (lane_id + 0.5) * LANE_WIDTH + random.uniform(-0.1, 0.1)
         vel = random.uniform(5, 7)
         veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
         is_valid_veh = True
@@ -35,11 +34,12 @@ def main():
             continue
         flow.append(veh)
         if veh.lane_id == 0:
-            TARGET_LANE[veh.id] = veh.lane_id + 1
+            TARGET_LANE[veh.id] = veh.lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
         elif veh.lane_id == LANE_NUMS - 1:
-            TARGET_LANE[veh.id] = veh.lane_id - 1
+            TARGET_LANE[veh.id] = veh.lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
         else:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
+            TARGET_LANE[veh.id] = veh.lane_id + (0 if random.uniform(0, 1) < 0.4
+                                                 else random.choice((-1, 1)))
         # 获取target_decision：turn_left / turn_right / keep
         if TARGET_LANE[veh.id] == veh.lane_id:
             target_decision[veh.id] = "keep"
@@ -82,8 +82,11 @@ def main():
     # Interaction judge & Grouping
     interaction_info = judge_interaction(flow, target_decision)
     group_idx, flow_groups = grouping(flow, interaction_info)
+    # 随机分组测试
+    # group_idx, flow_groups = random_grouping(flow)
     gol.set_value('group_idx', group_idx)
     print("Grouping Time: %f\n" % (time.time() - start_time))
+    print("flow_groups: \n", flow_groups)
 
     # Plot flow
     plot_flow(flow, group_idx, target_decision)
@@ -97,15 +100,27 @@ def main():
     former_flow = []
     # 决策结果记录
     finish_times = []
+
+    # 随机决策顺序测试
+    dict_key_ls = list(flow_groups.keys())
+    random.shuffle(dict_key_ls)
+    random_flow_groups = {}
+    for key in dict_key_ls:
+        random_flow_groups[key] = flow_groups.get(key)
     for idx, group in flow_groups.items():
         print("group_idx:", idx)
         mcts_init_state = {'time': 0}
         local_flow = group + former_flow
+        # 记录当前组信息，置入下一个组的决策过程
+        former_flow += group
         actions = {veh.id: [] for veh in local_flow}
         for veh in group:
             if decision_info[veh.id][0] == "cruise":
                 continue
             mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
+        # 本组内无决策车，无需进行决策
+        if len(mcts_init_state) == 1:
+            continue
         current_node = mcts.Node(
             VehicleState([mcts_init_state], actions=actions, flow=local_flow)
         )
@@ -136,8 +151,6 @@ def main():
         while current_node is not None:
             flow_record[idx][current_node.state.t/DT] = current_node.state.flow
             current_node = current_node.parent
-        # 记录当前组信息，置入下一个组的决策过程
-        former_flow += group
     print("finish_time:", finish_time)
 
     # Experimental indicators
@@ -145,13 +158,10 @@ def main():
     print("expand node num:", mcts.EXPAND_NODE)
     success = 1
     for idx, final_node in final_nodes.items():
-        for veh_id, veh_state in final_node.state.states[-1].items():
-            if veh_id == "time":
-                continue
-            d = veh_state[1]
-            if abs(d - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH) > 0.5:
+        for veh_idx, veh_state in final_node.state.decision_vehicles.items():
+            if abs(veh_state[1] - (TARGET_LANE[veh_idx] + 0.5) * LANE_WIDTH) > 0.5:
                 success = 0
-                print("Veh don't success! veh_id", veh_id, "group_idx", idx)
+                print("Veh don't success! veh_id", veh_idx, "group_idx", group_idx[veh_idx])
                 break
     print("success:", success)
 
@@ -257,7 +267,7 @@ def predict_flow(flow, t, decision_info, flow_record, group_idx):
                     and leading_car.s - veh.s <= veh.length
                     and abs(leading_car.d - veh.d) < veh.width * 0.5
             ):
-                return None
+                raise SystemExit('Collision detected. Failed!')
             if leading_car is None:
                 next_flow.append(
                     Vehicle(

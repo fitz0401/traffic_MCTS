@@ -1,3 +1,4 @@
+#coding=gbk
 import copy
 from math import sqrt
 import pickle
@@ -16,15 +17,18 @@ from vehicle_state import (
 
 
 def main():
+    len_flow = 10
     # 初始化全局变量
     gol.init()
+    decision_info = {i: ["decision"] for i in range(len_flow)}
+    gol.set_value('decision_info', decision_info)
     flow = []
     mcts_init_state = {'time': 0}
-    random.seed(0)
-    while len(flow) < 8:
-        s = random.uniform(0, 50)
+    random.seed(1)
+    while len(flow) < len_flow:
+        s = random.uniform(0, 60)
         lane_id = random.randint(0, LANE_NUMS - 1)
-        d = (lane_id + 0.5) * LANE_WIDTH
+        d = (lane_id + 0.5) * LANE_WIDTH + random.uniform(-0.1, 0.1)
         vel = random.uniform(5, 7)
         veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
         is_valid_veh = True
@@ -36,12 +40,15 @@ def main():
             continue
         flow.append(veh)
         if veh.lane_id == 0:
-            TARGET_LANE[veh.id] = veh.lane_id + 1
+            TARGET_LANE[veh.id] = veh.lane_id + random.choice((0, 1))
         elif veh.lane_id == LANE_NUMS - 1:
-            TARGET_LANE[veh.id] = veh.lane_id - 1
+            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0))
         else:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 1))
-        mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
+            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
+        if TARGET_LANE[veh.id] == veh.lane_id:
+            decision_info[veh.id][0] = "cruise"
+        else:
+            mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
 
     # # Read from init_state.yaml from yaml
     # with open("../init_state.yaml", "r") as f:
@@ -85,14 +92,6 @@ def main():
     # sort flow first by lane_id and then by s decreasingly
     flow.sort(key=lambda x: (x.lane_id, -x.s))
     print('flow:', flow)
-
-    # TODO: 优化group_idx的存储方式
-    vehicle_types = {i: ["decision"] for i in range(len(flow))}
-    gol.set_value('vehicle_types', vehicle_types)
-    group_idx = {}
-    for veh in flow:
-        group_idx[veh.id] = veh.group_idx
-    gol.set_value('group_idx', group_idx)
 
     flow_copy = copy.deepcopy(flow)
     start_time = time.time()

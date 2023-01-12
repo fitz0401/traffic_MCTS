@@ -21,7 +21,7 @@ class Vehicle:
     def is_collide(self, other: 'Vehicle') -> bool:
         if self.lane_id != other.lane_id:
             return False
-        if self.s + self.length * 1.5 < other.s or self.s - self.length * 1.5 > other.s:
+        if self.s + self.length * 2.5 < other.s or self.s - self.length * 2.5 > other.s:
             return False
         if self.d + self.width * 1.5 < other.d or self.d - self.width * 1.5 > other.d:
             return False

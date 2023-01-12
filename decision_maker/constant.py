@@ -21,4 +21,4 @@ RAMP_LANE_NUMS = LANE_WIDTH - 1
 # Decision param
 prediction_time = 20  # seconds
 DT = 1.5  # decision interval (second)
-T_group = 3    # Update group interval (second)
+T_group = 4.5    # Update group interval (second)

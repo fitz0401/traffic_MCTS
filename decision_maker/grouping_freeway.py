@@ -1,3 +1,4 @@
+import copy
 import yaml
 import time
 import random
@@ -142,7 +143,7 @@ def judge_interaction(flow, target_decision):
 
 
 def grouping(flow, interaction_info):
-    ''' group_idx: [车号|组号]; group_info：[组号|组内车流] '''
+    """ group_idx: [车号|组号]; group_info：[组号|组内车流] """
     # 从flow中的第一辆车开始进行聚类，依据车辆之间的交互可能性
     max_group_size = 3
     group_info = {1: [flow[0]]}
@@ -204,8 +205,21 @@ def grouping(flow, interaction_info):
                 break
         if not is_existed:
             group_interaction_info.append([idx])
-    print("group_info: \n", group_info)
-    print("group_interaction_info:", group_interaction_info)
+    return group_idx, group_info
+
+
+def random_grouping(flow):
+    max_group_size = 3
+    random_flow = copy.deepcopy(flow)
+    random.shuffle(random_flow)
+    veh_num = len(flow)
+    group_num = random.choice((math.ceil(veh_num / max_group_size),
+                               math.ceil(veh_num / max_group_size + 1)))
+    group_info = {i + 1: [] for i in range(group_num)}
+    group_idx = {i: 0 for i in range(len(flow))}
+    for i, veh in enumerate(random_flow):
+        group_idx[veh.id] = i % group_num + 1
+        group_info[i % group_num + 1].append(veh)
     return group_idx, group_info
 
 
