@@ -1,5 +1,4 @@
 import mcts
-import gol
 from grouping_freeway import *
 from vehicle_state import (
     Vehicle,
@@ -8,17 +7,10 @@ from vehicle_state import (
 
 
 def main():
-    # 初始化全局变量
-    len_flow = 10
-    gol.init()
-    '''decision_info : [id: vehicle_type, decision_interval]'''
-    decision_info = {i: ["decision"] for i in range(len_flow)}
-    gol.set_value('decision_info', decision_info)
-
     flow = []
     target_decision = {}
     # Randomly generate vehicles
-    random.seed(0)
+    random.seed(1)
     while len(flow) < len_flow:
         s = random.uniform(0, 60)
         lane_id = random.randint(0, LANE_NUMS - 1)
@@ -66,9 +58,13 @@ def main():
     #         )
     #     )
     #     TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
+    #     decision_info[vehicle["id"]][0] = vehicle["vehicle_type"]
     #     # 获取target_decision：turn_left / turn_right / keep
     #     if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
-    #         target_decision[vehicle["id"]] = "keep"
+    #         if decision_info[vehicle["id"]][0] == "overtake":
+    #             target_decision[vehicle["id"]] = "overtake"
+    #         else:
+    #             target_decision[vehicle["id"]] = "keep"
     #     elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
     #         target_decision[vehicle["id"]] = "turn_left"
     #     else:
@@ -81,20 +77,18 @@ def main():
 
     # Interaction judge & Grouping
     interaction_info = judge_interaction(flow, target_decision)
-    group_idx, flow_groups = grouping(flow, interaction_info)
+    flow_groups = grouping(flow, interaction_info)
     # 随机分组测试
     # group_idx, flow_groups = random_grouping(flow)
-    gol.set_value('group_idx', group_idx)
+    # gol.set_value('group_idx', group_idx)
     print("Grouping Time: %f\n" % (time.time() - start_time))
     print("flow_groups: \n", flow_groups)
 
     # Plot flow
-    plot_flow(flow, group_idx, target_decision)
+    plot_flow(flow, target_decision)
 
     # 分组决策
     final_nodes = {}
-    flow_record = {i: {} for i in flow_groups.keys()}
-    gol.set_value('flow_record', flow_record)
     start_time = time.time()
     finish_time = 0
     former_flow = []
@@ -128,8 +122,8 @@ def main():
         # MCTS
         for t in range(int(prediction_time / DT)):
             print("-------------t=%d----------------" % t)
-            current_node = mcts.uct_search(100 / (t / 2 + 1), current_node)
-            print("Best Child: ", current_node.visits / (100 / (t / 2 + 1)) * 100, "%")
+            current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+            print("Best Child: ", current_node.visits / (200 / (t / 2 + 1)) * 100, "%")
             temp_best = current_node
             while temp_best.children:
                 temp_best = mcts.best_child(temp_best, 0)
@@ -169,7 +163,7 @@ def main():
     flow_plot = {t: [] for t in range(int(prediction_time / DT))}
     flow_plot[0] = flow
     for t in range(int(prediction_time / DT)):
-        flow_plot[t + 1] = predict_flow(flow_plot[t], t, decision_info, flow_record, group_idx)
+        flow_plot[t + 1] = predict_flow(flow_plot[t], t)
 
     # plot predictions
     plt.ion()
@@ -212,7 +206,7 @@ def main():
         frame_id += 1
 
 
-def predict_flow(flow, t, decision_info, flow_record, group_idx):
+def predict_flow(flow, t):
     next_flow = []
     # find surround car
     surround_cars = {veh.id: {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}
@@ -234,7 +228,7 @@ def predict_flow(flow, t, decision_info, flow_record, group_idx):
                     surround_cars[veh_j.id]['left_lane']['front'] = veh_i
     # query or predict
     for veh in flow:
-        if decision_info[veh.id][0] == "query" and (t + 1) * DT <= decision_info[veh.id][1]:
+        if decision_info[veh.id][0] == "query" and (t + 1) * DT <= decision_info[veh.id][-1]:
             query_flow = flow_record[group_idx[veh.id]][t + 1]
             for query_veh in query_flow:
                 if query_veh.id == veh.id:

@@ -1,5 +1,4 @@
 import mcts
-import gol
 from grouping_freeway import *
 from vehicle_state import (
     Vehicle,
@@ -13,15 +12,13 @@ def main():
     for cnt in range(100):
         print("——————————cnt: %d——————————" % cnt)
         try:
-            # 初始化全局变量
-            len_flow = 10
-            gol.init()
-            '''decision_info : [id: vehicle_type, decision_interval]'''
-            decision_info = {i: ["decision"] for i in range(len_flow)}
-            gol.set_value('decision_info', decision_info)
-
             flow = []
             target_decision = {}
+            # 清理全局变量
+            for i in range(len_flow):
+                decision_info[i] = ["decision"]
+                group_idx[i] = 0
+                flow_record[i] = {}
             # Randomly generate vehicles
             random.seed(cnt)
             while len(flow) < len_flow:
@@ -39,60 +36,33 @@ def main():
                     continue
                 flow.append(veh)
                 if veh.lane_id == 0:
-                    TARGET_LANE[veh.id] = veh.lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
+                    TARGET_LANE[veh.id] = veh.lane_id + random.choice((0, 1))
                 elif veh.lane_id == LANE_NUMS - 1:
-                    TARGET_LANE[veh.id] = veh.lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
+                    TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0))
                 else:
-                    TARGET_LANE[veh.id] = veh.lane_id + (0 if random.uniform(0, 1) < 0.4
-                                                         else random.choice((-1, 1)))
+                    TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
                 # 获取target_decision：turn_left / turn_right / keep
                 if TARGET_LANE[veh.id] == veh.lane_id:
                     target_decision[veh.id] = "keep"
                     decision_info[veh.id][0] = "cruise"
                 elif TARGET_LANE[veh.id] > veh.lane_id:
                     target_decision[veh.id] = "turn_left"
+                    decision_info[veh.id][0] = "decision"
                 else:
                     target_decision[veh.id] = "turn_right"
-
-            # # Read from init_state.yaml from yaml
-            # with open("../init_state.yaml", "r") as f:
-            #     init_state = yaml.load(f, Loader=yaml.FullLoader)
-            # for vehicle in init_state["vehicles"]:
-            #     # 获取车流信息
-            #     flow.append(
-            #         Vehicle(
-            #             id=vehicle["id"],
-            #             state=[
-            #                 vehicle["s"],
-            #                 0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-            #                 vehicle["vel"],
-            #             ],
-            #             lane_id=vehicle["lane_id"],
-            #         )
-            #     )
-            #     TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-            #     # 获取target_decision：turn_left / turn_right / keep
-            #     if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
-            #         target_decision[vehicle["id"]] = "keep"
-            #     elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
-            #         target_decision[vehicle["id"]] = "turn_left"
-            #     else:
-            #         target_decision[vehicle["id"]] = "turn_right"
+                    decision_info[veh.id][0] = "decision"
 
             # sort flow first by s decreasingly
             flow.sort(key=lambda x: (-x.s, x.lane_id))
 
             # Interaction judge & Grouping
             interaction_info = judge_interaction(flow, target_decision)
-            group_idx, flow_groups = grouping(flow, interaction_info)
+            flow_groups = grouping(flow, interaction_info)
             # 随机分组测试
-            # group_idx, flow_groups = random_grouping(flow)
-            gol.set_value('group_idx', group_idx)
+            # flow_groups = random_grouping(flow)
 
             # 分组决策
             final_nodes = {}
-            flow_record = {i: {} for i in flow_groups.keys()}
-            gol.set_value('flow_record', flow_record)
             start_time = time.time()
             finish_time = 0
             former_flow = []
@@ -157,7 +127,7 @@ def main():
             flow_plot = {t: [] for t in range(int(prediction_time / DT))}
             flow_plot[0] = flow
             for t in range(int(prediction_time / DT)):
-                flow_plot[t + 1] = predict_flow(flow_plot[t], t, decision_info, flow_record, group_idx)
+                flow_plot[t + 1] = predict_flow(flow_plot[t], t)
         except:
             print("not success")
             continue
@@ -165,7 +135,7 @@ def main():
     print(sum(time_record) / success_num)
 
 
-def predict_flow(flow, t, decision_info, flow_record, group_idx):
+def predict_flow(flow, t):
     next_flow = []
     # find surround car
     surround_cars = {veh.id: {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}

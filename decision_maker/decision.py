@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import mcts
 import yaml
-import gol
 from constant import *
 from vehicle_state import (
     Vehicle,
@@ -17,13 +16,11 @@ from vehicle_state import (
 
 
 def main():
-    len_flow = 10
     # 初始化全局变量
-    gol.init()
-    decision_info = {i: ["decision"] for i in range(len_flow)}
-    gol.set_value('decision_info', decision_info)
     flow = []
     mcts_init_state = {'time': 0}
+
+    # Randomly generate vehicles
     random.seed(1)
     while len(flow) < len_flow:
         s = random.uniform(0, 60)
@@ -50,48 +47,49 @@ def main():
         else:
             mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
 
-    # # Read from init_state.yaml from yaml
-    # with open("../init_state.yaml", "r") as f:
-    #     init_state = yaml.load(f, Loader=yaml.FullLoader)
-    # for vehicle in init_state["vehicles"]:
-    #     flow.append(
-    #         Vehicle(
-    #             id=vehicle["id"],
-    #             state=[
-    #                 vehicle["s"],
-    #                 0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-    #                 vehicle["vel"],
-    #             ],
-    #             lane_id=vehicle["lane_id"],
-    #         )
-    #     )
-    #     # mcts_state中只存放需要决策的车辆
-    #     if vehicle["need_decision"]:
-    #         mcts_init_state[vehicle["id"]] = (
-    #             vehicle["s"],
-    #             0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-    #             vehicle["vel"],
-    #         )
-    #         TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-    # # QUE: 这段代码的作用？为什么至少要让flow中有三辆车
-    # flow_num = 3  # max allow vehicle number
-    # while len(flow) < flow_num:
-    #     s = random.uniform(5, 100)
-    #     vel = random.uniform(5, 10)
-    #     lane_id = random.randint(0, 2)
-    #     d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
-    #     veh = Vehicle(id=random.randint(1000, 9999), state=[s, d, vel], lane_id=lane_id)
-    #     is_valid_veh = True
-    #     for other_veh in flow:
-    #         if other_veh.is_collide(veh):
-    #             is_valid_veh = False
-    #             break
-    #     if not is_valid_veh:
-    #         continue
-    #     flow.append(veh)
+    # Read from init_state.yaml from yaml
+    with open("../init_state.yaml", "r") as f:
+        init_state = yaml.load(f, Loader=yaml.FullLoader)
+    for vehicle in init_state["vehicles"]:
+        flow.append(
+            Vehicle(
+                id=vehicle["id"],
+                state=[
+                    vehicle["s"],
+                    0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
+                    vehicle["vel"],
+                ],
+                lane_id=vehicle["lane_id"],
+            )
+        )
+        # mcts_state中只存放需要决策的车辆
+        if not vehicle["vehicle_type"] == "cruise":
+            mcts_init_state[vehicle["id"]] = (
+                vehicle["s"],
+                0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
+                vehicle["vel"],
+            )
+            TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
+        decision_info[vehicle["id"]].append(vehicle["vehicle_type"])
+
     # sort flow first by lane_id and then by s decreasingly
     flow.sort(key=lambda x: (x.lane_id, -x.s))
     print('flow:', flow)
+
+    # 找到超车对象
+    for i, veh_i in enumerate(flow):
+        if decision_info[veh_i.id][0] == "overtake":
+            for veh_j in flow[0:i]:
+                # 超车对象只能是巡航车
+                if veh_j.lane_id == veh_i.lane_id \
+                        and decision_info[veh_j.id][0] == "cruise":
+                    if len(decision_info[veh_i.id]) == 1:
+                        decision_info[veh_i.id].append(veh_j.id)
+                    else:
+                        decision_info[veh_i.id][1] = veh_j.id
+            # 没有超车对象，无需超车
+            if len(decision_info[veh_i.id]) == 1:
+                decision_info[veh_i.id][0] = "cruise"
 
     flow_copy = copy.deepcopy(flow)
     start_time = time.time()
@@ -252,7 +250,6 @@ def main():
         ax.axis("equal")
         ax.axis(xmin=0, xmax=scenario_size[0], ymin=0, ymax=15)
         plt.pause(0.5)
-
         plt.savefig("../output_video" + "/frame%02d.png" % frame_id)
         frame_id += 1
 

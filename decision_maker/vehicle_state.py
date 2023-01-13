@@ -2,7 +2,6 @@ from copy import deepcopy
 import hashlib
 import itertools
 import random
-import gol
 from constant import *
 
 
@@ -55,9 +54,6 @@ class Vehicle:
             self.lane_id,
         )
         return s
-
-
-ACTION_LIST = ['KS', 'AC', 'DC', 'LCL', 'LCR']
 
 
 class VehicleState:
@@ -202,10 +198,22 @@ class VehicleState:
     def terminal(self):
         if self.num_moves == 0 or self.t >= self.TIME_LIMIT:
             return True
-        # 决策车还未行驶到目标车道
         for veh_id, veh_state in self.decision_vehicles.items():
-            if abs(veh_state[1] - (0.5 + TARGET_LANE[veh_id]) * LANE_WIDTH) > 0.2:
-                return False
+            # 换道决策车还未行驶到目标车道
+            if decision_info[veh_id][0] == "decision":
+                if abs(veh_state[1] - (0.5 + TARGET_LANE[veh_id]) * LANE_WIDTH) > 0.2:
+                    return False
+            # 超车决策车还未完成超车
+            elif decision_info[veh_id][0] == "overtake":
+                ego_veh = None
+                aim_veh = None
+                for veh in self.flow:
+                    if veh.id == veh_id:
+                        ego_veh = veh
+                    if veh.id == decision_info[veh_id][1]:
+                        aim_veh = veh
+                if (not ego_veh.lane_id == aim_veh.lane_id) or ego_veh.s <= aim_veh.s:
+                    return False
         return True
 
     def reward(self):  # reward have to have their support in [0, 1]
@@ -270,10 +278,6 @@ class VehicleState:
                         surround_cars[veh_i.id]['left_lane']['back'] = veh_j
                         surround_cars[veh_j.id]['left_lane']['front'] = veh_i
         predict_flow = []
-        # 获取全局变量
-        decision_info = gol.get_value('decision_info')
-        flow_record = gol.get_value('flow_record')
-        group_idx = gol.get_value('group_idx')
         for veh in self.flow:
             # find leading_car
             leading_car = None
@@ -305,14 +309,14 @@ class VehicleState:
                 return None, None
 
             # ignore decision_vehicles in predict_flow
-            if decision_info[veh.id][0] == "query" and self.t + DT <= decision_info[veh.id][1]:
+            if decision_info[veh.id][0] == "query" and self.t + DT <= decision_info[veh.id][-1]:
                 query_flow = flow_record[group_idx[veh.id]][int(self.t/DT) + 1]
                 for query_veh in query_flow:
                     if query_veh.id == veh.id:
                         predict_flow.append(query_veh)
                         break
             elif decision_info[veh.id][0] == "cruise" or \
-                    (decision_info[veh.id][0] == "query" and self.t + DT > decision_info[veh.id][1]):
+                    (decision_info[veh.id][0] == "query" and self.t + DT > decision_info[veh.id][-1]):
                 if leading_car is None:
                     predict_flow.append(
                         Vehicle(

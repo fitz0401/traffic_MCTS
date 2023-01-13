@@ -63,7 +63,6 @@ def uct_search(budget, root):
         front = tree_policy(root)
         reward = default_policy(front.state)  # can parallelize here
         backpropagation(front, reward)
-
     return best_child(root, 0)
 
 

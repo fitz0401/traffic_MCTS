@@ -1,7 +1,15 @@
 import numpy as np
 import math
 
-TARGET_LANE = {0: 0, 1: 0, 2: 1, 3: 1, 4: 1}
+# Decision Information
+ACTION_LIST = ['KS', 'AC', 'DC', 'LCL', 'LCR']
+len_flow = 10
+TARGET_LANE = {}
+'''decision_info : [id: vehicle_type, decision_interval]'''
+decision_info = {i: ["decision"] for i in range(len_flow)}
+group_idx = {i: 0 for i in range(len_flow)}
+flow_record = {i: {} for i in range(len_flow)}
+
 # IDM param
 SAFE_DIST = 2  # least safe distance between two cars
 REACTION_TIME = 1.0  # human reaction time
@@ -21,4 +29,4 @@ RAMP_LANE_NUMS = LANE_WIDTH - 1
 # Decision param
 prediction_time = 20  # seconds
 DT = 1.5  # decision interval (second)
-T_group = 4.5    # Update group interval (second)
+T_group = 4.5   # Update group interval (second)

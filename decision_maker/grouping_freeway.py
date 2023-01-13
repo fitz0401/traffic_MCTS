@@ -17,7 +17,7 @@ def main():
 
     # Randomly generate vehicles
     random.seed(0)
-    while len(flow) < 20:
+    while len(flow) < len_flow:
         s = random.uniform(5, 95)
         lane_id = random.randint(0, LANE_NUMS - 1)
         d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
@@ -77,8 +77,8 @@ def main():
 
     # Interaction judge & Grouping
     interaction_info = judge_interaction(flow, target_decision)
-    group_info, group_interaction_info = grouping(flow, interaction_info)
-    print("group_info:", group_info)
+    group_interaction_info = grouping(flow, interaction_info)
+    print("group_info:", group_idx)
     print("group_interaction_info:", group_interaction_info)
     print("Grouping Time: %f\n" % (time.time() - start_time))
 
@@ -147,7 +147,6 @@ def grouping(flow, interaction_info):
     # 从flow中的第一辆车开始进行聚类，依据车辆之间的交互可能性
     max_group_size = 3
     group_info = {1: [flow[0]]}
-    group_idx = {i: 0 for i in range(len(flow))}
     group_idx[flow[0].id] = 1
     # 依据交互可能性进行分组
     group_interaction_info = []  # 记录组与组之间的交互信息
@@ -205,7 +204,7 @@ def grouping(flow, interaction_info):
                 break
         if not is_existed:
             group_interaction_info.append([idx])
-    return group_idx, group_info
+    return group_info
 
 
 def random_grouping(flow):
@@ -216,14 +215,13 @@ def random_grouping(flow):
     group_num = random.choice((math.ceil(veh_num / max_group_size),
                                math.ceil(veh_num / max_group_size + 1)))
     group_info = {i + 1: [] for i in range(group_num)}
-    group_idx = {i: 0 for i in range(len(flow))}
     for i, veh in enumerate(random_flow):
         group_idx[veh.id] = i % group_num + 1
         group_info[i % group_num + 1].append(veh)
-    return group_idx, group_info
+    return group_info
 
 
-def plot_flow(flow, group_idx, target_decision=None):
+def plot_flow(flow, target_decision=None):
     if target_decision is None:
         target_decision = []
     plt.ion()  # 将 figure 设置为交互模式，figure 不用 plt.show() 也可以显示
@@ -250,7 +248,10 @@ def plot_flow(flow, group_idx, target_decision=None):
             verticalalignment="center",
         )
         if target_decision:
-            if target_decision[vehicle.id] == "keep":
+            if target_decision[vehicle.id] == "overtake":
+                ax.arrow(vehicle.s, vehicle.d, 5, 0,
+                         length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='r')
+            elif target_decision[vehicle.id] == "keep":
                 ax.arrow(vehicle.s, vehicle.d, 5, 0,
                          length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
             elif target_decision[vehicle.id] == "turn_left":

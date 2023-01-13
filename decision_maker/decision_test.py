@@ -3,8 +3,6 @@ import copy
 import random
 import time
 import mcts
-import yaml
-import gol
 from constant import *
 from vehicle_state import (
     Vehicle,
@@ -18,11 +16,6 @@ def main():
     for cnt in range(100):
         print("——————————cnt: %d——————————" % cnt)
         try:
-            len_flow = 10
-            # 初始化全局变量
-            gol.init()
-            decision_info = {i: ["decision"] for i in range(len_flow)}
-            gol.set_value('decision_info', decision_info)
             flow = []
             mcts_init_state = {'time': 0}
             random.seed(cnt)
@@ -50,47 +43,7 @@ def main():
                     decision_info[veh.id][0] = "cruise"
                 else:
                     mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
-
-            # # Read from init_state.yaml from yaml
-            # with open("../init_state.yaml", "r") as f:
-            #     init_state = yaml.load(f, Loader=yaml.FullLoader)
-            # for vehicle in init_state["vehicles"]:
-            #     flow.append(
-            #         Vehicle(
-            #             id=vehicle["id"],
-            #             state=[
-            #                 vehicle["s"],
-            #                 0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-            #                 vehicle["vel"],
-            #             ],
-            #             lane_id=vehicle["lane_id"],
-            #         )
-            #     )
-            #     # mcts_state中只存放需要决策的车辆
-            #     if vehicle["need_decision"]:
-            #         mcts_init_state[vehicle["id"]] = (
-            #             vehicle["s"],
-            #             0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-            #             vehicle["vel"],
-            #         )
-            #         TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-            # # QUE: 这段代码的作用？为什么至少要让flow中有三辆车
-            # flow_num = 3  # max allow vehicle number
-            # while len(flow) < flow_num:
-            #     s = random.uniform(5, 100)
-            #     vel = random.uniform(5, 10)
-            #     lane_id = random.randint(0, 2)
-            #     d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
-            #     veh = Vehicle(id=random.randint(1000, 9999), state=[s, d, vel], lane_id=lane_id)
-            #     is_valid_veh = True
-            #     for other_veh in flow:
-            #         if other_veh.is_collide(veh):
-            #             is_valid_veh = False
-            #             break
-            #     if not is_valid_veh:
-            #         continue
-            #     flow.append(veh)
-            # sort flow first by lane_id and then by s decreasingly
+                    decision_info[veh.id][0] = "decision"
             start_time = time.time()
             flow.sort(key=lambda x: (x.lane_id, -x.s))
             flow_copy = copy.deepcopy(flow)
