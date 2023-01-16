@@ -2,8 +2,8 @@ import numpy as np
 import math
 
 # Decision Information
-ACTION_LIST = ['KS', 'AC', 'DC', 'LCL', 'LCR']
-len_flow = 10
+ACTION_LIST = ['KS', 'AC', 'DC', 'LCR', 'LCL']
+len_flow = 5
 TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''
 decision_info = {i: ["decision"] for i in range(len_flow)}

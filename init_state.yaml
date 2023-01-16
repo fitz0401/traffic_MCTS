@@ -64,23 +64,37 @@ vehicles:
 #    need_decision: False
 #    vehicle_type: cruise
   - id: 0
-    s: 36
-    vel: 5
-    d: 0
-    lane_id: 2
-    target_lane: 1
-    vehicle_type: decision
-  - id: 1
     s: 25
     vel: 4
     d: 0
     lane_id: 2
     target_lane: 2
     vehicle_type: cruise
-  - id: 2
-    s: 14
-    vel: 8
+  - id: 1
+    s: 15
+    vel: 6
     d: 0
     lane_id: 2
     target_lane: 2
     vehicle_type: overtake
+  - id: 2
+    s: 10.0
+    vel: 5
+    d: 0
+    lane_id: 1
+    target_lane: 1
+    vehicle_type: overtake
+  - id: 3
+    s: 30.0
+    vel: 6
+    d: 0
+    lane_id: 3
+    target_lane: 3
+    vehicle_type: cruise
+  - id: 4
+    s: 27.0
+    vel: 4
+    d: 0
+    lane_id: 1
+    target_lane: 1
+    vehicle_type: cruise

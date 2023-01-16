@@ -89,6 +89,10 @@ def main():
 def judge_interaction(flow, target_decision):
     vehicle_num = len(flow)
     interaction_info = -1 * np.ones((vehicle_num, vehicle_num))  # 交互矩阵中的元素初始化为-1
+    # 人为设定超车关系具备交互可能性
+    for veh_id, veh_info in decision_info.items():
+        if veh_info[0] == "overtake":
+            interaction_info[veh_id][veh_info[1]] = interaction_info[veh_info[1]][veh_id] = 1
     # 判断车辆的交互可能性
     for i, veh_i in enumerate(flow):
         for veh_j in flow[i + 1:]:
@@ -151,6 +155,11 @@ def grouping(flow, interaction_info):
     # 依据交互可能性进行分组
     group_interaction_info = []  # 记录组与组之间的交互信息
     for i, veh_i in enumerate(flow[1:], start=1):
+        # 优先把超车车辆和被超车车辆分为一组
+        if decision_info[veh_i.id][0] == "overtake":
+            group_idx[veh_i.id] = group_idx[decision_info[veh_i.id][1]]
+            group_info[group_idx[veh_i.id]].append(veh_i)
+            continue
         # 检查车辆i能否和车辆j分为一组, 倒序遍历j~(i,0],确保临近分组
         for j in range(i - 1, -1, -1):
             veh_j = flow[j]

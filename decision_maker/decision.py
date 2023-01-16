@@ -20,32 +20,33 @@ def main():
     flow = []
     mcts_init_state = {'time': 0}
 
-    # Randomly generate vehicles
-    random.seed(1)
-    while len(flow) < len_flow:
-        s = random.uniform(0, 60)
-        lane_id = random.randint(0, LANE_NUMS - 1)
-        d = (lane_id + 0.5) * LANE_WIDTH + random.uniform(-0.1, 0.1)
-        vel = random.uniform(5, 7)
-        veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
-        is_valid_veh = True
-        for other_veh in flow:
-            if other_veh.is_collide(veh):
-                is_valid_veh = False
-                break
-        if not is_valid_veh:
-            continue
-        flow.append(veh)
-        if veh.lane_id == 0:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((0, 1))
-        elif veh.lane_id == LANE_NUMS - 1:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0))
-        else:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
-        if TARGET_LANE[veh.id] == veh.lane_id:
-            decision_info[veh.id][0] = "cruise"
-        else:
-            mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
+    # # Randomly generate vehicles
+    # random.seed(0)
+    # while len(flow) < len_flow:
+    #     s = random.uniform(0, 60)
+    #     lane_id = random.randint(0, LANE_NUMS - 1)
+    #     d = (lane_id + 0.5) * LANE_WIDTH + random.uniform(-0.1, 0.1)
+    #     vel = random.uniform(5, 7)
+    #     veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
+    #     is_valid_veh = True
+    #     for other_veh in flow:
+    #         if other_veh.is_collide(veh):
+    #             is_valid_veh = False
+    #             break
+    #     if not is_valid_veh:
+    #         continue
+    #     flow.append(veh)
+    #     if veh.lane_id == 0:
+    #         TARGET_LANE[veh.id] = veh.lane_id + random.choice((0, 1))
+    #     elif veh.lane_id == LANE_NUMS - 1:
+    #         TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0))
+    #     else:
+    #         TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
+    #     if TARGET_LANE[veh.id] == veh.lane_id:
+    #         decision_info[veh.id][0] = "cruise"
+    #     else:
+    #         mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
+    #         decision_info[veh.id][0] = "decision"
 
     # Read from init_state.yaml from yaml
     with open("../init_state.yaml", "r") as f:
@@ -70,10 +71,10 @@ def main():
                 vehicle["vel"],
             )
             TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-        decision_info[vehicle["id"]].append(vehicle["vehicle_type"])
+        decision_info[vehicle["id"]][0] = vehicle["vehicle_type"]
 
     # sort flow first by lane_id and then by s decreasingly
-    flow.sort(key=lambda x: (x.lane_id, -x.s))
+    flow.sort(key=lambda x: (-x.s, x.lane_id))
     print('flow:', flow)
 
     # 找到超车对象
@@ -163,6 +164,14 @@ def main():
                 veh_id not in finish_time
                 and int(veh_state[1] / LANE_WIDTH) == TARGET_LANE[veh_id]
             ):
+                if decision_info[veh_id][0] == "overtake":
+                    aim_veh = None
+                    for veh in final_node.state.flow:
+                        if veh.id == decision_info[veh_id][1]:
+                            aim_veh = veh
+                            break
+                    if veh_state[0] < aim_veh.s + aim_veh.length:
+                        continue
                 finish_time[veh_id] = final_node.state.states[i]["time"]
     print("finish_time:", finish_time)
     average_finish_time = []
@@ -172,17 +181,31 @@ def main():
     average_finish_time = sum(average_finish_time) / len(average_finish_time)
     print("average_finish_time:", average_finish_time)
     print("expand node num:", mcts.EXPAND_NODE)
+
     # calculate success
     success = 1
     for veh_id, veh_state in final_node.state.states[-1].items():
         if veh_id == "time":
             continue
         d = veh_state[1]
+        # 是否抵达目标车道
         if abs(d - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH) > 0.5:
             success = 0
-            print("Veh don't success! veh_id", veh_id, "d", d)
+            print("Vehicle doesn't at aimed lane! veh_id", veh_id)
             break
+        # 是否完成超车
+        if decision_info[veh_id][0] == "overtake":
+            aim_veh = None
+            for veh in final_node.state.flow:
+                if veh.id == decision_info[veh_id][1]:
+                    aim_veh = veh
+                    break
+            if veh_state[0] < aim_veh.s + aim_veh.length:
+                success = 0
+                print("Vehicle doesn't finish overtaking! veh_id", veh_id)
+                break
     print("success:", success)
+
     # calculate minimum distance
     min_distance = 100
     for i in range(len(final_node.state.states)):

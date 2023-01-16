@@ -121,10 +121,8 @@ class VehicleState:
                         vel -= self.ACC * DT
                         vel = max(vel, 0)
                         s += vel * DT - 0.5 * self.ACC * DT * DT
-                    elif (
-                            abs(d - (TARGET_LANE[veh.id] + 0.5) * LANE_WIDTH)
-                            > LANE_WIDTH / 4
-                    ):
+                    elif (abs(d - (TARGET_LANE[veh.id] + 0.5) * LANE_WIDTH) > LANE_WIDTH / 4
+                          or decision_info[veh.id][0] == "overtake"):
                         if action == 'LCL':
                             d += self.CHANGE_LANE_D
                             s += vel * DT
@@ -212,7 +210,8 @@ class VehicleState:
                         ego_veh = veh
                     if veh.id == decision_info[veh_id][1]:
                         aim_veh = veh
-                if (not ego_veh.lane_id == aim_veh.lane_id) or ego_veh.s <= aim_veh.s:
+                if (not ego_veh.lane_id == aim_veh.lane_id) \
+                        or ego_veh.s <= aim_veh.s + 1.5 * ego_veh.length:
                     return False
         return True
 
@@ -224,27 +223,48 @@ class VehicleState:
             self_reward = 0.0
             other_reward = 0.0
             s, d = veh_state[0], veh_state[1]
-            # 终止状态距离目标车道线横向距离，<0.5表示换道成功：reward += 0.8
-            if abs(d - (0.5 + TARGET_LANE[veh_id]) * LANE_WIDTH) < 0.5:
-                self_reward += 0.8
+            # 终止状态奖励：完成超车：reward += 0.8
+            aim_veh = None
+            if decision_info[veh_id][0] == "overtake":
+                for veh in self.flow:
+                    if veh.id == decision_info[veh_id][1]:
+                        aim_veh = veh
+                        break
+                if s > aim_veh.s + aim_veh.length and \
+                        abs(d - (0.5 + TARGET_LANE[veh_id]) * LANE_WIDTH) < 0.5:
+                    self_reward += 0.8
+            # 终止状态奖励：距离目标车道线横向距离，<0.5表示换道成功：reward += 0.8
+            else:
+                if abs(d - (0.5 + TARGET_LANE[veh_id]) * LANE_WIDTH) < 0.5:
+                    self_reward += 0.8
+            # 决策过程奖励
             max_action_num = len(self.actions[veh_id])
             moves = []
             for i in range(len(self.actions[veh_id])):
                 move = self.actions[veh_id][i]
                 moves.append(move)
-                # 累计每一步动作换道完成的奖励
-                if abs(self.states[i][veh_id][1] - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH) < 0.5:
-                    self_reward += 0.2 / max_action_num
-                # 累计每一步动作接近换道完成（没有成功换道，但在相邻车道的靠近目标车道侧）的奖励
-                if (abs(self.states[i][veh_id][1]
-                        - int(self.states[i][veh_id][1] / LANE_WIDTH) * LANE_WIDTH
-                        - LANE_WIDTH / 2) < 0.5):
-                    self_reward += 0.1 / max_action_num
-                # 保持动作连续性：reward += 0.2 / max_action_num
-                if i > 0 and moves[-1] == moves[-2]:
-                    self_reward += 0.2 / max_action_num
-                # 速度奖励
-                self_reward += 0.2 * self.states[i][veh_id][2] / 10.0 / max_action_num
+                if decision_info[veh_id][0] == "overtake":
+                    # 累计每一步动作超车完成的奖励
+                    if self.states[i][veh_id][0] > aim_veh.s + aim_veh.length:
+                        self_reward += 0.1 / max_action_num
+                        if abs(self.states[i][veh_id][1] - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH) < 0.2:
+                            self_reward += 0.2 / max_action_num
+                    if self.states[i][veh_id][2] > aim_veh.vel:
+                        self_reward += 0.1 / max_action_num
+                else:
+                    # 累计每一步动作换道完成的奖励
+                    if abs(self.states[i][veh_id][1] - (TARGET_LANE[veh_id] + 0.5) * LANE_WIDTH) < 0.5:
+                        self_reward += 0.2 / max_action_num
+                    # 累计每一步动作接近换道完成（没有成功换道，但在相邻车道的靠近目标车道侧）的奖励
+                    if (abs(self.states[i][veh_id][1]
+                            - int(self.states[i][veh_id][1] / LANE_WIDTH) * LANE_WIDTH
+                            - LANE_WIDTH / 2) < 0.5):
+                        self_reward += 0.1 / max_action_num
+                    # 保持动作连续性：reward += 0.2 / max_action_num
+                    if i > 0 and moves[-1] == moves[-2]:
+                        self_reward += 0.2 / max_action_num
+                    # 速度奖励
+                    self_reward += 0.2 * self.states[i][veh_id][2] / 10.0 / max_action_num
             # 惩罚：同车道后方有车的情况下选择减速
             back_veh = self.surround_cars[veh_id]['cur_lane'].get('back', None)
             if back_veh:

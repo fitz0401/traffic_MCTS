@@ -9,71 +9,88 @@ from vehicle_state import (
 def main():
     flow = []
     target_decision = {}
-    # Randomly generate vehicles
-    random.seed(1)
-    while len(flow) < len_flow:
-        s = random.uniform(0, 60)
-        lane_id = random.randint(0, LANE_NUMS - 1)
-        d = (lane_id + 0.5) * LANE_WIDTH + random.uniform(-0.1, 0.1)
-        vel = random.uniform(5, 7)
-        veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
-        is_valid_veh = True
-        for other_veh in flow:
-            if other_veh.is_collide(veh):
-                is_valid_veh = False
-                break
-        if not is_valid_veh:
-            continue
-        flow.append(veh)
-        if veh.lane_id == 0:
-            TARGET_LANE[veh.id] = veh.lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
-        elif veh.lane_id == LANE_NUMS - 1:
-            TARGET_LANE[veh.id] = veh.lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
-        else:
-            TARGET_LANE[veh.id] = veh.lane_id + (0 if random.uniform(0, 1) < 0.4
-                                                 else random.choice((-1, 1)))
-        # 获取target_decision：turn_left / turn_right / keep
-        if TARGET_LANE[veh.id] == veh.lane_id:
-            target_decision[veh.id] = "keep"
-            decision_info[veh.id][0] = "cruise"
-        elif TARGET_LANE[veh.id] > veh.lane_id:
-            target_decision[veh.id] = "turn_left"
-        else:
-            target_decision[veh.id] = "turn_right"
-
-    # # Read from init_state.yaml from yaml
-    # with open("../init_state.yaml", "r") as f:
-    #     init_state = yaml.load(f, Loader=yaml.FullLoader)
-    # for vehicle in init_state["vehicles"]:
-    #     # 获取车流信息
-    #     flow.append(
-    #         Vehicle(
-    #             id=vehicle["id"],
-    #             state=[
-    #                 vehicle["s"],
-    #                 0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-    #                 vehicle["vel"],
-    #             ],
-    #             lane_id=vehicle["lane_id"],
-    #         )
-    #     )
-    #     TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-    #     decision_info[vehicle["id"]][0] = vehicle["vehicle_type"]
-    #     # 获取target_decision：turn_left / turn_right / keep
-    #     if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
-    #         if decision_info[vehicle["id"]][0] == "overtake":
-    #             target_decision[vehicle["id"]] = "overtake"
-    #         else:
-    #             target_decision[vehicle["id"]] = "keep"
-    #     elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
-    #         target_decision[vehicle["id"]] = "turn_left"
+    # # Randomly generate vehicles
+    # random.seed(1)
+    # while len(flow) < len_flow:
+    #     s = random.uniform(0, 60)
+    #     lane_id = random.randint(0, LANE_NUMS - 1)
+    #     d = (lane_id + 0.5) * LANE_WIDTH + random.uniform(-0.1, 0.1)
+    #     vel = random.uniform(5, 7)
+    #     veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
+    #     is_valid_veh = True
+    #     for other_veh in flow:
+    #         if other_veh.is_collide(veh):
+    #             is_valid_veh = False
+    #             break
+    #     if not is_valid_veh:
+    #         continue
+    #     flow.append(veh)
+    #     if veh.lane_id == 0:
+    #         TARGET_LANE[veh.id] = veh.lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
+    #     elif veh.lane_id == LANE_NUMS - 1:
+    #         TARGET_LANE[veh.id] = veh.lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
     #     else:
-    #         target_decision[vehicle["id"]] = "turn_right"
+    #         TARGET_LANE[veh.id] = veh.lane_id + (0 if random.uniform(0, 1) < 0.4
+    #                                              else random.choice((-1, 1)))
+    #     # 获取target_decision：turn_left / turn_right / keep
+    #     if TARGET_LANE[veh.id] == veh.lane_id:
+    #         target_decision[veh.id] = "keep"
+    #         decision_info[veh.id][0] = "cruise"
+    #     elif TARGET_LANE[veh.id] > veh.lane_id:
+    #         target_decision[veh.id] = "turn_left"
+    #         decision_info[veh.id][0] = "decision"
+    #     else:
+    #         target_decision[veh.id] = "turn_right"
+    #         decision_info[veh.id][0] = "decision"
+
+    # Read from init_state.yaml from yaml
+    with open("../init_state.yaml", "r") as f:
+        init_state = yaml.load(f, Loader=yaml.FullLoader)
+    for vehicle in init_state["vehicles"]:
+        # 获取车流信息
+        flow.append(
+            Vehicle(
+                id=vehicle["id"],
+                state=[
+                    vehicle["s"],
+                    0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
+                    vehicle["vel"],
+                ],
+                lane_id=vehicle["lane_id"],
+            )
+        )
+        TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
+        decision_info[vehicle["id"]][0] = vehicle["vehicle_type"]
+        # 获取target_decision：turn_left / turn_right / keep
+        if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
+            if decision_info[vehicle["id"]][0] == "overtake":
+                target_decision[vehicle["id"]] = "overtake"
+            else:
+                target_decision[vehicle["id"]] = "keep"
+        elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
+            target_decision[vehicle["id"]] = "turn_left"
+        else:
+            target_decision[vehicle["id"]] = "turn_right"
 
     # sort flow first by s decreasingly
     start_time = time.time()
     flow.sort(key=lambda x: (-x.s, x.lane_id))
     print('flow:', flow)
+
+    # 找到超车对象
+    for i, veh_i in enumerate(flow):
+        if decision_info[veh_i.id][0] == "overtake":
+            for veh_j in flow[0:i]:
+                # 超车对象只能是巡航车
+                if veh_j.lane_id == veh_i.lane_id \
+                        and decision_info[veh_j.id][0] == "cruise":
+                    if len(decision_info[veh_i.id]) == 1:
+                        decision_info[veh_i.id].append(veh_j.id)
+                    else:
+                        decision_info[veh_i.id][1] = veh_j.id
+            # 没有超车对象，无需超车
+            if len(decision_info[veh_i.id]) == 1:
+                decision_info[veh_i.id][0] = "cruise"
 
     # Interaction judge & Grouping
     interaction_info = judge_interaction(flow, target_decision)
@@ -153,10 +170,24 @@ def main():
     success = 1
     for idx, final_node in final_nodes.items():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
+            # 是否抵达目标车道
             if abs(veh_state[1] - (TARGET_LANE[veh_idx] + 0.5) * LANE_WIDTH) > 0.5:
                 success = 0
-                print("Veh don't success! veh_id", veh_idx, "group_idx", group_idx[veh_idx])
+                print("Vehicle doesn't at aimed lane! veh_id", veh_idx,
+                      "group_idx", group_idx[veh_idx])
                 break
+            # 是否完成超车
+            if decision_info[veh_idx][0] == "overtake":
+                aim_veh = None
+                for veh in final_node.state.flow:
+                    if veh.id == decision_info[veh_idx][1]:
+                        aim_veh = veh
+                        break
+                if veh_state[0] < aim_veh.s + aim_veh.length:
+                    success = 0
+                    print("Vehicle doesn't finish overtaking! veh_id", veh_idx,
+                          "group_idx", group_idx[veh_idx])
+                    break
     print("success:", success)
 
     # 预测交通流至最长预测时间
