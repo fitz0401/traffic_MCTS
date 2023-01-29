@@ -2,13 +2,12 @@
 import copy
 from math import sqrt
 import pickle
-import random
 import time
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import mcts
 import yaml
-from constant import *
+from decision_maker.constant import *
 from vehicle_state import (
     Vehicle,
     VehicleState,

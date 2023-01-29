@@ -1,6 +1,7 @@
-import mcts
+import yaml
+from decision_maker import mcts
 from grouping_freeway import *
-from vehicle_state import (
+from decision_maker.vehicle_state import (
     Vehicle,
     VehicleState,
 )
@@ -10,7 +11,7 @@ def main():
     flow = []
     target_decision = {}
     # # Randomly generate vehicles
-    # random.seed(1)
+    # random.seed(0)
     # while len(flow) < len_flow:
     #     s = random.uniform(0, 60)
     #     lane_id = random.randint(0, LANE_NUMS - 1)
@@ -44,7 +45,7 @@ def main():
     #         decision_info[veh.id][0] = "decision"
 
     # Read from init_state.yaml from yaml
-    with open("../init_state.yaml", "r") as f:
+    with open("../../init_state.yaml", "r") as f:
         init_state = yaml.load(f, Loader=yaml.FullLoader)
     for vehicle in init_state["vehicles"]:
         # 获取车流信息
@@ -233,7 +234,7 @@ def main():
         ax.axis("equal")
         ax.axis(xmin=0, xmax=scenario_size[0], ymin=0, ymax=15)
         plt.pause(0.5)
-        plt.savefig("../output_video" + "/frame%02d.png" % frame_id)
+        plt.savefig("../../output_video" + "/frame%02d.png" % frame_id)
         frame_id += 1
 
 

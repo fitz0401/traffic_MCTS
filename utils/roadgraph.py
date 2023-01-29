@@ -174,7 +174,7 @@ def left_lane(lanes, lane_id):
     if id in lanes:
         return id
     else:
-        logging.error("Cannot find left lane of Lane id {}".format(lane_id))
+        # logging.error("Cannot find left lane of Lane id {}".format(lane_id))
         return None
 
 
@@ -185,7 +185,7 @@ def right_lane(lanes, lane_id):
     if id in lanes:
         return id
     else:
-        logging.error("Cannot find right lane of Lane id {}".format(lane_id))
+        # logging.error("Cannot find right lane of Lane id {}".format(lane_id))
         return None
 
 
@@ -270,7 +270,7 @@ def plot_roadgraph(edges, lanes, junction_lanes):
     ax.grid(True)
     ax.axis("equal")
     plt.show()
-    return ax
+    return fig, ax
 
 def build_roadgraph(file_path):
     with open(file_path, "r") as f:

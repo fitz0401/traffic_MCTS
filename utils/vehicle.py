@@ -19,7 +19,7 @@ class Vehicle:
         id,
         init_state=State(),
         lane_id=-1,
-        target_speed=0.0,
+        target_speed=10.0,
         behaviour="KL",
         length=5.0,
         width=2.0,
@@ -63,25 +63,46 @@ class Vehicle:
 
         return vehicle_new_lane
 
-    # def change_to_adjacent_lane(self, lane_id, course_spline):
-    #     # Assume that adjacent lane is on the same edge and share same s-axis
-    #     # Assumption wrong!!
-    #     vehicle_new_lane = deepcopy(self)
-    #     vehicle_new_lane.lane_id = lane_id
+    # TODO: 变换为笛卡尔坐标后，映射到同一车道，进行碰撞检测
+    def is_collide(self, other: 'Vehicle') -> bool:
+        if self.lane_id != other.lane_id:
+            return False
+        if self.current_state.s + self.length * 2.5 < other.current_state.s \
+                or self.current_state.s - self.length * 2.5 > other.current_state.s:
+            return False
+        if self.current_state.d + self.width * 1.5 < other.current_state.d \
+                or self.current_state.d - self.width * 1.5 > other.current_state.d:
+            return False
+        return True
 
-    #     rx, ry = course_spline.calc_position(self.current_state.s)
-    #     ryaw = course_spline.calc_yaw(self.current_state.s)
-    #     rkappa = course_spline.calc_curvature(self.current_state.s)
+    def check_vel(self, other_s, other_vel) -> bool:
+        # Assume other_veh is in the same lane
+        if other_s > self.current_state.s:  # self is the behind car
+            reaction_dist = self.length + 0.5 * self.current_state.s_d
+            delta_s = other_s - self.current_state.s
+            if delta_s < reaction_dist:
+                return False
+            vel_lower_limit = self.current_state.s_d - (delta_s - reaction_dist) / 3.0
+            if other_vel < vel_lower_limit:
+                return False
+        else:  # self is the front car
+            delta_s = self.current_state.s - other_s
+            if delta_s < self.length:
+                return False
+            vel_upper_limit = min((2.5 * self.current_state.s_d + delta_s) / 3.5, 2.0 * delta_s)
+            if other_vel > vel_upper_limit:
+                return False
+        return True
 
-    #     s, s_d, d, d_d = cartesian_to_frenet2D(
-    #         self.current_state.s, rx, ry, ryaw, rkappa, vehicle_new_lane.current_state
-    #     )
-    #     vehicle_new_lane.current_state.s = s
-    #     vehicle_new_lane.current_state.s_d = s_d
-    #     vehicle_new_lane.current_state.d = d
-    #     vehicle_new_lane.current_state.d_d = d_d
-
-    #     return vehicle_new_lane
+    def __repr__(self) -> str:
+        s = "Vehicle %d: s=%f, d=%f, vel=%f, lane_id=%s\n" % (
+            self.id,
+            self.current_state.s,
+            self.current_state.d,
+            self.current_state.vel,
+            self.lane_id,
+        )
+        return s
 
 
 def build_vehicle(
@@ -90,7 +111,7 @@ def build_vehicle(
     x0, y0 = lanes[lane_id].course_spline.frenet_to_cartesian1D(s0, d0)
     yaw0 = lanes[lane_id].course_spline.calc_yaw(s0)
     cur0 = lanes[lane_id].course_spline.calc_curvature(s0)
-
+    vtype_config = None
     try:
         vtype_config = config["vehicle"][vtype]
     except KeyError:

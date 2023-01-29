@@ -3,7 +3,7 @@ import time
 import yaml
 from matplotlib import pyplot as plt
 import utils.roadgraph as roadgraph
-from constant import *
+from decision_maker.constant import *
 from vehicle_state import (
     Vehicle,
 )
@@ -62,11 +62,11 @@ def main():
 def plot_flow(flow, target_decision=None):
     if target_decision is None:
         target_decision = []
-    with open("../config.yaml", "r", encoding="utf-8") as f:
+    with open("../../config.yaml", "r", encoding="utf-8") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
     plt.ion()  # 将 figure 设置为交互模式，figure 不用 plt.show() 也可以显示
     # 道路绘制
-    edges, lanes, junction_lanes = roadgraph.build_roadgraph("roadgraph_intersect.yaml")
+    edges, lanes, junction_lanes = roadgraph.build_roadgraph("../../roadgraph_intersect.yaml")
     print(junction_lanes.keys())
     ax = roadgraph.plot_roadgraph(edges, lanes, junction_lanes)
     # 绘制车流

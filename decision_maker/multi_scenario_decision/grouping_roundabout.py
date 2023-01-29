@@ -1,14 +1,11 @@
-import math
-
-import yaml
-import time
 import random
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from constant import *
-from vehicle_state import (
+import time
+import yaml
+from matplotlib import pyplot as plt
+import utils.roadgraph as roadgraph
+from decision_maker.constant import *
+from decision_maker.vehicle_state import (
     Vehicle,
-    LANE_WIDTH,
 )
 
 
@@ -19,9 +16,9 @@ def main():
     # Randomly generate vehicles
     random.seed(0)
     while len(flow) < 15:
-        s = random.uniform(5, 75)
-        lane_id = random.randint(0, LANE_NUMS - 1) - 1
-        d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
+        s = random.uniform(5, 45)
+        lane_id = random.randint(0, LANE_NUMS)
+        d = random.uniform(-0.1, 0.1)
         vel = random.uniform(5, 10)
         veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
         is_valid_veh = True
@@ -32,50 +29,21 @@ def main():
         if not is_valid_veh:
             continue
         flow.append(veh)
-        if veh.lane_id == 0:
+        if veh.lane_id == 0 or veh.lane_id == LANE_NUMS:
+            TARGET_LANE[veh.id] = veh.lane_id
+        elif veh.lane_id == 1:
             TARGET_LANE[veh.id] = veh.lane_id + random.choice((0, 1))
-        elif veh.lane_id == RAMP_LANE_NUMS - 1:
+        elif veh.lane_id == 3:
             TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0))
-        elif veh.lane_id == -1:
-            TARGET_LANE[veh.id] = 0
         else:
             TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
         # 获取target_decision：turn_left / turn_right / keep
-        if veh.lane_id == -1:
+        if TARGET_LANE[veh.id] == veh.lane_id:
             target_decision[veh.id] = "keep"
+        elif TARGET_LANE[veh.id] > veh.lane_id:
+            target_decision[veh.id] = "turn_left"
         else:
-            if TARGET_LANE[veh.id] == veh.lane_id:
-                target_decision[veh.id] = "keep"
-            elif TARGET_LANE[veh.id] > veh.lane_id:
-                target_decision[veh.id] = "turn_left"
-            else:
-                target_decision[veh.id] = "turn_right"
-
-    # # Read from init_state.yaml from yaml
-    # with open("../init_state.yaml", "r") as f:
-    #     init_state = yaml.load(f, Loader=yaml.FullLoader)
-    # for vehicle in init_state["vehicles"]:
-    #     # 获取车流信息
-    #     flow.append(
-    #         Vehicle(
-    #             id=vehicle["id"],
-    #             state=[
-    #                 vehicle["s"],
-    #                 0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-    #                 vehicle["vel"],
-    #             ],
-    #             lane_id=vehicle["lane_id"],
-    #         )
-    #     )
-    #     TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-    #     # 获取target_decision：turn_left / turn_right / keep
-    #     if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
-    #         target_decision[vehicle["id"]] = "keep"
-    #     elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
-    #         target_decision[vehicle["id"]] = "turn_left"
-    #     else:
-    #         target_decision[vehicle["id"]] = "turn_right"
-    # sort flow first by s decreasingly
+            target_decision[veh.id] = "turn_right"
     start_time = time.time()
     flow.sort(key=lambda x: (-x.s, x.lane_id))
     print('flow:', flow)
@@ -98,7 +66,7 @@ def judge_interaction(flow, target_decision):
     # 判断车辆的交互可能性
     for i, veh_i in enumerate(flow):
         # 记录车辆是否在merge_zone中
-        if (veh_i.lane_id == 0 or veh_i.lane_id == -1) and (RAMP_LENGTH - 30 <= veh_i.s <= RAMP_LENGTH):
+        if (veh_i.lane_id == 0 and 33 <= veh_i.s <= 46) or (veh_i.lane_id == 1 and 25 <= veh_i.s <= 38):
             merge_zone_ids.append(i)
         for veh_j in flow[i + 1:]:
             # 无交互：满足横向安全距离
@@ -146,7 +114,7 @@ def judge_interaction(flow, target_decision):
         for veh_j_idx in merge_zone_ids[i + 1:]:
             veh_j = flow[veh_j_idx]
             safe_s = max(T_group * (veh_j.vel - veh_i.vel + 0.9 * T_group) + SAFE_DIST, SAFE_DIST)
-            if veh_i.s - veh_j.s < safe_s:
+            if abs(veh_i.s - veh_j.s) - 8 < safe_s:
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 1
         merge_zone_ids[i] = veh_i.id
     print("merge_zone_ids:", merge_zone_ids)
@@ -217,83 +185,72 @@ def grouping(flow, interaction_info):
     return group_info, group_interaction_info
 
 
-# TODO: 编写一个坐标变换函数，用于显示在匝道上的车(lane_id = -1)的真实位置
 def plot_flow(flow, target_decision=None):
     if target_decision is None:
         target_decision = []
+    with open("../../config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
     plt.ion()  # 将 figure 设置为交互模式，figure 不用 plt.show() 也可以显示
-    fig, ax = plt.subplots()
-    fig.set_size_inches(16, 4)
-    # 绘制路段
-    v_rot = np.array([[math.cos(RAMP_ANGLE), -math.sin(RAMP_ANGLE)],
-                      [math.sin(RAMP_ANGLE), math.cos(RAMP_ANGLE)]])
-    v_0 = np.array([[-RAMP_LENGTH], [0]])
-    v_1 = v_rot.dot(v_0)
-    v1_norm = v_1 / np.linalg.norm(v_1)
-    ramp_dx = LANE_WIDTH / 2 / math.sin(RAMP_ANGLE)
-    ax.plot([(v1_norm * ramp_dx)[0] + RAMP_LENGTH - ramp_dx, (v1_norm * RAMP_LENGTH)[0] + RAMP_LENGTH - ramp_dx],
-            [0, (v1_norm * RAMP_LENGTH)[1] + LANE_WIDTH / 2], 'k', linewidth=1)
-    ax.plot([(v1_norm * ramp_dx)[0] + RAMP_LENGTH + ramp_dx, (v1_norm * RAMP_LENGTH)[0] + RAMP_LENGTH + ramp_dx],
-            [0, (v1_norm * RAMP_LENGTH)[1] + LANE_WIDTH / 2], 'k', linewidth=1)
-    ax.plot([0, (v1_norm * ramp_dx)[0] + RAMP_LENGTH - ramp_dx], [0, 0], 'k', linewidth=1)
-    ax.plot([(v1_norm * ramp_dx)[0] + RAMP_LENGTH + ramp_dx, scenario_size[0]], [0, 0], 'k', linewidth=1)
-    ax.plot([0, scenario_size[0]], [4, 4], 'b--', linewidth=1)
-    ax.plot([0, scenario_size[0]], [8, 8], 'b--', linewidth=1)
-    ax.plot([0, scenario_size[0]], [12, 12], 'k', linewidth=1)
-    # 绘制车辆
+    # 道路绘制
+    edges, lanes, junction_lanes = roadgraph.build_roadgraph("../../roadgraph_roundabout.yaml")
+    ax = roadgraph.plot_roadgraph(edges, lanes, junction_lanes)
+    # 绘制车流
     for vehicle in flow:
-        if not vehicle.lane_id == -1:
-            rect_x = vehicle.s - 2.5
-            rect_y = vehicle.d - 1
-            veh_x = vehicle.s
-            veh_y = vehicle.d
-        else:
-            v_rect_0 = np.array([[vehicle.s - 2.5 - RAMP_LENGTH], [vehicle.d - 1 + LANE_WIDTH - LANE_WIDTH / 2]])
-            v_rect_1 = v_rot.dot(v_rect_0)
-            rect_x = v_rect_1[0] + RAMP_LENGTH
-            rect_y = v_rect_1[1] + LANE_WIDTH / 2
-            v_veh_0 = np.array([[vehicle.s - RAMP_LENGTH], [vehicle.d + LANE_WIDTH - LANE_WIDTH / 2]])
-            v_veh_1 = v_rot.dot(v_veh_0)
-            veh_x = v_veh_1[0] + RAMP_LENGTH
-            veh_y = v_veh_1[1] + LANE_WIDTH / 2
+        x, y = lanes[list(lanes.keys())[vehicle.lane_id]].course_spline.frenet_to_cartesian1D(vehicle.s, vehicle.d)
+        yaw = lanes[list(lanes.keys())[vehicle.lane_id]].course_spline.calc_yaw(vehicle.s)
+        width = config["vehicle"]["car"]["width"]
+        length = config["vehicle"]["car"]["length"]
         ax.add_patch(
-            patches.Rectangle(
-                (rect_x, rect_y),
-                5,
-                2,
-                RAMP_ANGLE * 180.0 / math.pi if vehicle.lane_id == -1 else 0,
-                linewidth=1,
+            plt.Rectangle(
+                (
+                    x
+                    - math.sqrt(
+                        (width / 2) ** 2 + (length / 2) ** 2
+                    )
+                    * math.sin(
+                        math.atan2(length / 2, width / 2)
+                        - yaw
+                    ),
+                    y
+                    - math.sqrt(
+                        (width / 2) ** 2 + (length / 2) ** 2
+                    )
+                    * math.cos(
+                        math.atan2(length / 2, width / 2)
+                        - yaw
+                    ),
+                ),
+                length,
+                width,
+                angle=yaw / math.pi * 180,
                 facecolor=plt.cm.tab20(vehicle.group_idx),
+                fill=True,
+                alpha=0.7,
                 zorder=3,
-                alpha=0.5,
             )
         )
         ax.text(
-            veh_x,
-            veh_y,
+            x,
+            y,
             "%d,G%d" % (vehicle.id, vehicle.group_idx),
-            fontsize=8,
+            fontsize=6,
             horizontalalignment="center",
             verticalalignment="center",
-            rotation=RAMP_ANGLE * 180.0 / math.pi if vehicle.lane_id == -1 else 0,
+            rotation=yaw / math.pi * 180,
         )
         if target_decision:
-            if not vehicle.lane_id == -1:
-                if target_decision[vehicle.id] == "keep":
-                    ax.arrow(veh_x, veh_y, 5, 0,
-                             length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
-                elif target_decision[vehicle.id] == "turn_left":
-                    ax.arrow(veh_x, veh_y, 3, 4,
-                             length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
-                else:
-                    ax.arrow(veh_x, veh_y, 3, -4,
-                             length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
-            else:
-                ax.arrow(veh_x[0], veh_y[0], 5 * math.cos(RAMP_ANGLE), 5 * math.sin(RAMP_ANGLE),
+            if target_decision[vehicle.id] == "keep":
+                ax.arrow(x, y, 5 * math.cos(yaw), 5 * math.sin(yaw),
                          length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
-    ax.set_facecolor((0.9, 0.9, 0.9))
+            elif target_decision[vehicle.id] == "turn_left":
+                ax.arrow(x, y, 5 * math.cos(yaw + math.pi / 5), 5 * math.sin(yaw + math.pi / 5),
+                         length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
+            else:
+                ax.arrow(x, y, 5 * math.cos(yaw - math.pi / 5), 5 * math.sin(yaw - math.pi / 5),
+                         length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
+    ax.set_facecolor("lightgray")
+    ax.grid(True)
     ax.axis("equal")
-    ax.axis(xmin=0, xmax=scenario_size[0], ymin=-20, ymax=15)
     plt.pause(0)
 
 
