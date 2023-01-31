@@ -1,0 +1,18 @@
+Edges:
+  - id: E1
+    lane_num: 4
+    lane_width: 4
+    from_junction: null
+    to_junction: null
+    waypoints:
+      - x: 0
+        y: -4
+      - x: 200
+        y: -4
+
+    specific_lane:
+      0:
+        - x: 3.618442752845496
+          y: -18.521208599540124
+        - x: 60
+          y: 2

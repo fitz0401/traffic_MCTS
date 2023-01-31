@@ -4,18 +4,18 @@ from flow_state import FlowState
 
 
 def main():
-    # with open("../../config.yaml", "r", encoding='utf-8') as f:
-    #     config = yaml.load(f, Loader=yaml.FullLoader)
-    flow, target_decision = yaml_flow(config, lanes)
-    # flow, target_decision = random_flow(0, config, lanes)
+    flow, target_decision = yaml_flow()
+    # flow, target_decision = random_flow(1)
 
     start_time = time.time()
     # 找到超车对象
     for i, veh_i in enumerate(flow):
+        veh_i_lane_id = int((veh_i.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
         if decision_info[veh_i.id][0] == "overtake":
             for veh_j in flow[0:i]:
+                veh_j_lane_id = int((veh_j.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                 # 超车对象只能是巡航车
-                if veh_j.lane_id == veh_i.lane_id \
+                if veh_i_lane_id == veh_j_lane_id \
                         and decision_info[veh_j.id][0] == "cruise":
                     if len(decision_info[veh_i.id]) == 1:
                         decision_info[veh_i.id].append(veh_j.id)
@@ -26,16 +26,17 @@ def main():
                 decision_info[veh_i.id][0] = "cruise"
 
     # Interaction judge & Grouping
-    interaction_info = judge_interaction(flow, lanes, target_decision)
+    interaction_info = judge_interaction(flow, target_decision)
     flow_groups = grouping(flow, interaction_info)
     # 随机分组测试
-    # group_idx, flow_groups = random_grouping(flow)
-    # gol.set_value('group_idx', group_idx)
+    # flow_groups = random_grouping(flow)
     print("Grouping Time: %f\n" % (time.time() - start_time))
     print("flow_groups: \n", flow_groups)
 
     # Plot flow
-    plot_flow(flow, edges, lanes, junction_lanes, target_decision)
+    fig, ax = plt.subplots()
+    fig.set_size_inches(22, 4)
+    plot_flow(ax, flow, 2, target_decision)
 
     # 分组决策
     final_nodes = {}
@@ -61,8 +62,9 @@ def main():
         for veh in group:
             if decision_info[veh.id][0] == "cruise":
                 continue
+            veh_lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
             mcts_init_state[veh.id] = \
-                (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh.lane_id)
+                (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh_lane_id)
         # 本组内无决策车，无需进行决策
         if len(mcts_init_state) == 1:
             continue
@@ -105,7 +107,7 @@ def main():
     for idx, final_node in final_nodes.items():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否抵达目标车道
-            if abs(veh_state[1] - (TARGET_LANE[veh_idx] + 0.5) * LANE_WIDTH) > 0.5:
+            if abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5:
                 success = 0
                 print("Vehicle doesn't at aimed lane! veh_id", veh_idx,
                       "group_idx", group_idx[veh_idx])
@@ -117,7 +119,7 @@ def main():
                     if veh.id == decision_info[veh_idx][1]:
                         aim_veh = veh
                         break
-                if veh_state[0] < aim_veh.s + aim_veh.length:
+                if veh_state[0] < aim_veh.current_state.s + aim_veh.length:
                     success = 0
                     print("Vehicle doesn't finish overtaking! veh_id", veh_idx,
                           "group_idx", group_idx[veh_idx])
@@ -131,137 +133,12 @@ def main():
         flow_plot[t + 1] = predict_flow(flow_plot[t], t)
 
     # plot predictions
-    plt.ion()
-    fig, ax = plt.subplots()
-    fig.set_size_inches(22, 4)
-    plt.pause(0.5)
     frame_id = 0
     for t in range(int(prediction_time / DT)):
         ax.cla()
-        for veh in flow_plot[t]:
-            ax.add_patch(
-                patches.Rectangle(
-                    (veh.s - 2.5, veh.d - 1),
-                    5,
-                    2,
-                    linewidth=1,
-                    facecolor=plt.cm.tab20(veh.id),
-                    zorder=3,
-                    alpha=0.5,
-                )
-            )
-            ax.text(
-                veh.s,
-                veh.d,
-                veh.id,
-                fontsize=10,
-                horizontalalignment="center",
-                verticalalignment="center",
-            )
-        ax.plot([0, scenario_size[0]], [0, 0], 'k', linewidth=1)
-        ax.plot([0, scenario_size[0]], [4, 4], 'b--', linewidth=1)
-        ax.plot([0, scenario_size[0]], [8, 8], 'b--', linewidth=1)
-        ax.plot([0, scenario_size[0]], [12, 12], 'b--', linewidth=1)
-        ax.plot([0, scenario_size[0]], [16, 16], 'k', linewidth=1)
-        ax.set_facecolor((0.9, 0.9, 0.9))
-        ax.axis("equal")
-        ax.axis(xmin=0, xmax=scenario_size[0], ymin=0, ymax=15)
-        plt.pause(0.5)
+        plot_flow(ax, flow_plot[t], 0.5)
         plt.savefig("../../output_video" + "/frame%02d.png" % frame_id)
         frame_id += 1
-
-
-def yaml_flow(config, lanes):
-    flow = []
-    target_decision = {}
-    # Read from init_state.yaml from yaml
-    with open("../../init_state.yaml", "r") as f:
-        init_state = yaml.load(f, Loader=yaml.FullLoader)
-    for vehicle in init_state["vehicles"]:
-        # 获取车流信息
-        flow.append(
-            build_vehicle(
-                id=vehicle["id"],
-                vtype="car",
-                s0=vehicle["s"],
-                s0_d=vehicle["vel"],
-                d0=vehicle["d"],
-                lane_id=list(lanes.keys())[vehicle["lane_id"]],
-                target_speed=10.0,
-                behaviour=vehicle["vehicle_type"],
-                lanes=lanes,
-                config=config,
-            )
-        )
-        TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-        decision_info[vehicle["id"]][0] = vehicle["vehicle_type"]
-        # 获取target_decision：turn_left / turn_right / keep
-        if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
-            if decision_info[vehicle["id"]][0] == "overtake":
-                target_decision[vehicle["id"]] = "overtake"
-            else:
-                target_decision[vehicle["id"]] = "keep"
-        elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
-            target_decision[vehicle["id"]] = "turn_left"
-        else:
-            target_decision[vehicle["id"]] = "turn_right"
-    # sort flow first by s decreasingly
-    flow.sort(key=lambda x: (-x.current_state.s, x.lane_id))
-    print('flow:', flow)
-    return flow, target_decision
-
-
-def random_flow(random_seed, config, lanes):
-    flow = []
-    target_decision = {}
-    # Randomly generate vehicles
-    random.seed(random_seed)
-    while len(flow) < len_flow:
-        s = random.uniform(0, 60)
-        lane_id = random.randint(0, LANE_NUMS - 1)
-        d = random.uniform(-0.1, 0.1)
-        vel = random.uniform(5, 7)
-        veh = build_vehicle(
-            id=len(flow),
-            vtype="car",
-            s0=s,
-            s0_d=vel,
-            d0=d,
-            lane_id=list(lanes.keys())[lane_id],
-            target_speed=10.0,
-            behaviour="decision",
-            lanes=lanes,
-            config=config,
-        )
-        is_valid_veh = True
-        for other_veh in flow:
-            if other_veh.is_collide(veh):
-                is_valid_veh = False
-                break
-        if not is_valid_veh:
-            continue
-        flow.append(veh)
-        if lane_id == 0:
-            TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
-        elif lane_id == LANE_NUMS - 1:
-            TARGET_LANE[veh.id] = lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
-        else:
-            TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4
-                                             else random.choice((-1, 1)))
-        # 获取target_decision：turn_left / turn_right / keep
-        if TARGET_LANE[veh.id] == lane_id:
-            target_decision[veh.id] = "keep"
-            decision_info[veh.id][0] = "cruise"
-        elif TARGET_LANE[veh.id] > lane_id:
-            target_decision[veh.id] = "turn_left"
-            decision_info[veh.id][0] = "decision"
-        else:
-            target_decision[veh.id] = "turn_right"
-            decision_info[veh.id][0] = "decision"
-    # sort flow first by s decreasingly
-    flow.sort(key=lambda x: (-x.current_state.s, x.lane_id))
-    print('flow:', flow)
-    return flow, target_decision
 
 
 def predict_flow(flow, t):
@@ -271,19 +148,21 @@ def predict_flow(flow, t):
                      for veh in flow}
     # flow 已按照s降序排列
     for i, veh_i in enumerate(flow):
+        veh_i_lane_id = int((veh_i.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
         for veh_j in flow[i + 1:]:
-            if veh_j.lane_id == veh_i.lane_id:
+            veh_j_lane_id = int((veh_j.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+            if veh_i_lane_id == veh_j_lane_id:
                 if 'back' not in surround_cars[veh_i.id]['cur_lane']:
                     surround_cars[veh_i.id]['cur_lane']['back'] = veh_j
                     surround_cars[veh_j.id]['cur_lane']['front'] = veh_i
-            elif veh_j.lane_id == veh_i.lane_id - 1:
+            elif veh_i_lane_id - veh_j_lane_id == 1:
                 if 'back' not in surround_cars[veh_i.id]['right_lane']:
                     surround_cars[veh_i.id]['right_lane']['back'] = veh_j
-                    surround_cars[veh_j.id]['right_lane']['front'] = veh_i
-            elif veh_j.lane_id == veh_i.lane_id + 1:
+                    surround_cars[veh_j.id]['left_lane']['front'] = veh_i
+            elif veh_i_lane_id - veh_j_lane_id == -1:
                 if 'back' not in surround_cars[veh_i.id]['left_lane']:
                     surround_cars[veh_i.id]['left_lane']['back'] = veh_j
-                    surround_cars[veh_j.id]['left_lane']['front'] = veh_i
+                    surround_cars[veh_j.id]['right_lane']['front'] = veh_i
     # query or predict
     for veh in flow:
         if decision_info[veh.id][0] == "query" and (t + 1) * DT <= decision_info[veh.id][-1]:
@@ -298,59 +177,73 @@ def predict_flow(flow, t):
             if 'front' in surround_cars[veh.id]['cur_lane']:
                 leading_car = surround_cars[veh.id]['cur_lane']['front']
             if 'front' in surround_cars[veh.id]['left_lane'] and (
-                    abs(veh.d - surround_cars[veh.id]['left_lane']['front'].d)
+                    abs(veh.current_state.d - surround_cars[veh.id]['left_lane']['front'].current_state.d)
                     < LANE_WIDTH * 0.6
             ):
                 if leading_car is None:
                     leading_car = surround_cars[veh.id]['left_lane']['front']
-                elif leading_car.s > surround_cars[veh.id]['left_lane']['front'].s:
+                elif leading_car.current_state.s > surround_cars[veh.id]['left_lane']['front'].current_state.s:
                     leading_car = surround_cars[veh.id]['left_lane']['front']
             if 'front' in surround_cars[veh.id]['right_lane'] and (
-                    abs(veh.d - surround_cars[veh.id]['right_lane']['front'].d)
+                    abs(veh.current_state.d - surround_cars[veh.id]['right_lane']['front'].current_state.d)
                     < LANE_WIDTH * 0.6
             ):
                 if leading_car is None:
                     leading_car = surround_cars[veh.id]['right_lane']['front']
-                elif leading_car.s > surround_cars[veh.id]['right_lane']['front'].s:
+                elif leading_car.current_state.s > surround_cars[veh.id]['right_lane']['front'].current_state.s:
                     leading_car = surround_cars[veh.id]['right_lane']['front']
             # detect_collision
             if (
                     leading_car
-                    and leading_car.s - veh.s <= veh.length
-                    and abs(leading_car.d - veh.d) < veh.width * 0.5
+                    and leading_car.current_state.s - veh.current_state.s <= veh.length
+                    and abs(leading_car.current_state.d - veh.current_state.d) < veh.width * 0.5
             ):
                 raise SystemExit('Collision detected. Failed!')
             if leading_car is None:
                 next_flow.append(
-                    Vehicle(
+                    build_vehicle(
                         id=veh.id,
-                        state=[veh.s + veh.vel * DT, veh.d, veh.vel],
+                        vtype="car",
+                        s0=veh.current_state.s + veh.current_state.s_d * DT,
+                        s0_d=veh.current_state.s_d,
+                        d0=veh.current_state.d,
                         lane_id=veh.lane_id,
+                        target_speed=10.0,
+                        behaviour=decision_info[veh.id][0],
+                        lanes=lanes,
+                        config=config,
                     )
                 )
             else:
-                delta_v = veh.vel - leading_car.vel
-                s = leading_car.s - veh.s - veh.length
+                delta_v = veh.current_state.s_d - leading_car.current_state.s_d
+                s = leading_car.current_state.s - veh.current_state.s - veh.length
                 s = max(1.0, s)
                 s_star_raw = (
                         SAFE_DIST
-                        + veh.vel * REACTION_TIME
-                        + (veh.vel * delta_v) / (2 * SQRT_AB)
+                        + veh.current_state.s_d * REACTION_TIME
+                        + (veh.current_state.s_d * delta_v) / (2 * SQRT_AB)
                 )
                 s_star = max(s_star_raw, SAFE_DIST)
                 acc = PAR * (
-                        1 - np.power(veh.vel / veh.exp_vel, 4) - (s_star ** 2) / (s ** 2)
+                        1 - np.power(veh.current_state.s_d / veh.target_speed, 4) - (s_star ** 2) / (s ** 2)
                 )
-                acc = max(acc, veh.max_dec)
-                vel = max(0, veh.vel + acc * DT)
+                acc = max(acc, veh.max_decel)
+                vel = max(0, veh.current_state.s_d + acc * DT)
                 next_flow.append(
-                    Vehicle(
+                    build_vehicle(
                         id=veh.id,
-                        state=[veh.s + (vel + veh.vel) / 2 * DT, veh.d, vel],
+                        vtype="car",
+                        s0=veh.current_state.s + (vel + veh.current_state.s_d) / 2 * DT,
+                        s0_d=veh.current_state.s_d,
+                        d0=veh.current_state.d,
                         lane_id=veh.lane_id,
+                        target_speed=10.0,
+                        behaviour=decision_info[veh.id][0],
+                        lanes=lanes,
+                        config=config,
                     )
                 )
-    next_flow.sort(key=lambda x: (-x.s, x.lane_id))
+    next_flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     return next_flow
 
 

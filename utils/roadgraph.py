@@ -189,8 +189,7 @@ def right_lane(lanes, lane_id):
         return None
 
 
-def plot_roadgraph(edges, lanes, junction_lanes):
-    fig, ax = plt.subplots()
+def plot_roadgraph(ax, edges, lanes, junction_lanes):
     for edge in edges.values():
         for lane_index in range(edge.lane_num):
             lane_id = edge.id + '_' + str(lane_index)
@@ -270,7 +269,6 @@ def plot_roadgraph(edges, lanes, junction_lanes):
     ax.grid(True)
     ax.axis("equal")
     plt.show()
-    return fig, ax
 
 def build_roadgraph(file_path):
     with open(file_path, "r") as f:

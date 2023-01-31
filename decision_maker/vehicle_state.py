@@ -134,7 +134,6 @@ class VehicleState:
 
                     if d <= 0 or d >= scenario_size[1]:
                         continue
-                    # TODO: 碰撞检测的时机
                     # 检查当前动作是否会导致前后车辆间距不满足要求
                     target_lane = 'cur_lane'
                     if int(d / LANE_WIDTH) != lane_id:

@@ -6,30 +6,6 @@ from decision_maker.constant import *
 from utils.vehicle import build_vehicle
 
 
-# TODO: 适配多场景的换道检测
-def check_lane_change(veh_state, target_lane_id=None):
-    s = veh_state[0]
-    d = veh_state[1]
-    v = veh_state[2]
-    lane_id = veh_state[3]
-    # 无需自动换道检测
-    if target_lane_id is None and -LANE_WIDTH/2 <= d < LANE_WIDTH/2:
-        return veh_state
-    # 无需手动换道
-    elif target_lane_id and target_lane_id == lane_id:
-        return veh_state
-    else:
-        x, y = lanes[lane_id].course_spline.frenet_to_cartesian1D(s, d)
-        if target_lane_id:
-            new_lane_id = target_lane_id
-        else:
-            new_lane_id = roadgraph.right_lane(lanes, lane_id) \
-                if d < -LANE_WIDTH/2 else roadgraph.left_lane(lanes, lane_id)
-        refined_s = np.linspace(0, lanes[new_lane_id].course_spline.s[-1], 200)
-        new_s, new_d = lanes[new_lane_id].course_spline.cartesian_to_frenet1D(x, y, refined_s)
-        return round(new_s,1), round(new_d,1), v, new_lane_id
-
-
 class FlowState:
     TIME_LIMIT = prediction_time
 
@@ -55,7 +31,7 @@ class FlowState:
         self.decision_vehicles = deepcopy(self.states[-1])
         self.actions = actions
         self.flow = flow
-        self.flow.sort(key=lambda x: (-x.current_state.s, x.lane_id))
+        self.flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
         self.next_action = []
         self.decision_vehicles.pop('time')
 
@@ -91,7 +67,7 @@ class FlowState:
                         vel -= self.ACC * DT
                         vel = max(vel, 0)
                         s += vel * DT - 0.5 * self.ACC * DT * DT
-                    elif (abs(d - (TARGET_LANE[veh.id] + 0.5) * LANE_WIDTH) > LANE_WIDTH / 4
+                    elif (abs(d - TARGET_LANE[veh.id] * LANE_WIDTH) > LANE_WIDTH / 4
                           or decision_info[veh.id][0] == "overtake"):
                         if action == 'LCL':
                             d += self.CHANGE_LANE_D
@@ -101,26 +77,26 @@ class FlowState:
                             s += vel * DT
                     else:
                         continue
+
                     # 越界检查
-                    # TODO: 适配各种场景的越界检查
-                    if (list(lanes).index(lane_id) == 0 and d <= -LANE_WIDTH/2) or \
-                            (list(lanes).index(lane_id) == len(lanes) - 1 and d >= LANE_WIDTH/2):
+                    if d <= 0 - LANE_WIDTH/2 or d >= scenario_size[1] - LANE_WIDTH/2:
                         continue
-                    # 检查当前动作是否会导致前后车辆间距不满足要求
+
+                    # TODO: 碰撞检测的时机
                     target_lane = 'cur_lane'
-                    if d >= LANE_WIDTH/2:
-                        target_lane = 'left_lane'
-                    elif d < -LANE_WIDTH/2:
-                        target_lane = 'right_lane'
+                    new_lane_id = int((d + LANE_WIDTH/2) / LANE_WIDTH)
+                    if not new_lane_id == lane_id:
+                        if action == 'LCL':
+                            target_lane = 'left_lane'
+                        elif action == 'LCR':
+                            target_lane = 'right_lane'
                     front_veh = surround_cars[veh.id][target_lane].get('front', None)
                     back_veh = surround_cars[veh.id][target_lane].get('back', None)
-                    # 对可行动作进行换道检测
-                    temp_state = check_lane_change((s, d, vel, lane_id))
-                    if (front_veh and not front_veh.check_vel(temp_state[0], temp_state[2])) or (
-                            back_veh and not back_veh.check_vel(temp_state[0], temp_state[2])
+                    if (front_veh and not front_veh.check_vel(s, vel)) or (
+                            back_veh and not back_veh.check_vel(s, vel)
                     ):
                         continue
-                    self.action_for_each[veh.id][action] = temp_state
+                    self.action_for_each[veh.id][action] = (s, d, vel, new_lane_id)
             else:
                 for predict_veh in self.predicted_flow:
                     if predict_veh.id == veh.id:
@@ -167,7 +143,7 @@ class FlowState:
                         s0=next_state[veh_id][0],
                         s0_d=next_state[veh_id][2],
                         d0=next_state[veh_id][1],
-                        lane_id=next_state[veh_id][3],
+                        lane_id=[veh.lane_id for veh in self.flow if veh.id == veh_id][0],
                         target_speed=10.0,
                         behaviour=decision_info[veh_id][0],
                         lanes=lanes,
@@ -185,11 +161,9 @@ class FlowState:
         if self.num_moves == 0 or self.t >= self.TIME_LIMIT:
             return True
         for veh_id, veh_state in self.decision_vehicles.items():
-            virtual_veh_state = check_lane_change(veh_state, list(lanes.keys())[TARGET_LANE[veh_id]])
-            vir_s, vir_d = virtual_veh_state[0], virtual_veh_state[1]
             # 换道决策车还未行驶到目标车道
             if decision_info[veh_id][0] == "decision":
-                if abs(vir_d > 0.3):
+                if abs(veh_state[1] - TARGET_LANE[veh_id] * LANE_WIDTH) > 0.2:
                     return False
             # 超车决策车还未完成超车
             elif decision_info[veh_id][0] == "overtake":
@@ -200,7 +174,10 @@ class FlowState:
                         ego_veh = veh
                     if veh.id == decision_info[veh_id][1]:
                         aim_veh = veh
-                if abs(vir_d > 0.2) or vir_s <= aim_veh.current_state.s + 1.5 * ego_veh.length:
+                ego_veh_lane_id = int((ego_veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+                aim_veh_lane_id = int((aim_veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+                if (not ego_veh_lane_id == aim_veh_lane_id) \
+                        or ego_veh.s <= aim_veh.s + 1.5 * ego_veh.length:
                     return False
         return True
 
@@ -211,9 +188,7 @@ class FlowState:
         for veh_id, veh_state in self.decision_vehicles.items():
             self_reward = 0.0
             other_reward = 0.0
-            # virtual_veh 在目标换道/超车车道上
-            virtual_veh_state = check_lane_change(veh_state, list(lanes.keys())[TARGET_LANE[veh_id]])
-            vir_s, vir_d = virtual_veh_state[0], virtual_veh_state[1]
+            s, d = veh_state[0], veh_state[1]
             # 超车终止状态奖励：reward += 0.8
             aim_veh = None
             if decision_info[veh_id][0] == "overtake":
@@ -221,32 +196,30 @@ class FlowState:
                     if veh.id == decision_info[veh_id][1]:
                         aim_veh = veh
                         break
-                if vir_s > aim_veh.s + aim_veh.length and abs(vir_d) < 0.5:
+                if s > aim_veh.s + aim_veh.length \
+                        and abs(d - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.5:
                     self_reward += 0.8
             # 换道终止状态奖励：距离目标车道线横向距离，<0.5表示换道成功：reward += 0.8
             else:
-                if abs(vir_d) < 0.5:
+                if abs(d - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.5:
                     self_reward += 0.8
             # 决策过程奖励
             total_action_num = len(self.actions[veh_id])
             for i in range(len(self.actions[veh_id])):
-                temp_virtual_state = \
-                    check_lane_change(self.states[i][veh_id], list(lanes.keys())[TARGET_LANE[veh_id]])
-                temp_vir_s, temp_vir_d = temp_virtual_state[0], temp_virtual_state[1]
                 if decision_info[veh_id][0] == "overtake":
                     # 累计每一步动作超车完成的奖励
-                    if temp_vir_s > aim_veh.s + aim_veh.length:
+                    if self.states[i][veh_id][0] > aim_veh.s + aim_veh.length:
                         self_reward += 0.1 / total_action_num
-                        if abs(temp_vir_d) <= 0.5:
+                        if abs(self.states[i][veh_id][1] - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.2:
                             self_reward += 0.2 / total_action_num
                     if self.states[i][veh_id][2] > aim_veh.current_state.s_d:
                         self_reward += 0.1 / total_action_num
                 else:
                     # 累计每一步动作换道完成的奖励
-                    if abs(temp_vir_d) < 0.5:
+                    if abs(self.states[i][veh_id][1] - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.5:
                         self_reward += 0.2 / total_action_num
                     # 保持车道中心线行驶
-                    if abs(self.states[i][veh_id][1]) < 0.5:
+                    if self.states[i][veh_id][1] % LANE_WIDTH < 0.5:
                         self_reward += 0.1 / total_action_num
                     # 保持动作连续性：reward += 0.2 / max_action_num
                     if i > 0 and self.actions[veh_id][i] == self.actions[veh_id][i - 1]:
@@ -272,39 +245,43 @@ class FlowState:
                          for veh in self.flow}
         # flow 已按照s降序排列
         for i, veh_i in enumerate(self.flow):
+            veh_i_lane_id = int((veh_i.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
             for veh_j in self.flow[i+1:]:
-                if veh_j.lane_id == veh_i.lane_id:
+                veh_j_lane_id = int((veh_j.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+                if veh_i_lane_id == veh_j_lane_id:
                     if 'back' not in surround_cars[veh_i.id]['cur_lane']:
                         surround_cars[veh_i.id]['cur_lane']['back'] = veh_j
                         surround_cars[veh_j.id]['cur_lane']['front'] = veh_i
-                elif veh_j.lane_id == roadgraph.right_lane(lanes, veh_i.lane_id):
+                elif veh_i_lane_id - veh_j_lane_id == 1:
                     if 'back' not in surround_cars[veh_i.id]['right_lane']:
                         surround_cars[veh_i.id]['right_lane']['back'] = veh_j
                         surround_cars[veh_j.id]['left_lane']['front'] = veh_i
-                elif veh_j.lane_id == roadgraph.left_lane(lanes, veh_i.lane_id):
+                elif veh_i_lane_id - veh_j_lane_id == -1:
                     if 'back' not in surround_cars[veh_i.id]['left_lane']:
                         surround_cars[veh_i.id]['left_lane']['back'] = veh_j
                         surround_cars[veh_j.id]['right_lane']['front'] = veh_i
         predict_flow = []
         for veh in self.flow:
-            # find leading_car: 转化至和当前veh同一车道
+            # find leading_car
             leading_car = None
             if 'front' in surround_cars[veh.id]['cur_lane']:
                 leading_car = surround_cars[veh.id]['cur_lane']['front']
-            if 'front' in surround_cars[veh.id]['left_lane']:
-                left_leading_veh = surround_cars[veh.id]['left_lane']['front'].\
-                    change_to_next_lane(veh.lane_id, lanes[veh.lane_id].course_spline)
-                if abs(left_leading_veh.current_state.d - veh.current_state.d) < LANE_WIDTH * 0.6:
-                    if leading_car is None \
-                            or left_leading_veh.current_state.s < leading_car.current_state.s:
-                        leading_car = left_leading_veh
-            if 'front' in surround_cars[veh.id]['right_lane']:
-                right_leading_veh = surround_cars[veh.id]['right_lane']['front'].\
-                    change_to_next_lane(veh.lane_id, lanes[veh.lane_id].course_spline)
-                if abs(right_leading_veh.current_state.d - veh.current_state.d) < LANE_WIDTH * 0.6:
-                    if leading_car is None\
-                            or right_leading_veh.current_state.s < leading_car.current_state.s:
-                        leading_car = right_leading_veh
+            if 'front' in surround_cars[veh.id]['left_lane'] and (
+                    abs(veh.current_state.d - surround_cars[veh.id]['left_lane']['front'].current_state.d)
+                    < LANE_WIDTH * 0.6
+            ):
+                if leading_car is None:
+                    leading_car = surround_cars[veh.id]['left_lane']['front']
+                elif leading_car.current_state.s > surround_cars[veh.id]['left_lane']['front'].current_state.s:
+                    leading_car = surround_cars[veh.id]['left_lane']['front']
+            if 'front' in surround_cars[veh.id]['right_lane'] and (
+                    abs(veh.current_state.d - surround_cars[veh.id]['right_lane']['front'].current_state.d)
+                    < LANE_WIDTH * 0.6
+            ):
+                if leading_car is None:
+                    leading_car = surround_cars[veh.id]['right_lane']['front']
+                elif leading_car.current_state.s > surround_cars[veh.id]['right_lane']['front'].current_state.s:
+                    leading_car = surround_cars[veh.id]['right_lane']['front']
             # detect_collision
             if (
                     leading_car

@@ -63,7 +63,6 @@ class Vehicle:
 
         return vehicle_new_lane
 
-    # TODO: 变换为笛卡尔坐标后，映射到同一车道，进行碰撞检测
     def is_collide(self, other: 'Vehicle') -> bool:
         if self.lane_id != other.lane_id:
             return False
