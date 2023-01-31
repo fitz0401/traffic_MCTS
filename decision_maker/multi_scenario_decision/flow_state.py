@@ -4,6 +4,7 @@ import itertools
 import random
 from decision_maker.constant import *
 from utils.vehicle import build_vehicle
+from utils.obstacle_cost import check_collsion_new
 
 
 class FlowState:
@@ -37,12 +38,45 @@ class FlowState:
 
         # update flow
         self.predicted_flow, surround_cars = self.predict_flow()
-        # collision detected
         if self.predicted_flow is None and surround_cars is None:
             self.num_moves = 0
             return
 
-        # filt available actions
+        # collision detected
+        no_conflict_veh = set()
+        for ego_veh in self.flow:
+            if ego_veh.id in self.decision_vehicles:
+                potential_obs = []
+                # only check cur_lane + left/right_lane other_veh
+                for other_veh in surround_cars[ego_veh.id]['cur_lane'].values():
+                    potential_obs.append(other_veh)
+                mid_lane_d = int((ego_veh.current_state.d + LANE_WIDTH/2) / LANE_WIDTH) * LANE_WIDTH
+                if ego_veh.current_state.d > mid_lane_d:
+                    for other_veh in surround_cars[ego_veh.id]['left_lane'].values():
+                        potential_obs.append(other_veh)
+                elif ego_veh.current_state.d < mid_lane_d:
+                    for other_veh in surround_cars[ego_veh.id]['right_lane'].values():
+                        potential_obs.append(other_veh)
+                # only check decision_ego_veh
+                for obs_veh in potential_obs:
+                    if obs_veh.id in no_conflict_veh:
+                        continue
+                    is_collided, _ = check_collsion_new(
+                        np.array([ego_veh.current_state.x, ego_veh.current_state.y]),
+                        ego_veh.length,
+                        ego_veh.width,
+                        ego_veh.current_state.yaw,
+                        np.array([obs_veh.current_state.x, obs_veh.current_state.y]),
+                        obs_veh.length,
+                        obs_veh.width,
+                        obs_veh.current_state.yaw,
+                    )
+                    if is_collided:
+                        self.num_moves = 0
+                        return
+                no_conflict_veh.add(ego_veh.id)
+
+        # available actions
         self.action_for_each = {}
         t = self.t + DT
         for veh in self.flow:
@@ -82,20 +116,8 @@ class FlowState:
                     if d <= 0 - LANE_WIDTH/2 or d >= scenario_size[1] - LANE_WIDTH/2:
                         continue
 
-                    # TODO: 碰撞检测的时机
-                    target_lane = 'cur_lane'
+                    # 车道更新
                     new_lane_id = int((d + LANE_WIDTH/2) / LANE_WIDTH)
-                    if not new_lane_id == lane_id:
-                        if action == 'LCL':
-                            target_lane = 'left_lane'
-                        elif action == 'LCR':
-                            target_lane = 'right_lane'
-                    front_veh = surround_cars[veh.id][target_lane].get('front', None)
-                    back_veh = surround_cars[veh.id][target_lane].get('back', None)
-                    if (front_veh and not front_veh.check_vel(s, vel)) or (
-                            back_veh and not back_veh.check_vel(s, vel)
-                    ):
-                        continue
                     self.action_for_each[veh.id][action] = (s, d, vel, new_lane_id)
             else:
                 for predict_veh in self.predicted_flow:

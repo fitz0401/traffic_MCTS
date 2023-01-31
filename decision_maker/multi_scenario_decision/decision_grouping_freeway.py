@@ -4,8 +4,8 @@ from flow_state import FlowState
 
 
 def main():
-    flow, target_decision = yaml_flow()
-    # flow, target_decision = random_flow(1)
+    # flow, target_decision = yaml_flow()
+    flow, target_decision = random_flow(0)
 
     start_time = time.time()
     # 找到超车对象
