@@ -24,13 +24,19 @@ with open("../../config.yaml", "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 # Road param
+edges, lanes, junction_lanes = \
+    roadgraph.build_roadgraph("../../roadgraph_ramp.yaml")
 LANE_WIDTH = 4
-LANE_NUMS = 4
+LANE_NUMS = 0
+for lane in lanes.values():
+    if lane.course_spline.s[-1] == \
+            lanes[list(lanes.keys())[0]].course_spline.s[-1]:
+        LANE_NUMS += 1
+    else:
+        break
 scenario_size = [150, LANE_WIDTH * LANE_NUMS]
-edges, lanes, junction_lanes = roadgraph.build_roadgraph("../../roadgraph.yaml")
-RAMP_LENGTH = 80
+RAMP_LENGTH = 60
 RAMP_ANGLE = math.pi / 9
-RAMP_LANE_NUMS = LANE_WIDTH - 1
 
 # Decision param
 prediction_time = 20  # seconds

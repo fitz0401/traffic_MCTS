@@ -6,13 +6,15 @@ Edges:
     to_junction: null
     waypoints:
       - x: 0
-        y: -4
-      - x: 200
-        y: -4
+        y: 0
+      - x: 300
+        y: 0
 
     specific_lane:
-      0:
+      3:
         - x: 3.618442752845496
           y: -18.521208599540124
         - x: 60
+          y: 2
+        - x: 70
           y: 2

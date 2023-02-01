@@ -3,57 +3,57 @@ vehicles:
     s: 30.0
     vel: 7
     d: 0
-    lane_id: 3
+    lane_id: 2
     target_lane: 2
-    vehicle_type: decision
+    vehicle_type: cruise
   - id: 1
-    s: 5.0
+    s: 20.0
     vel: 7
     d: 0
-    lane_id: 0
-    target_lane: 1
-    vehicle_type: decision
+    lane_id: -1
+    target_lane: 0
+    vehicle_type: merge
   - id: 2
-    s: 15.0
+    s: 12.0
     vel: 5.0
     d: 0
-    lane_id: 3
-    target_lane: 2
+    lane_id: 2
+    target_lane: 1
     vehicle_type: decision
   - id: 3
-    s: 20.0
+    s: 15.0
+    vel: 6
+    d: 0
+    lane_id: 0
+    target_lane: 0
+    vehicle_type: cruise
+  - id: 4
+    s: 30.0
     vel: 6
     d: 0
     lane_id: 1
     target_lane: 0
     vehicle_type: decision
-  - id: 4
-    s: 30.0
-    vel: 6
-    d: 0
-    lane_id: 2
-    target_lane: 2
-    vehicle_type: cruise
   - id: 5
-    s: 28.0
+    s: 45.0
     vel: 6
     d: 0.5
-    lane_id: 0
+    lane_id: -1
     target_lane: 0
-    vehicle_type: cruise
+    vehicle_type: merge
   - id: 6
-    s: 10.0
+    s: 8.0
     vel: 5
     d: 0.5
-    lane_id: 2
-    target_lane: 2
+    lane_id: 1
+    target_lane: 1
     vehicle_type: cruise
   - id: 7
     s: 40.0
     vel: 6.5
     d: 0
-    lane_id: 1
-    target_lane: 1
+    lane_id: 0
+    target_lane: 0
     vehicle_type: cruise
 #  - id: 0
 #    s: 25

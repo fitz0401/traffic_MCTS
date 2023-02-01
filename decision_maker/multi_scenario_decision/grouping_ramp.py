@@ -1,26 +1,94 @@
+import copy
 import time
 import random
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from decision_maker.constant import *
-from decision_maker.vehicle_state import (
-    Vehicle,
-    LANE_WIDTH,
-)
+from utils.vehicle import build_vehicle
 
 
 def main():
+    flow, target_decision = yaml_flow()
+    # flow, target_decision = random_flow(0)
+
+    start_time = time.time()
+    print('flow:', flow)
+    # Interaction judge & Grouping
+    interaction_info = judge_interaction(flow, target_decision)
+    group_info = grouping(flow, interaction_info)
+    print("group_info:", group_info)
+    print("Grouping Time: %f\n" % (time.time() - start_time))
+
+    # Plot flow
+    fig, ax = plt.subplots()
+    fig.set_size_inches(16, 4)
+    plot_flow(ax, flow, 0, target_decision)
+
+
+def yaml_flow():
     flow = []
     target_decision = {}
+    # Read from init_state.yaml from yaml
+    with open("../../init_state.yaml", "r") as f:
+        init_state = yaml.load(f, Loader=yaml.FullLoader)
+    for vehicle in init_state["vehicles"]:
+        # 获取车流信息
+        flow.append(
+            build_vehicle(
+                id=vehicle["id"],
+                vtype="car",
+                s0=vehicle["s"],
+                s0_d=vehicle["vel"],
+                d0=vehicle["d"] if vehicle["lane_id"] < 0 else vehicle["d"] + vehicle["lane_id"] * LANE_WIDTH,
+                lane_id=list(lanes.keys())[-1] if vehicle["lane_id"] < 0 else list(lanes.keys())[0],
+                target_speed=10.0,
+                behaviour=vehicle["vehicle_type"],
+                lanes=lanes,
+                config=config,
+            )
+        )
+        decision_info[vehicle["id"]][0] = vehicle["vehicle_type"]
+        # 获取target_decision：turn_left / turn_right / keep / overtake / merge
+        TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
+        if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
+            if decision_info[vehicle["id"]][0] == "overtake":
+                target_decision[vehicle["id"]] = "overtake"
+            else:
+                target_decision[vehicle["id"]] = "keep"
+        elif decision_info[vehicle["id"]][0] == "merge":
+            target_decision[vehicle["id"]] = "keep"
+        elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
+            target_decision[vehicle["id"]] = "turn_left"
+        else:
+            target_decision[vehicle["id"]] = "turn_right"
+    # sort flow first by s decreasingly
+    flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
+    print('flow:', flow)
+    return flow, target_decision
 
+
+def random_flow(random_seed):
+    flow = []
+    target_decision = {}
     # Randomly generate vehicles
-    random.seed(0)
-    while len(flow) < 15:
-        s = random.uniform(5, 75)
-        lane_id = random.randint(0, LANE_NUMS - 1) - 1
-        d = random.uniform(-0.5, 0.5) + (lane_id + 0.5) * LANE_WIDTH
-        vel = random.uniform(5, 10)
-        veh = Vehicle(id=len(flow), state=[s, d, vel], lane_id=lane_id)
+    random.seed(random_seed)
+    while len(flow) < len_flow:
+        lane_id = random.randint(0, LANE_NUMS) - 1
+        s = random.uniform(0, RAMP_LENGTH) if lane_id < 0 else random.uniform(0, 60)
+        d = random.uniform(-0.1, 0.1) if lane_id < 0 \
+            else random.uniform(-0.1, 0.1) + lane_id * LANE_WIDTH
+        vel = random.uniform(5, 7)
+        veh = build_vehicle(
+            id=len(flow),
+            vtype="car",
+            s0=s,
+            s0_d=vel,
+            d0=d,
+            lane_id=list(lanes.keys())[-1] if lane_id < 0 else list(lanes.keys())[0],
+            target_speed=10.0,
+            behaviour="decision",
+            lanes=lanes,
+            config=config,
+        )
         is_valid_veh = True
         for other_veh in flow:
             if other_veh.is_collide(veh):
@@ -29,109 +97,87 @@ def main():
         if not is_valid_veh:
             continue
         flow.append(veh)
-        if veh.lane_id == 0:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((0, 1))
-        elif veh.lane_id == RAMP_LANE_NUMS - 1:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0))
-        elif veh.lane_id == -1:
+        if lane_id < 0:
             TARGET_LANE[veh.id] = 0
+        elif lane_id == 0:
+            TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
+        elif lane_id == LANE_NUMS - 1:
+            TARGET_LANE[veh.id] = lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
         else:
-            TARGET_LANE[veh.id] = veh.lane_id + random.choice((-1, 0, 1))
-        # 获取target_decision：turn_left / turn_right / keep
-        if veh.lane_id == -1:
+            TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4
+                                             else random.choice((-1, 1)))
+        # 获取target_decision：turn_left / turn_right / keep / overtake / merge
+        if lane_id < 0:
             target_decision[veh.id] = "keep"
+            decision_info[veh.id][0] = "merge"
+        elif TARGET_LANE[veh.id] == lane_id:
+            target_decision[veh.id] = "keep"
+            decision_info[veh.id][0] = "cruise"
+        elif TARGET_LANE[veh.id] > lane_id:
+            target_decision[veh.id] = "turn_left"
+            decision_info[veh.id][0] = "decision"
         else:
-            if TARGET_LANE[veh.id] == veh.lane_id:
-                target_decision[veh.id] = "keep"
-            elif TARGET_LANE[veh.id] > veh.lane_id:
-                target_decision[veh.id] = "turn_left"
-            else:
-                target_decision[veh.id] = "turn_right"
-
-    # # Read from init_state.yaml from yaml
-    # with open("../init_state.yaml", "r") as f:
-    #     init_state = yaml.load(f, Loader=yaml.FullLoader)
-    # for vehicle in init_state["vehicles"]:
-    #     # 获取车流信息
-    #     flow.append(
-    #         Vehicle(
-    #             id=vehicle["id"],
-    #             state=[
-    #                 vehicle["s"],
-    #                 0 + (vehicle["lane_id"] + 0.5) * LANE_WIDTH,
-    #                 vehicle["vel"],
-    #             ],
-    #             lane_id=vehicle["lane_id"],
-    #         )
-    #     )
-    #     TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
-    #     # 获取target_decision：turn_left / turn_right / keep
-    #     if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
-    #         target_decision[vehicle["id"]] = "keep"
-    #     elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
-    #         target_decision[vehicle["id"]] = "turn_left"
-    #     else:
-    #         target_decision[vehicle["id"]] = "turn_right"
+            target_decision[veh.id] = "turn_right"
+            decision_info[veh.id][0] = "decision"
     # sort flow first by s decreasingly
-    start_time = time.time()
-    flow.sort(key=lambda x: (-x.s, x.lane_id))
+    flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     print('flow:', flow)
-
-    # Interaction judge & Grouping
-    interaction_info = judge_interaction(flow, target_decision)
-    group_info, group_interaction_info = grouping(flow, interaction_info)
-    print("group_info:", group_info)
-    print("group_interaction_info:", group_interaction_info)
-    print("Grouping Time: %f\n" % (time.time() - start_time))
-
-    # Plot flow
-    plot_flow(flow, target_decision)
+    return flow, target_decision
 
 
 def judge_interaction(flow, target_decision):
     vehicle_num = len(flow)
     interaction_info = -1 * np.ones((vehicle_num, vehicle_num))  # 交互矩阵中的元素初始化为-1
+    # 人为设定超车关系具备交互可能性
+    for veh_id, veh_info in decision_info.items():
+        if veh_info[0] == "overtake":
+            interaction_info[veh_id][veh_info[1]] = interaction_info[veh_info[1]][veh_id] = 1
     merge_zone_ids = []
     # 判断车辆的交互可能性
     for i, veh_i in enumerate(flow):
+        # 利用横坐标判断所在车道，注意区分匝道和主路
+        veh_i_lane_id = get_lane_id(veh_i)
         # 记录车辆是否在merge_zone中
-        if (veh_i.lane_id == 0 or veh_i.lane_id == -1) and (RAMP_LENGTH - 30 <= veh_i.s <= RAMP_LENGTH):
+        if (veh_i_lane_id == 0 or veh_i_lane_id == -1) and (RAMP_LENGTH - 20 <= veh_i.current_state.s <= RAMP_LENGTH):
             merge_zone_ids.append(i)
         for veh_j in flow[i + 1:]:
+            veh_j_lane_id = get_lane_id(veh_j)
             # 无交互：满足横向安全距离
-            if abs(veh_i.lane_id - veh_j.lane_id) >= 3:
+            if abs(veh_i_lane_id - veh_j_lane_id) >= 3:
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                 continue
-            if abs(veh_i.lane_id - veh_j.lane_id) >= 2:
+            if abs(veh_i_lane_id - veh_j_lane_id) >= 2:
                 # 相隔一条车道，只有两车都向中间车道换道，才会产生交互
-                (veh_left, veh_right) = (veh_i, veh_j) if veh_i.d >= veh_j.d else (veh_j, veh_i)
+                (veh_left, veh_right) = (veh_i, veh_j) \
+                    if veh_i.current_state.d >= veh_j.current_state.d else (veh_j, veh_i)
                 if not (target_decision[veh_left.id] == "turn_right" and target_decision[veh_right.id] == "turn_left"):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 无交互：满足纵向安全距离
-            # TODO: 纵向安全距离的确定
-            safe_s = max(T_group * (veh_j.vel - veh_i.vel + 0.9 * T_group) + SAFE_DIST, SAFE_DIST)
-            if veh_i.s - veh_j.s >= safe_s:
+            safe_s = max(T_group * (veh_j.current_state.s_d - veh_i.current_state.s_d + 0.9 * T_group)
+                         + SAFE_DIST, SAFE_DIST)
+            if veh_i.current_state.s - veh_j.current_state.s >= safe_s:
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                 continue
             # 无交互：前车直行，左后方车直行或左变道 / 右后方车直行或右变道
             if target_decision[veh_i.id] == "keep":
-                if (veh_j.lane_id - veh_i.lane_id == 1 and
+                if (veh_j_lane_id - veh_i_lane_id == 1 and
                         target_decision[veh_j.id] in {"keep", "turn_left"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
-                elif (veh_j.lane_id - veh_i.lane_id == -1 and
+                elif (veh_j_lane_id - veh_i_lane_id == -1 and
                       target_decision[veh_j.id] in {"keep", "turn_right"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
+            # 无交互：前车左变道，右后方车直行或右变道
             if target_decision[veh_i.id] == "turn_left":
-                if (veh_j.lane_id - veh_i.lane_id == -1 and
+                if (veh_j_lane_id - veh_i_lane_id == -1 and
                         target_decision[veh_j.id] in {"keep", "turn_right"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 无交互：前车右变道，左后方车直行或左变道
             if target_decision[veh_i.id] == "turn_right":
-                if (veh_j.lane_id - veh_i.lane_id == 1 and
+                if (veh_j_lane_id - veh_i_lane_id == 1 and
                         target_decision[veh_j.id] in {"keep", "turn_left"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
@@ -142,156 +188,160 @@ def judge_interaction(flow, target_decision):
         veh_i = flow[veh_i_idx]
         for veh_j_idx in merge_zone_ids[i + 1:]:
             veh_j = flow[veh_j_idx]
-            safe_s = max(T_group * (veh_j.vel - veh_i.vel + 0.9 * T_group) + SAFE_DIST, SAFE_DIST)
-            if veh_i.s - veh_j.s < safe_s:
+            safe_s = max(T_group * (veh_j.current_state.s_d - veh_i.current_state.s_d + 0.9 * T_group)
+                         + SAFE_DIST, SAFE_DIST)
+            if veh_i.current_state.s - veh_j.current_state.s < safe_s:
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 1
         merge_zone_ids[i] = veh_i.id
-    print("merge_zone_ids:", merge_zone_ids)
     return interaction_info
 
 
 def grouping(flow, interaction_info):
+    """ group_idx: [车号|组号]; group_info：[组号|组内车流] """
     # 从flow中的第一辆车开始进行聚类，依据车辆之间的交互可能性
     max_group_size = 3
-    group_info = {1: [flow[0].id]}
-    flow[0].group_idx = 1
+    group_info = {1: [flow[0]]}
+    group_idx[flow[0].id] = 1
     # 依据交互可能性进行分组
     group_interaction_info = []  # 记录组与组之间的交互信息
     for i, veh_i in enumerate(flow[1:], start=1):
+        # 优先把超车车辆和被超车车辆分为一组
+        if decision_info[veh_i.id][0] == "overtake":
+            group_idx[veh_i.id] = group_idx[decision_info[veh_i.id][1]]
+            group_info[group_idx[veh_i.id]].append(veh_i)
+            continue
         # 检查车辆i能否和车辆j分为一组, 倒序遍历j~(i,0],确保临近分组
         for j in range(i - 1, -1, -1):
             veh_j = flow[j]
             # j所在分组已满
-            if len(group_info[veh_j.group_idx]) >= max_group_size:
+            if len(group_info[group_idx[veh_j.id]]) >= max_group_size:
                 continue
             # 无交互可能性
             if interaction_info[veh_i.id][veh_j.id] == 0:
                 continue
             # 存在交互可能性：分组后跳出循环，防止i被重复分组
             elif interaction_info[veh_i.id][veh_j.id] == 1:
-                veh_i.group_idx = veh_j.group_idx
-                group_info[veh_i.group_idx].append(veh_i.id)
+                group_idx[veh_i.id] = group_idx[veh_j.id]
+                group_info[group_idx[veh_i.id]].append(veh_i)
                 break
         # 若i仍未被分组(潜在交互车辆所在分组已满 或 与其它车辆均无交互关系)，则单独分为一组
-        if veh_i.group_idx == 0:
-            veh_i.group_idx = len(group_info) + 1
-            group_info[veh_i.group_idx] = [veh_i.id]
+        if group_idx[veh_i.id] == 0:
+            group_idx[veh_i.id] = len(group_info) + 1
+            group_info[group_idx[veh_i.id]] = [veh_i]
     # 生成组间交互信息group_interaction_info
     for i, veh_i in enumerate(flow):
         if len(np.where(interaction_info[veh_i.id] == 1)[0]) == 0:
-            group_interaction_info.append([veh_i.group_idx])
+            group_interaction_info.append([group_idx[veh_i.id]])
             continue
         for veh_j in flow[i+1:]:
             if interaction_info[veh_i.id, veh_j.id] == 1:
-                if veh_i.group_idx == veh_j.group_idx:
+                if group_idx[veh_i.id] == group_idx[veh_j.id]:
                     continue
                 else:
                     is_existed = False
                     for groups in group_interaction_info:
-                        i_existed = groups.count(veh_i.group_idx)
-                        j_existed = groups.count(veh_j.group_idx)
+                        i_existed = groups.count(group_idx[veh_i.id])
+                        j_existed = groups.count(group_idx[veh_j.id])
                         if i_existed and j_existed:
                             is_existed = True
                             break
                         if i_existed and not j_existed:
                             is_existed = True
-                            groups.append(veh_j.group_idx)
+                            groups.append(group_idx[veh_j.id])
                             break
                         elif not i_existed and j_existed:
                             is_existed = True
-                            groups.append(veh_i.group_idx)
+                            groups.append(group_idx[veh_i.id])
                             break
                     if not is_existed:
-                        group_interaction_info.append([veh_i.group_idx, veh_j.group_idx])
-    for group_idx in group_info:
+                        group_interaction_info.append([group_idx[veh_i.id], group_idx[veh_j.id]])
+    for idx in group_info.keys():
         is_existed = False
         for groups in group_interaction_info:
-            if groups.count(group_idx):
+            if groups.count(idx):
                 is_existed = True
                 break
         if not is_existed:
-            group_interaction_info.append([group_idx])
-    return group_info, group_interaction_info
+            group_interaction_info.append([idx])
+    print("group_interaction_info: ", group_interaction_info)
+    return group_info
 
 
-# TODO: 编写一个坐标变换函数，用于显示在匝道上的车(lane_id = -1)的真实位置
-def plot_flow(flow, target_decision=None):
+def random_grouping(flow):
+    max_group_size = 3
+    random_flow = copy.deepcopy(flow)
+    random.shuffle(random_flow)
+    veh_num = len(flow)
+    group_num = random.choice((math.ceil(veh_num / max_group_size),
+                               math.ceil(veh_num / max_group_size + 1)))
+    group_info = {i + 1: [] for i in range(group_num)}
+    for i, veh in enumerate(random_flow):
+        group_idx[veh.id] = i % group_num + 1
+        group_info[i % group_num + 1].append(veh)
+    return group_info
+
+
+def plot_flow(ax, flow, pause_t, target_decision=None):
     if target_decision is None:
         target_decision = []
     plt.ion()  # 将 figure 设置为交互模式，figure 不用 plt.show() 也可以显示
-    fig, ax = plt.subplots()
-    fig.set_size_inches(16, 4)
-    # 绘制路段
-    v_rot = np.array([[math.cos(RAMP_ANGLE), -math.sin(RAMP_ANGLE)],
-                      [math.sin(RAMP_ANGLE), math.cos(RAMP_ANGLE)]])
-    v_0 = np.array([[-RAMP_LENGTH], [0]])
-    v_1 = v_rot.dot(v_0)
-    v1_norm = v_1 / np.linalg.norm(v_1)
-    ramp_dx = LANE_WIDTH / 2 / math.sin(RAMP_ANGLE)
-    ax.plot([(v1_norm * ramp_dx)[0] + RAMP_LENGTH - ramp_dx, (v1_norm * RAMP_LENGTH)[0] + RAMP_LENGTH - ramp_dx],
-            [0, (v1_norm * RAMP_LENGTH)[1] + LANE_WIDTH / 2], 'k', linewidth=1)
-    ax.plot([(v1_norm * ramp_dx)[0] + RAMP_LENGTH + ramp_dx, (v1_norm * RAMP_LENGTH)[0] + RAMP_LENGTH + ramp_dx],
-            [0, (v1_norm * RAMP_LENGTH)[1] + LANE_WIDTH / 2], 'k', linewidth=1)
-    ax.plot([0, (v1_norm * ramp_dx)[0] + RAMP_LENGTH - ramp_dx], [0, 0], 'k', linewidth=1)
-    ax.plot([(v1_norm * ramp_dx)[0] + RAMP_LENGTH + ramp_dx, scenario_size[0]], [0, 0], 'k', linewidth=1)
-    ax.plot([0, scenario_size[0]], [4, 4], 'b--', linewidth=1)
-    ax.plot([0, scenario_size[0]], [8, 8], 'b--', linewidth=1)
-    ax.plot([0, scenario_size[0]], [12, 12], 'k', linewidth=1)
-    # 绘制车辆
+    roadgraph.plot_roadgraph(ax, edges, lanes, junction_lanes)
+    # 绘制车流
     for vehicle in flow:
-        if not vehicle.lane_id == -1:
-            rect_x = vehicle.s - 2.5
-            rect_y = vehicle.d - 1
-            veh_x = vehicle.s
-            veh_y = vehicle.d
-        else:
-            v_rect_0 = np.array([[vehicle.s - 2.5 - RAMP_LENGTH], [vehicle.d - 1 + LANE_WIDTH - LANE_WIDTH / 2]])
-            v_rect_1 = v_rot.dot(v_rect_0)
-            rect_x = v_rect_1[0] + RAMP_LENGTH
-            rect_y = v_rect_1[1] + LANE_WIDTH / 2
-            v_veh_0 = np.array([[vehicle.s - RAMP_LENGTH], [vehicle.d + LANE_WIDTH - LANE_WIDTH / 2]])
-            v_veh_1 = v_rot.dot(v_veh_0)
-            veh_x = v_veh_1[0] + RAMP_LENGTH
-            veh_y = v_veh_1[1] + LANE_WIDTH / 2
+        x = vehicle.current_state.x
+        y = vehicle.current_state.y
+        yaw = vehicle.current_state.yaw
+        width = vehicle.width
+        length = vehicle.length
         ax.add_patch(
-            patches.Rectangle(
-                (rect_x, rect_y),
-                5,
-                2,
-                RAMP_ANGLE * 180.0 / math.pi if vehicle.lane_id == -1 else 0,
-                linewidth=1,
-                facecolor=plt.cm.tab20(vehicle.group_idx),
+            plt.Rectangle(
+                (
+                    x - math.sqrt((width / 2) ** 2 + (length / 2) ** 2)
+                    * math.sin(math.atan2(length / 2, width / 2) - yaw),
+                    y - math.sqrt((width / 2) ** 2 + (length / 2) ** 2)
+                    * math.cos(math.atan2(length / 2, width / 2) - yaw),
+                   ),
+                length,
+                width,
+                angle=yaw / math.pi * 180,
+                facecolor=plt.cm.tab20(group_idx[vehicle.id]),
+                fill=True,
+                alpha=0.7,
                 zorder=3,
-                alpha=0.5,
             )
         )
         ax.text(
-            veh_x,
-            veh_y,
-            "%d,G%d" % (vehicle.id, vehicle.group_idx),
-            fontsize=8,
+            x,
+            y,
+            "%d,G%d" % (vehicle.id, group_idx[vehicle.id]),
+            fontsize=6,
             horizontalalignment="center",
             verticalalignment="center",
-            rotation=RAMP_ANGLE * 180.0 / math.pi if vehicle.lane_id == -1 else 0,
+            rotation=yaw / math.pi * 180,
         )
         if target_decision:
-            if not vehicle.lane_id == -1:
-                if target_decision[vehicle.id] == "keep":
-                    ax.arrow(veh_x, veh_y, 5, 0,
-                             length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
-                elif target_decision[vehicle.id] == "turn_left":
-                    ax.arrow(veh_x, veh_y, 3, 4,
-                             length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
-                else:
-                    ax.arrow(veh_x, veh_y, 3, -4,
-                             length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
-            else:
-                ax.arrow(veh_x[0], veh_y[0], 5 * math.cos(RAMP_ANGLE), 5 * math.sin(RAMP_ANGLE),
+            if target_decision[vehicle.id] == "keep":
+                ax.arrow(x, y, 5 * math.cos(yaw), 5 * math.sin(yaw),
                          length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
-    ax.set_facecolor((0.9, 0.9, 0.9))
+            elif target_decision[vehicle.id] == "turn_left":
+                ax.arrow(x, y, 5 * math.cos(yaw + math.pi / 5), 5 * math.sin(yaw + math.pi / 5),
+                         length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
+            else:
+                ax.arrow(x, y, 5 * math.cos(yaw - math.pi / 5), 5 * math.sin(yaw - math.pi / 5),
+                         length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
+    ax.set_facecolor("lightgray")
+    ax.grid(False)
     ax.axis("equal")
-    ax.axis(xmin=0, xmax=scenario_size[0], ymin=-20, ymax=15)
-    plt.pause(0)
+    ax.axis(xmin=-10, xmax=scenario_size[0] + 10, ymin=-20, ymax=scenario_size[1] - LANE_WIDTH)
+    plt.pause(pause_t)
+
+
+def get_lane_id(vehicle):
+    if vehicle.lane_id == list(lanes.keys())[-1]:
+        vehicle_lane_id = -1
+    else:
+        vehicle_lane_id = int((vehicle.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+    return vehicle_lane_id
 
 
 if __name__ == "__main__":
