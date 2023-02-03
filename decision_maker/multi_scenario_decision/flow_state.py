@@ -9,28 +9,44 @@ from utils.obstacle_cost import check_collsion_new
 
 # 适配各种场景的全局函数
 def get_lane_id(vehicle):
-    if vehicle.lane_id == list(lanes.keys())[-1]:
-        vehicle_lane_id = -1
+    # 还未完成汇入但进入0车道时，视为0车道；还未驶出环岛，视为0车道[状态和绘图认为车道已经切换]
+    merge_length = 5.5
+    if LANE_NUMS < len(lanes) and vehicle.lane_id == list(lanes.keys())[-1]:
+        if vehicle.current_state.s < RAMP_LENGTH - merge_length:
+            vehicle_lane_id = -1
+        else:
+            vehicle_lane_id = 0
+    elif LANE_NUMS == len(lanes) - 2 and vehicle.lane_id == list(lanes.keys())[-2]:
+        if vehicle.current_state.s < merge_length:
+            vehicle_lane_id = 0
+        else:
+            vehicle_lane_id = -2
     else:
         vehicle_lane_id = int((vehicle.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
     return vehicle_lane_id
 
 
-def check_lane_change(s, d, lane_id):
+def check_lane_change(veh_id, s, d, lane_id):
     if lane_id >= 0:
-        return s, d, int((d + LANE_WIDTH/2) / LANE_WIDTH)
+        if lane_id == 0 and decision_info[veh_id][0] == "merge_out" and s > INTER_S[0]:
+            return s, 0, -2
+        else:
+            return s, d, int((d + LANE_WIDTH/2) / LANE_WIDTH)
     elif lane_id == -1:
-        # 任意车道的处理
-        if s >= RAMP_LENGTH - 5:
-            x, y = lanes[list(lanes.keys())[-1]].course_spline.frenet_to_cartesian1D(s, d)
-            refined_s = np.linspace(0, lanes['E1_0'].course_spline.s[-1], 300)
-            s, d = lanes['E1_0'].course_spline.cartesian_to_frenet1D(x, y, refined_s)
-            return s, d, 0
+        # 任意车道的处理：提前换至0车道进行碰撞检测
+        # if s >= RAMP_LENGTH - 5:
+        #     x, y = lanes[list(lanes.keys())[-1]].course_spline.frenet_to_cartesian1D(s, d)
+        #     refined_s = np.linspace(0, lanes['E1_0'].course_spline.s[-1], 300)
+        #     s, d = lanes['E1_0'].course_spline.cartesian_to_frenet1D(x, y, refined_s)
+        #     return s, d, 0
+
         # 对齐车道纵坐标时的处理
-        # if s > RAMP_LENGTH:
-        #     return s, 0, 0
+        if s > RAMP_LENGTH:
+            return s, 0, 0
         else:
             return s, d, lane_id
+    elif lane_id == -2:
+        return s, d, lane_id
 
 
 class FlowState:
@@ -97,7 +113,7 @@ class FlowState:
                     elif action == 'DC':
                         vel -= self.ACC * DT
                         vel = max(vel, 0)
-                        s += vel * DT - 0.5 * self.ACC * DT * DT
+                        s += max(vel * DT - 0.5 * self.ACC * DT * DT, 0)
                     # 可以换道的情况：主路上换道未完成的车 / 主路上超车车
                     elif (
                             lane_id >= 0 and
@@ -121,7 +137,7 @@ class FlowState:
                         continue
 
                     # 车道更新
-                    s, d, lane_id = check_lane_change(s, d, lane_id)
+                    s, d, lane_id = check_lane_change(veh.id, s, d, lane_id)
                     self.action_for_each[veh.id][action] = (s, d, vel, lane_id)
             else:
                 for predict_veh in self.predicted_flow:
@@ -165,10 +181,12 @@ class FlowState:
                     build_vehicle(
                         id=veh_id,
                         vtype="car",
-                        s0=next_state[veh_id][0],
+                        s0=next_state[veh_id][0] - INTER_S[0]
+                        if next_state[veh_id][3] == -2
+                        else next_state[veh_id][0],
                         s0_d=next_state[veh_id][2],
                         d0=next_state[veh_id][1],
-                        lane_id=list(lanes.keys())[-1] if next_state[veh_id][3] < 0
+                        lane_id=list(lanes.keys())[next_state[veh_id][3]] if next_state[veh_id][3] < 0
                         else list(lanes.keys())[0],
                         target_speed=10.0,
                         behaviour=decision_info[veh_id][0],
@@ -206,9 +224,11 @@ class FlowState:
                         or ego_veh.s <= aim_veh.s + 1.5 * ego_veh.length:
                     return False
             # 匝道车辆还未完成汇入
-            elif decision_info[veh_id][0] == "merge":
-                if veh_state[0] < RAMP_LENGTH or veh_state[3] != 0:
-                    return False
+            elif decision_info[veh_id][0] == "merge_in" and veh_state[3] != 0:
+                return False
+            # 环岛车辆还未完成驶出
+            elif decision_info[veh_id][0] == "merge_out" and veh_state[3] != -2:
+                return False
         return True
 
     def reward(self):  # reward have to have their support in [0, 1]
@@ -234,8 +254,12 @@ class FlowState:
                 if abs(d - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.5:
                     self_reward += 0.8
             # 汇入终止状态奖励：reward += 0.8
-            elif decision_info[veh_id][0] == "merge":
-                if veh_state[0] > RAMP_LENGTH:
+            elif decision_info[veh_id][0] == "merge_in":
+                if veh_state[3] == 0:
+                    self_reward += 0.8
+            # 汇出终止状态奖励：reward += 0.8
+            elif decision_info[veh_id][0] == "merge_out":
+                if veh_state[3] == -2:
                     self_reward += 0.8
 
             # 决策过程奖励
@@ -261,7 +285,7 @@ class FlowState:
                         self_reward += 0.2 / total_action_num
                     # 速度奖励
                     self_reward += 0.2 * self.states[i][veh_id][2] / 10.0 / total_action_num
-                elif decision_info[veh_id][0] == "merge":
+                elif decision_info[veh_id][0] in {"merge_in", "merge_out"}:
                     # 速度奖励
                     self_reward += 0.05 * self.states[i][veh_id][2] / 10.0 / total_action_num
 
@@ -272,7 +296,7 @@ class FlowState:
                     if action == 'DC' or action == 'KL_DC':
                         other_reward -= 0.1
             # 惩罚：抢道汇入
-            if decision_info[veh_id][0] == "merge":
+            if decision_info[veh_id][0] == "merge_in":
                 main_lane_front_veh = self.surround_cars[veh_id]['left_lane'].get('front', None)
                 main_lane_back_veh = self.surround_cars[veh_id]['left_lane'].get('back', None)
                 if main_lane_front_veh or main_lane_back_veh:
@@ -300,14 +324,14 @@ class FlowState:
                         surround_cars[veh_i.id]['cur_lane']['back'] = veh_j
                         surround_cars[veh_j.id]['cur_lane']['front'] = veh_i
                 # 只在safe_merge_zone内检查左右车道的周围车
-                elif veh_i_lane_id - veh_j_lane_id == 1:
+                elif veh_i_lane_id - veh_j_lane_id == 1 and veh_i_lane_id >= 0:
                     if veh_i_lane_id == 0 and veh_j_lane_id == -1:
                         if veh_i.current_state.s < RAMP_LENGTH - 10 or veh_j.current_state.s < RAMP_LENGTH - 10:
                             continue
                     if 'back' not in surround_cars[veh_i.id]['right_lane']:
                         surround_cars[veh_i.id]['right_lane']['back'] = veh_j
                         surround_cars[veh_j.id]['left_lane']['front'] = veh_i
-                elif veh_i_lane_id - veh_j_lane_id == -1:
+                elif veh_i_lane_id - veh_j_lane_id == -1 and veh_j_lane_id >= 0:
                     if veh_i_lane_id == -1 and veh_j_lane_id == 0:
                         if veh_i.current_state.s < RAMP_LENGTH - 10 or veh_j.current_state.s < RAMP_LENGTH - 10:
                             continue

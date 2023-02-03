@@ -21,7 +21,7 @@ def main():
     # Plot flow
     fig, ax = plt.subplots()
     fig.set_size_inches(16, 4)
-    plot_flow(ax, flow, 2, target_decision)
+    plot_flow(ax, flow, 0, target_decision)
 
 
 def yaml_flow():

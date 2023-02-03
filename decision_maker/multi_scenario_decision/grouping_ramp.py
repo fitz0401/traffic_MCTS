@@ -7,8 +7,8 @@ from utils.vehicle import build_vehicle
 
 
 def main():
-    flow, target_decision = yaml_flow()
-    # flow, target_decision = random_flow(0)
+    # flow, target_decision = yaml_flow()
+    flow, target_decision = random_flow(0)
 
     start_time = time.time()
     print('flow:', flow)
@@ -47,14 +47,14 @@ def yaml_flow():
             )
         )
         decision_info[vehicle["id"]][0] = vehicle["vehicle_type"]
-        # 获取target_decision：turn_left / turn_right / keep / overtake / merge
+        # 获取target_decision：turn_left / turn_right / keep / overtake / merge_in
         TARGET_LANE[vehicle["id"]] = vehicle["target_lane"]
         if TARGET_LANE[vehicle["id"]] == vehicle["lane_id"]:
             if decision_info[vehicle["id"]][0] == "overtake":
                 target_decision[vehicle["id"]] = "overtake"
             else:
                 target_decision[vehicle["id"]] = "keep"
-        elif decision_info[vehicle["id"]][0] == "merge":
+        elif decision_info[vehicle["id"]][0] == "merge_in":
             target_decision[vehicle["id"]] = "keep"
         elif TARGET_LANE[vehicle["id"]] > vehicle["lane_id"]:
             target_decision[vehicle["id"]] = "turn_left"
@@ -109,7 +109,7 @@ def random_flow(random_seed):
         # 获取target_decision：turn_left / turn_right / keep / overtake / merge
         if lane_id < 0:
             target_decision[veh.id] = "keep"
-            decision_info[veh.id][0] = "merge"
+            decision_info[veh.id][0] = "merge_in"
         elif TARGET_LANE[veh.id] == lane_id:
             target_decision[veh.id] = "keep"
             decision_info[veh.id][0] = "cruise"

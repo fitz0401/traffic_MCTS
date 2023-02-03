@@ -5,7 +5,7 @@ import utils.roadgraph as roadgraph
 
 # Decision Information
 ACTION_LIST = ['KS', 'AC', 'DC', 'LCR', 'LCL']
-len_flow = 8
+len_flow = 10
 # Global vars
 TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''
@@ -24,19 +24,18 @@ with open("../../config.yaml", "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 # Road param
-edges, lanes, junction_lanes = \
-    roadgraph.build_roadgraph("../../roadgraph_ramp.yaml")
-LANE_WIDTH = 4
-LANE_NUMS = 0
-for lane in lanes.values():
-    if lane.course_spline.s[-1] == \
-            lanes[list(lanes.keys())[0]].course_spline.s[-1]:
-        LANE_NUMS += 1
-    else:
-        break
+roadgraph_path = "../../roadgraph_roundabout.yaml"
+edges, lanes, junction_lanes = roadgraph.build_roadgraph(roadgraph_path)
+LANE_WIDTH = edges['E1'].lane_width
+LANE_NUMS = len(lanes)
+if roadgraph_path == "../../roadgraph_ramp.yaml":
+    LANE_NUMS -= 1
+elif roadgraph_path == "../../roadgraph_roundabout.yaml":
+    LANE_NUMS -= 2
 scenario_size = [150, LANE_WIDTH * LANE_NUMS]
-RAMP_LENGTH = 60
+RAMP_LENGTH = lanes[list(lanes.keys())[-1]].course_spline.s[-2]
 RAMP_ANGLE = math.pi / 9
+INTER_S = [50, 70]
 
 # Decision param
 prediction_time = 20  # seconds

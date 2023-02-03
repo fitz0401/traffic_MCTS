@@ -74,25 +74,6 @@ class Vehicle:
             return False
         return True
 
-    def check_vel(self, other_s, other_vel) -> bool:
-        # Assume other_veh is in the same lane
-        if other_s > self.current_state.s:  # self is the behind car
-            reaction_dist = self.length + 0.5 * self.current_state.s_d
-            delta_s = other_s - self.current_state.s
-            if delta_s < reaction_dist:
-                return False
-            vel_lower_limit = self.current_state.s_d - (delta_s - reaction_dist) / 3.0
-            if other_vel < vel_lower_limit:
-                return False
-        else:  # self is the front car
-            delta_s = self.current_state.s - other_s
-            if delta_s < self.length:
-                return False
-            vel_upper_limit = min((2.5 * self.current_state.s_d + delta_s) / 3.5, 2.0 * delta_s)
-            if other_vel > vel_upper_limit:
-                return False
-        return True
-
     def __repr__(self) -> str:
         s = "Vehicle %d: s=%f, d=%f, vel=%f, lane_id=%s\n" % (
             self.id,
