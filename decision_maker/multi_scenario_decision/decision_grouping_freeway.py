@@ -100,7 +100,7 @@ def main():
             current_node = current_node.parent
     print("finish_time:", finish_time)
 
-    # Experimental indicators
+    # Experimental indicators: success
     print("average_finish_time:", sum(finish_times) / len(finish_times))
     print("expand node num:", mcts.EXPAND_NODE)
     success = 1
@@ -129,8 +129,16 @@ def main():
     # 预测交通流至最长预测时间
     flow_plot = {t: [] for t in range(int(prediction_time / DT))}
     flow_plot[0] = flow
+    min_dist = 100
     for t in range(int(prediction_time / DT)):
         flow_plot[t + 1] = predict_flow(flow_plot[t], t)
+        # Experimental indicators: minimum distance
+        for i, ego_veh in enumerate(flow_plot[t + 1]):
+            for other_veh in flow_plot[t + 1][i + 1:]:
+                if abs(ego_veh.current_state.d - other_veh.current_state.d) < ego_veh.width:
+                    min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s) \
+                        if abs(ego_veh.current_state.s - other_veh.current_state.s) < min_dist else min_dist
+    print("min_distance:", min_dist - 5)
 
     # plot predictions
     frame_id = 0

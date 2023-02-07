@@ -5,7 +5,7 @@ import utils.roadgraph as roadgraph
 
 # Decision Information
 ACTION_LIST = ['KS', 'AC', 'DC', 'LCR', 'LCL']
-len_flow = 10
+len_flow = 8
 # Global vars
 TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''
@@ -24,7 +24,7 @@ with open("../../config.yaml", "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 # Road param
-roadgraph_path = "../../roadgraph_roundabout.yaml"
+roadgraph_path = "../../roadgraph_ramp.yaml"
 edges, lanes, junction_lanes = roadgraph.build_roadgraph(roadgraph_path)
 LANE_WIDTH = edges['E1'].lane_width
 LANE_NUMS = len(lanes)
@@ -41,3 +41,5 @@ INTER_S = [50, 70]
 prediction_time = 20  # seconds
 DT = 1.5  # decision interval (second)
 T_group = 4.5   # Update group interval (second)
+phi = {i: math.pi / 4 for i in range(len_flow)}
+gamma = {i: 1 for i in range(len_flow)}

@@ -100,7 +100,7 @@ def random_flow(random_seed):
         if lane_id < 0:
             TARGET_LANE[veh.id] = 0
         elif lane_id == 0:
-            TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
+            TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.8 else 1)
         elif lane_id == LANE_NUMS - 1:
             TARGET_LANE[veh.id] = lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
         else:

@@ -291,19 +291,19 @@ class FlowState:
 
             # 惩罚：同车道后方有车的情况下，迫使后车减速
             back_veh = self.surround_cars[veh_id]['cur_lane'].get('back', None)
-            if back_veh:
-                for action in self.actions[back_veh.id]:
-                    if action == 'DC' or action == 'KL_DC':
+            front_veh = self.surround_cars[veh_id]['cur_lane'].get('front', None)
+            if back_veh and decision_info[veh_id][0] == "decision":
+                for i in range(len(self.actions[back_veh.id])):
+                    if self.actions[back_veh.id][i] in {'DC', 'KL_DC'} and self.actions[veh_id][i] in {'LCL', 'LCR'}:
                         other_reward -= 0.1
             # 惩罚：抢道汇入
-            if decision_info[veh_id][0] == "merge_in":
-                main_lane_front_veh = self.surround_cars[veh_id]['left_lane'].get('front', None)
-                main_lane_back_veh = self.surround_cars[veh_id]['left_lane'].get('back', None)
-                if main_lane_front_veh or main_lane_back_veh:
-                    for action in self.actions[veh_id]:
-                        if action == 'AC' or action == 'KL_AC':
-                            other_reward -= 0.1
-            cur_reward = max(0.0, min(1.0, self_reward)) + max(0.0, other_reward)
+            if (back_veh or front_veh) and decision_info[veh_id][0] == "merge_in":
+                for i in range(len(self.actions[veh_id])):
+                    if self.actions[veh_id][i] in {'AC', 'KL_AC'} and self.states[i][veh_id][3] < 0:
+                        other_reward -= 0.1
+            cur_reward = max(0.0, min(1.0, (math.sin(phi[veh_id]) * self_reward
+                                            + math.cos(phi[veh_id]) * other_reward)))
+            # cur_reward = max(0.0, min(1.0, self_reward + gamma[veh_id] * other_reward))
             rewards.append(cur_reward)
         # 决策车的reward取均值
         flow_reward = 0.0
