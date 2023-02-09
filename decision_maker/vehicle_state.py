@@ -197,7 +197,7 @@ class VehicleState:
             return True
         for veh_id, veh_state in self.decision_vehicles.items():
             # 换道决策车还未行驶到目标车道
-            if decision_info[veh_id][0] == "decision":
+            if decision_info[veh_id][0] == "change_lane":
                 if abs(veh_state[1] - (0.5 + TARGET_LANE[veh_id]) * LANE_WIDTH) > 0.2:
                     return False
             # 超车决策车还未完成超车

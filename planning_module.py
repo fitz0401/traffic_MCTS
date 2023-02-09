@@ -22,12 +22,12 @@ import time
 from matplotlib import pyplot as plt
 import numpy as np
 import yaml
-
 import single_vehicle_planning as single_vehicle_planner
-from utils.cubic_spline import Spline2D
-from utils.trajectory import State
-from utils.vehicle import Vehicle, build_vehicle
 import utils.roadgraph as roadgraph
+from decision_maker.constant import (
+    RAMP_LENGTH,
+    LANE_WIDTH
+)
 
 config_file_path = "config.yaml"
 plt_folder = "./output_video/"
@@ -278,19 +278,8 @@ def update_behaviour(vehicle_id, vehicles, lanes):
         change_lane_vehicle = vehicle.change_to_next_lane(
             left_lane_id, lanes[left_lane_id].course_spline
         )
-        print(
-            "Vehicle",
-            vehicle_id,
-            "is changing lane to the left",
-            left_lane_id,
-            change_lane_vehicle.current_state.d,
-        )
         if abs(change_lane_vehicle.current_state.d) < lanes[left_lane_id].width / 3:
-            logging.info(
-                "Vehicle {} change lane successfully%f,%f".format(vehicle_id),
-                change_lane_vehicle.current_state.d,
-                change_lane_vehicle.current_state.s,
-            )
+            logging.info("Vehicle {} change left lane successfully%f,%f".format(vehicle_id))
             vehicles[vehicle_id] = change_lane_vehicle
             vehicles[vehicle_id].behaviour = "KL"
     if vehicle.behaviour == "LC-R":
@@ -299,18 +288,14 @@ def update_behaviour(vehicle_id, vehicles, lanes):
             right_lane_id, lanes[right_lane_id].course_spline
         )
         if abs(change_lane_vehicle.current_state.d) < lanes[right_lane_id].width / 3:
-            logging.info("Vehicle {} change lane successfully".format(vehicle_id))
-            print("Change lane successful!")
-            right_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
+            logging.info("Vehicle {} change right lane successfully".format(vehicle_id))
             vehicles[vehicle_id] = change_lane_vehicle
             vehicles[vehicle_id].behaviour = "KL"
     if (
         vehicle.behaviour == "Decision"
         and abs(vehicle.current_state.d) > lanes[vehicle.lane_id].width / 2
     ):
-        logging.info(
-            "Vehicle {} change lane via decision successfully".format(vehicle_id)
-        )
+        logging.info("Vehicle {} change lane via decision successfully".format(vehicle_id))
         if vehicle.current_state.d > 0:
             target_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
         else:
@@ -345,7 +330,7 @@ def update_behaviour(vehicle_id, vehicles, lanes):
             )
         else:
             logging.error(
-                "Vehicle {} Lane {}  is unknown lane type {}".vehicle.lane_id(
+                "Vehicle {} Lane {}  is unknown lane type {}".format(
                     vehicle_id, vehicle.lane_id, type(lanes[vehicle.lane_id])
                 )
             )
@@ -472,11 +457,12 @@ def planner(
                 continue
             state = (
                 decision_state[1][0],
-                decision_state[1][1]
-                - (int(vehicle.lane_id[vehicle.lane_id.find('_') + 1 :]) + 0.5) * 4,
+                decision_state[1][1] - (int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:])) * LANE_WIDTH
+                if decision_state[1][3] > 0 else decision_state[1][1],
                 decision_state[1][2],
             )
             temp_decision_states.append((t - T, state))
+            # TODO: MIN or MAX?
             if t - T >= config["MIN_T"]:
                 break
         # print("temp_decision_states:", temp_decision_states)
@@ -512,59 +498,40 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s", level=log_level
     )
     logging.getLogger("matplotlib.font_manager").disabled = True
-
     if ANIMATION:
         plot_init()
 
     """
     Step 1. Build Frenet cord
     """
+    # TODO: 构建道路函数
     edges, edge_lanes, junction_lanes = roadgraph.build_roadgraph(config["ROAD_PATH"])
     lanes = edge_lanes | junction_lanes
+    lanes['E1_3'].go_straight_lane.append('E1_0')
+    lanes['E1_3'].next_s = RAMP_LENGTH
 
     """
     Init vehicles
     """
     vehicles = {}
-    with open("init_state.yaml", "r") as f:
-        init_state = yaml.load(f, Loader=yaml.FullLoader)
-    for vehicle in init_state["vehicles"]:
-        vehicles[vehicle["id"]] = build_vehicle(
-            id=vehicle["id"],
-            vtype="car",
-            s0=vehicle["s"],  # initial longtitude position [m]
-            s0_d=vehicle["vel"],  # initial longtitude speed [m/s]
-            d0=vehicle["d"],  # initial lateral position [m]
-            lane_id=list(lanes.keys())[vehicle["lane_id"]],  # init lane id
-            target_speed=9.0,  # todo: target longtitude vel [m/s]
-            behaviour="Decision"
-            if vehicle["need_decision"]
-            else "KL",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-            lanes=lanes,
-            config=config,
-        )
-
-    # v_id = 1
-    # vehicles[v_id] = build_vehicle(
-    #     id=v_id,
-    #     vtype="car",
-    #     s0=45.0,  # initial longtitude position [m]
-    #     s0_d=7.0,  # initial longtitude speed [m/s]
-    #     d0=0.0,  # initial lateral position [m]
-    #     lane_id=list(lanes.keys())[1],  # init lane id
-    #     target_speed=9.0,  # target longtitude vel [m/s]
-    #     behaviour="Decision",  # KL: keep lane, STOP: stop, LC-L: left lane change, LC-R: right lane change
-    #     lanes=lanes,
-    #     config=config,
-    # )
+    with open("decision_maker/multi_scenario_decision/decision_state.pickle", "rb") as f:
+        decision_states = pickle.load(f)
+        flow = pickle.load(f)
+    for veh in flow:
+        veh.lane_id = list(lanes.keys())[int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)] \
+            if veh.behaviour == "KL" else veh.lane_id
+        veh.current_state.d = veh.current_state.d - int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH \
+            if veh.behaviour == "KL" else veh.current_state.d
+        vehicles[veh.id] = veh
 
     # color map
     global colors
     color_map = plt.get_cmap("spring")
     colors = [color_map(i) for i in np.linspace(0, 1, 10)]
 
-    # static obstacle lists
-    static_obs_list = []
+    """
+    Init static obstacle
+    """
     test_obs = {
         "type": "static",
         "length": 4,
@@ -581,7 +548,7 @@ def main():
     for t in np.arange(1, 7, config["DT"]):
         pedestrian["pos"].append({"t": t, "x": start_x, "y": start_y})
         start_y += 1.0 * config["DT"]
-    static_obs_list = [pedestrian]
+    # static_obs_list = [pedestrian]
     static_obs_list = []
 
     global T, delta_timestep, delta_t
@@ -589,9 +556,6 @@ def main():
     delta_timestep = 3
     delta_t = delta_timestep * config["DT"]
     predictions = {}
-
-    with open("decision_state.pickle", "rb") as f:
-        decision_states = pickle.load(f)
 
     # write current state to csv file
     if config["CSV"]:
@@ -601,7 +565,10 @@ def main():
                 ["t", "vehicle_id", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
             )
     MIN_DIST = 100
-    # main loop
+
+    """
+    Step 2. Main Loop
+    """
     for i in range(SIM_LOOP):
         start = time.time()
         """
@@ -610,11 +577,12 @@ def main():
         T = i * config["DT"]
         for vehicle_id, vehicle in vehicles.items():
             if vehicle_id in predictions:
-                #  TODO:
                 vehicle.current_state = deepcopy(predictions[vehicle_id].states[1])
                 del predictions[vehicle_id].states[0]
                 vehicle.current_state.t = T
             else:
+                if i == 0:
+                    continue
                 logging.warning("Vehicle {} not in predictions".format(vehicle_id))
 
         # find minimum distance between vehicles
@@ -653,18 +621,31 @@ def main():
                             vehicle.current_state.acc,
                         ]
                     )
-
-            if (lanes[vehicle.lane_id].next_s == math.inf) and (
-                lanes[vehicle.lane_id].course_spline.s[-1] - vehicle.current_state.s
-                <= 3.0
+            # arrived
+            if (
+                lanes[vehicle.lane_id].next_s == math.inf and
+                lanes[vehicle.lane_id].course_spline.s[-1] - vehicle.current_state.s <= 3.0
             ):
                 logging.info("Vehicle {} reached goal".format(vehicle_id))
-                vehicles.pop(vehicle.id)
-
+                vehicles.pop(vehicle_id)
+            # merge_in or merge_out
+            if (
+                lanes[vehicle.lane_id].next_s != math.inf and
+                vehicle.current_state.s >= lanes[vehicle.lane_id].next_s
+            ):
+                next_lanes = lanes[vehicle.lane_id].go_straight_lane[0]
+                vehicles[vehicle_id] = vehicle.change_to_next_lane(
+                    next_lanes, lanes[next_lanes].course_spline
+                )
+                vehicles[vehicle_id].behaviour = "KL"
+                logging.info(
+                    "Vehicle {} now drives in lane {}".format(vehicle_id, next_lanes)
+                )
         if len(vehicles) == 0:
             logging.info("All vehicles reached goal")
             break
 
+        # 每隔0.3s重新进行一次计算
         if i % delta_timestep == 0:
             """
             Update Behavior
@@ -675,11 +656,30 @@ def main():
             """
             Planner
             """
-            param_list = []
+            ''' 多线程 '''
+            # param_list = []
+            # for vehicle_id in vehicles:
+            #     if vehicles[vehicle_id].current_state.t <= T:
+            #         param_list.append(
+            #             (
+            #                 vehicle_id,
+            #                 vehicles,
+            #                 predictions,
+            #                 lanes,
+            #                 static_obs_list,
+            #                 T,
+            #                 decision_states,
+            #             )
+            #         )
+            # pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+            # results = pool.starmap(planner, param_list)
+            # pool.close()
+            ''' 单线程 '''
+            results = []
             for vehicle_id in vehicles:
                 if vehicles[vehicle_id].current_state.t <= T:
-                    param_list.append(
-                        (
+                    results.append(
+                        planner(
                             vehicle_id,
                             vehicles,
                             predictions,
@@ -689,9 +689,6 @@ def main():
                             decision_states,
                         )
                     )
-            pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-            results = pool.starmap(planner, param_list)
-            pool.close()
 
             """
             Update prediction

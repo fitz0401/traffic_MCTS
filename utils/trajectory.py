@@ -154,7 +154,7 @@ class Trajectory:
             refined_s, self.states[0].x, self.states[0].y
         )
         for i in range(len(self.states)):
-            # Step 1: find nearest reference point rs
+            # Step 1: find the nearest reference point rs
             rx, ry = current_course_spline.calc_position(refined_s[ri])
             dist = np.sqrt((self.states[i].x - rx) ** 2 + (self.states[i].y - ry) ** 2)
             while ri + 1 < len(refined_s):
@@ -196,7 +196,7 @@ class Trajectory:
 
         _, ri = csp.find_nearest_rs(refined_s, self.states[0].x, self.states[0].y)
         for i in range(len(self.states)):
-            # Step 1: find nearest reference point rs
+            # Step 1: find the nearest reference point rs
             rx, ry = csp.calc_position(refined_s[ri])
             dist = np.sqrt((self.states[i].x - rx) ** 2 + (self.states[i].y - ry) ** 2)
             while ri + 1 < len(refined_s):

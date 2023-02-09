@@ -43,7 +43,7 @@ def main():
                     decision_info[veh.id][0] = "cruise"
                 else:
                     mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
-                    decision_info[veh.id][0] = "decision"
+                    decision_info[veh.id][0] = "change_lane"
             start_time = time.time()
             flow.sort(key=lambda x: (x.lane_id, -x.s))
             flow_copy = copy.deepcopy(flow)

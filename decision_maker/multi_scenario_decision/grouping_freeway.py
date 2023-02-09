@@ -40,8 +40,8 @@ def yaml_flow():
                 s0_d=vehicle["vel"],
                 d0=vehicle["d"] + vehicle["lane_id"] * LANE_WIDTH,
                 lane_id=list(lanes.keys())[0],
-                target_speed=10.0,
-                behaviour=vehicle["vehicle_type"],
+                target_speed=9.0,
+                behaviour="KL" if vehicle["vehicle_type"] == "cruise" else "Decision",
                 lanes=lanes,
                 config=config,
             )
@@ -81,8 +81,8 @@ def random_flow(random_seed):
             s0_d=vel,
             d0=d,
             lane_id=list(lanes.keys())[0],
-            target_speed=10.0,
-            behaviour="decision",
+            target_speed=9.0,
+            behaviour="Decision",
             lanes=lanes,
             config=config,
         )
@@ -105,12 +105,13 @@ def random_flow(random_seed):
         if TARGET_LANE[veh.id] == lane_id:
             target_decision[veh.id] = "keep"
             decision_info[veh.id][0] = "cruise"
+            veh.behaviour = "KL"
         elif TARGET_LANE[veh.id] > lane_id:
             target_decision[veh.id] = "turn_left"
-            decision_info[veh.id][0] = "decision"
+            decision_info[veh.id][0] = "change_lane"
         else:
             target_decision[veh.id] = "turn_right"
-            decision_info[veh.id][0] = "decision"
+            decision_info[veh.id][0] = "change_lane"
     # sort flow first by s decreasingly
     flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     print('flow:', flow)

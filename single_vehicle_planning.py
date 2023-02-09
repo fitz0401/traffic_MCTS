@@ -35,7 +35,6 @@ def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=
     Plot
     """
     fig, ax = plt.subplots()
-    #  using calc_position function calculate xlist and ylist in 100 x,y positions from 0 to course_spline.s[-1] on course_spline and plt.plot them
     xlist, ylist = [], []
     for s in np.arange(current_state.s - 3, paths[0].states[-1].s + 10, 0.1):
         x, y = course_spline.calc_position(s)
@@ -153,6 +152,8 @@ def decision_trajectory_generator(
     fullpath = Trajectory()
     current_state = vehicle.current_state
     for (i, state) in enumerate(decision_states):
+        if current_state.s > state[1][0]:
+            continue
         seg_time = [state[0] - decision_states[i - 1][0]] if i > 0 else [state[0]]
         seg_target_state = state[1]
         sample_d = np.linspace(
@@ -174,6 +175,7 @@ def decision_trajectory_generator(
             )
         seg_paths.sort(key=lambda x: x.cost)
         bestpath = None
+        # 选取最优cost的轨迹
         for path in seg_paths:
             if check_path(vehicle, path, config):
                 bestpath = deepcopy(path)
@@ -183,18 +185,17 @@ def decision_trajectory_generator(
                     )
                 )
                 break
-
-        if bestpath != None:
+        # 当前规划点位plan成功，在当前点的基础上规划下一个点
+        if bestpath is not None:
             current_state = bestpath.states[-1]
             fullpath.concatenate(bestpath)
         else:
             fullpath = None
             break
-
-    if fullpath != None:
+    # if no possible trajectory, return normal keep_lane
+    if fullpath is not None and len(fullpath.states) != 0:
         return fullpath
     else:
-        # if no possible trajectory, return normal keep_lane
         logging.warning(
             "Vehicle {} cannot find a decision path, return keep_lane path".format(
                 vehicle.id
@@ -626,100 +627,7 @@ def lanekeeping_trajectory_generator(
 
 
 def main():
-    load_config(config_file_path)
-
-    """
-    Build Frenet cord
-    """
-    # way points
-    wx = [-5, 10.0, 20.5, 35.0, 70.5, 90]
-    wy = [0.0, -3.0, 5.0, 6.5, 0.0, 5]
-    # target course
-    course_spline = Spline2D(wx, wy)
-    # generate target and left right boundaries
-    s = np.arange(0, course_spline.s[-1], 0.2)
-    center_line, left_bound, right_bound = [], [], []
-    for si in s:
-        center_line.append(course_spline.calc_position(si))
-        left_bound.append(
-            course_spline.frenet_to_cartesian1D(si, -config["MAX_ROAD_WIDTH"] / 2)
-        )
-        right_bound.append(
-            course_spline.frenet_to_cartesian1D(si, config["MAX_ROAD_WIDTH"] / 2)
-        )
-
-    # initial state
-    s0 = 10.0  # initial longtitude position [m]
-    s0_d = 15.0 / 3.6  # initial longtitude speed [m/s]
-    d0 = 1.0  # initial lateral position [m]
-    d0_d = 0.0  # initial lateral speed [m/s]
-    x0, y0 = course_spline.frenet_to_cartesian1D(s0, d0)
-    current_state = State(
-        t=0,
-        s=s0,
-        s_d=s0_d,
-        d=d0,
-        d_d=d0_d,
-        x=x0,
-        y=y0,
-        yaw=course_spline.calc_yaw(s0),
-        cur=course_spline.calc_curvature(s0),
-    )
-
-    """
-    Sample target states
-    """
-    target_vel = 20.0 / 3.6  # target longtitude vel [ m/s]
-    # static obstacle lists
-    obs_list = []
-    test_obs = {
-        "radius": 1,
-        "path": [{"x": 36, "y": 4.5} for i in range(100)],
-    }
-    obs_list = [test_obs]
-    max_road_width = config["MAX_ROAD_WIDTH"]
-    d_road_w = config["D_ROAD_W"]
-    d_t_sample = config["D_T_S"] / 3.6
-    n_s_d_sample = config["N_D_S_SAMPLE"]
-    dt = config["DT"]
-
-    sample_d = np.arange(
-        -max_road_width, max_road_width * 1.01, d_road_w
-    )  # sample target lateral offset
-    sample_t = [7.0]  # Sample course time
-    sample_vel = np.arange(
-        target_vel - d_t_sample * n_s_d_sample,
-        target_vel + d_t_sample * n_s_d_sample * 1.01,
-        d_t_sample,
-    )  # sample target longtitude vel(Velocity keeping)
-
-    """
-    Generate trajectories
-    """
-    paths = frenet_optimal_planner.calc_frenet_paths(
-        current_state, sample_d, sample_t, sample_vel, dt, config=config
-    )
-
-    if paths is None:
-        print("WARNING: No path found")
-        return
-
-    for path in paths:
-        path.frenet_to_cartesian(course_spline)
-
-    for path in paths:
-        ref_vel_list = [target_vel] * len(path.states)
-        path.cost = (
-            cost.smoothness(path, course_spline, config["weights"]) * dt
-            + cost.vel_diff(path, ref_vel_list, config["weights"]) * dt
-            + cost.guidance(path, config["weights"]) * dt
-            + cost.acc(path, config["weights"]) * dt
-            + cost.jerk(path, config["weights"]) * dt
-            + cost.obs(path, obs_list, config)
-        )
-    plot_cost_function(current_state, paths, course_spline, obs_list)
-
-    print("Done!")
+    pass
 
 
 if __name__ == "__main__":

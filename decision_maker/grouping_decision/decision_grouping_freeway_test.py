@@ -16,7 +16,7 @@ def main():
             target_decision = {}
             # 清理全局变量
             for i in range(len_flow):
-                decision_info[i] = ["decision"]
+                decision_info[i] = ["change_lane"]
                 group_idx[i] = 0
                 flow_record[i] = {}
             # Randomly generate vehicles
@@ -47,10 +47,10 @@ def main():
                     decision_info[veh.id][0] = "cruise"
                 elif TARGET_LANE[veh.id] > veh.lane_id:
                     target_decision[veh.id] = "turn_left"
-                    decision_info[veh.id][0] = "decision"
+                    decision_info[veh.id][0] = "change_lane"
                 else:
                     target_decision[veh.id] = "turn_right"
-                    decision_info[veh.id][0] = "decision"
+                    decision_info[veh.id][0] = "change_lane"
 
             # sort flow first by s decreasingly
             flow.sort(key=lambda x: (-x.s, x.lane_id))

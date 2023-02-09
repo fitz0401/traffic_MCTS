@@ -68,7 +68,7 @@ def main():
     start_time = time.time()
     for t in range(0, int(prediction_time/DT), int(T_group/DT)):
         print('——————————t: %d——————————:\n' % t)
-        vehicle_types = {i: ["decision"] for i in range(len(cur_flow))}
+        vehicle_types = {i: ["change_lane"] for i in range(len(cur_flow))}
         gol.set_value('vehicle_types', vehicle_types)
         cur_flow.sort(key=lambda x: (-x.s, x.lane_id))
         print('cur_flow:', cur_flow)

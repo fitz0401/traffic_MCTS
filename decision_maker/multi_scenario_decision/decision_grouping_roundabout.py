@@ -107,7 +107,7 @@ def main():
     for idx, final_node in final_nodes.items():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否抵达目标车道
-            if decision_info[veh_idx][0] == "decision":
+            if decision_info[veh_idx][0] == "change_lane":
                 if abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5:
                     success = 0
                     print("Vehicle doesn't at aimed lane! veh_id", veh_idx,

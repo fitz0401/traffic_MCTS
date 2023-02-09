@@ -39,10 +39,10 @@ def main():
     #         decision_info[veh.id][0] = "cruise"
     #     elif TARGET_LANE[veh.id] > veh.lane_id:
     #         target_decision[veh.id] = "turn_left"
-    #         decision_info[veh.id][0] = "decision"
+    #         decision_info[veh.id][0] = "change_lane"
     #     else:
     #         target_decision[veh.id] = "turn_right"
-    #         decision_info[veh.id][0] = "decision"
+    #         decision_info[veh.id][0] = "change_lane"
 
     # Read from init_state.yaml from yaml
     with open("../../init_state.yaml", "r") as f:

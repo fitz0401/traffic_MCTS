@@ -45,7 +45,7 @@ def main():
     #         decision_info[veh.id][0] = "cruise"
     #     else:
     #         mcts_init_state[veh.id] = (veh.s, veh.d, veh.vel)
-    #         decision_info[veh.id][0] = "decision"
+    #         decision_info[veh.id][0] = "change_lane"
 
     # Read from init_state.yaml from yaml
     with open("../init_state.yaml", "r") as f:
