@@ -73,7 +73,7 @@ def random_flow(random_seed):
     random.seed(random_seed)
     while len(flow) < len_flow:
         lane_id = random.randint(0, LANE_NUMS) - 1
-        s = random.uniform(0, RAMP_LENGTH - 10) if lane_id < 0 \
+        s = random.uniform(0, INTER_S[1] - 10) if lane_id < 0 \
             else random.uniform(0, INTER_S[-1])
         d = random.uniform(-0.1, 0.1) if lane_id < 0 \
             else random.uniform(-0.1, 0.1) + lane_id * LANE_WIDTH
@@ -86,7 +86,7 @@ def random_flow(random_seed):
             d0=d,
             lane_id=list(lanes.keys())[-1] if lane_id < 0 else list(lanes.keys())[0],
             target_speed=9.0,
-            behaviour="decision",
+            behaviour="Decision",
             lanes=lanes,
             config=config,
         )
@@ -117,19 +117,20 @@ def random_flow(random_seed):
             veh.behaviour = "KL"
         elif TARGET_LANE[veh.id] > lane_id:
             target_decision[veh.id] = "turn_left"
+            decision_info[veh.id][0] = "change_lane"
         else:
             target_decision[veh.id] = "turn_right"
+            decision_info[veh.id][0] = "change_lane"
         # 构建驶出环岛的车辆
         if (
                 lane_id == 0 and s < INTER_S[0] - 10
                 or lane_id == 1 and s < INTER_S[0] - 25
-                or lane_id == 2 and s < INTER_S[0] - 40
         ):
             if random.uniform(0, 1) < 0.4:
                 TARGET_LANE[veh.id] = 0
                 target_decision[veh.id] = "turn_right"
                 decision_info[veh.id][0] = "merge_out"
-        veh.behaviour = decision_info[veh.id][0]
+                veh.behaviour = "Decision"
         # sort flow first by s decreasingly
     flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     print('flow:', flow)

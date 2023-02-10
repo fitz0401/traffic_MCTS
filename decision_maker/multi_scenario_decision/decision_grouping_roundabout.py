@@ -1,3 +1,4 @@
+import pickle
 from decision_maker import mcts
 from grouping_roundabout import *
 from flow_state import FlowState
@@ -5,7 +6,8 @@ from flow_state import FlowState
 
 def main():
     # flow, target_decision = yaml_flow()
-    flow, target_decision = random_flow(24)
+    flow, target_decision = random_flow(4)
+    decision_info_ori = copy.deepcopy(decision_info)
 
     start_time = time.time()
     # 找到超车对象
@@ -87,6 +89,7 @@ def main():
         for veh in group:
             decision_info[veh.id][0] = "query"
             decision_info[veh.id].append(current_node.state.t)
+            action_record[veh.id] = current_node.state.actions[veh.id]
         print("Group %d Time: %f\n" % (idx, time.time() - start_time))
         final_nodes[idx] = copy.deepcopy(current_node)
         finish_time = max(finish_time, final_nodes[idx].state.t)
@@ -104,7 +107,7 @@ def main():
     print("average_finish_time:", sum(finish_times) / len(finish_times))
     print("expand node num:", mcts.EXPAND_NODE)
     success = 1
-    for idx, final_node in final_nodes.items():
+    for final_node in final_nodes.values():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否抵达目标车道
             if decision_info[veh_idx][0] == "change_lane":
@@ -144,8 +147,37 @@ def main():
     # 预测交通流至最长预测时间
     flow_plot = {t: [] for t in range(int(prediction_time / DT))}
     flow_plot[0] = flow
+    min_dist = 100
     for t in range(int(prediction_time / DT)):
         flow_plot[t + 1] = predict_flow(flow_plot[t], t)
+        # Experimental indicators: minimum distance
+        for i, ego_veh in enumerate(flow_plot[t + 1]):
+            for other_veh in flow_plot[t + 1][i + 1:]:
+                if (
+                        abs(ego_veh.current_state.d - other_veh.current_state.d) < ego_veh.width
+                        and ego_veh.lane_id == other_veh.lane_id
+                ):
+                    min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s) \
+                        if abs(ego_veh.current_state.s - other_veh.current_state.s) < min_dist else min_dist
+    print("min_distance:", min_dist - 5)
+
+    # 存储决策结果，用于规划
+    decision_state_for_planning = {}
+    for final_node in final_nodes.values():
+        for veh_id in final_node.state.decision_vehicles.keys():
+            decision_state = []
+            for i in range(int(final_node.state.t / DT) - 1):
+                # 针对每个时刻，记录每辆车动作变化时的状态（即第i次动作引发的i+1状态）
+                if final_node.state.actions[veh_id][i + 1] != final_node.state.actions[veh_id][i]:
+                    decision_state.append((final_node.state.states[i + 1]["time"],
+                                           final_node.state.states[i + 1][veh_id]))
+            decision_state.append((final_node.state.states[-1]["time"], final_node.state.states[-1][veh_id]))
+            decision_state_for_planning[veh_id] = decision_state
+    ''' pickle file: flow | decision_info(initial value) | decision_state '''
+    with open("decision_state.pickle", "wb") as fd:
+        pickle.dump(flow, fd)
+        pickle.dump(decision_info_ori, fd)
+        pickle.dump(decision_state_for_planning, fd)
 
     # plot predictions
     frame_id = 0
@@ -173,14 +205,14 @@ def predict_flow(flow, t):
             # 只在safe_merge_zone内检查左右车道的周围车
             elif veh_i_lane_id - veh_j_lane_id == 1 and veh_i_lane_id >= 0:
                 if veh_i_lane_id == 0 and veh_j_lane_id == -1:
-                    if veh_i.current_state.s < RAMP_LENGTH - 20 or veh_j.current_state.s < RAMP_LENGTH - 20:
+                    if veh_i.current_state.s < INTER_S[1] - 20 or veh_j.current_state.s < INTER_S[1] - 20:
                         continue
                 if 'back' not in surround_cars[veh_i.id]['right_lane']:
                     surround_cars[veh_i.id]['right_lane']['back'] = veh_j
                     surround_cars[veh_j.id]['left_lane']['front'] = veh_i
             elif veh_i_lane_id - veh_j_lane_id == -1 and veh_j_lane_id >= 0:
                 if veh_i_lane_id == -1 and veh_j_lane_id == 0:
-                    if veh_i.current_state.s < RAMP_LENGTH - 20 or veh_j.current_state.s < RAMP_LENGTH - 20:
+                    if veh_i.current_state.s < INTER_S[1] - 20 or veh_j.current_state.s < INTER_S[1] - 20:
                         continue
                 if 'back' not in surround_cars[veh_i.id]['left_lane']:
                     surround_cars[veh_i.id]['left_lane']['back'] = veh_j

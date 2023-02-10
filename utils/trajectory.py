@@ -112,8 +112,8 @@ class Trajectory:
             self.states[-1].acc = self.states[-2].acc
         except IndexError:
             self.states[0].acc = 0
-            logging.error("Trajectory is empty at frenet_to_cartesian()")
-            exit()
+            self.cost = np.Inf
+            return
 
         # https://blog.csdn.net/m0_37454852/article/details/86514444
         # https://baike.baidu.com/item/%E6%9B%B2%E7%8E%87/9985286

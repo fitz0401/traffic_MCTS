@@ -7,6 +7,7 @@ from flow_state import FlowState
 def main():
     # flow, target_decision = yaml_flow()
     flow, target_decision = random_flow(0)
+    decision_info_ori = copy.deepcopy(decision_info)
 
     start_time = time.time()
     # 找到超车对象
@@ -154,10 +155,11 @@ def main():
                                            final_node.state.states[i + 1][veh_id]))
             decision_state.append((final_node.state.states[-1]["time"], final_node.state.states[-1][veh_id]))
             decision_state_for_planning[veh_id] = decision_state
-    ''' pickle file: decision_state | flow '''
+    ''' pickle file: flow | decision_info(initial value) | decision_state '''
     with open("decision_state.pickle", "wb") as fd:
-        pickle.dump(decision_state_for_planning, fd)
         pickle.dump(flow, fd)
+        pickle.dump(decision_info_ori, fd)
+        pickle.dump(decision_state_for_planning, fd)
 
     # plot predictions
     frame_id = 0

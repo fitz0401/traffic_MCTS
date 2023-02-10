@@ -13,7 +13,6 @@ import math
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-import yaml
 
 from state_lattice_planner import state_lattice_planner
 from frenet_optimal_planner import frenet_optimal_planner
@@ -21,35 +20,27 @@ from utils.cubic_spline import Spline2D
 from utils.trajectory import Trajectory, State
 import utils.cost as cost
 
-config_file_path = "config.yaml"
-
-
-def load_config(config_file_path):
-    with open(config_file_path, "r") as f:
-        global config
-        config = yaml.load(f, Loader=yaml.FullLoader)
-
 
 def plot_cost_function(current_state, paths, course_spline, obs_list, stop_path=None):
     """
     Plot
     """
     fig, ax = plt.subplots()
-    xlist, ylist = [], []
+    x_list, y_list = [], []
     for s in np.arange(current_state.s - 3, paths[0].states[-1].s + 10, 0.1):
         x, y = course_spline.calc_position(s)
-        xlist.append(x)
-        ylist.append(y)
-    (centerline,) = plt.plot(xlist, ylist, "k--")
+        x_list.append(x)
+        y_list.append(y)
+    (centerline,) = plt.plot(x_list, y_list, "k--")
 
     # plot paths with unique color sequential in grayscale color map
     color_map = plt.get_cmap("gist_rainbow")
     colors = [color_map(i) for i in np.linspace(0, 1, len(paths))]
-    linewidths = [i for i in np.linspace(2.5, 0.5, len(paths))]
+    line_widths = [i for i in np.linspace(2.5, 0.5, len(paths))]
     for i in range(len(paths) - 1, 0, -1):
         pathx = [state.x for state in paths[i].states]
         pathy = [state.y for state in paths[i].states]
-        plt.plot(pathx, pathy, color=colors[i], linewidth=linewidths[i])
+        plt.plot(pathx, pathy, color=colors[i], linewidth=line_widths[i])
     # (best_path,) = plt.plot(paths[0].x, paths[0].y, "r", linewidth=3)
 
     # plot obslist with  black circles with radius
@@ -255,7 +246,7 @@ def lanechange_trajectory_generator(
                     )
                 )
     end = time.time()
-    if paths == []:
+    if not paths:
         logging.error(
             "No lane change path found {},{},{}".format(sample_t, sample_s, sample_vel)
         )
@@ -422,7 +413,6 @@ def stop_trajectory_generator(
     """
     Step 2: 
     """
-    path = Trajectory()
     if (
         current_state.vel <= 1.0 and (min_s - current_state.s) <= car_length
     ):  # already stopped,keep it
@@ -552,7 +542,6 @@ def lanekeeping_trajectory_generator(
         current_state, center_d, sample_t, sample_vel, dt, config
     )
     ref_vel_list = [target_vel] * 100
-    bestpath = None
     if center_paths is not None:
         for path in center_paths:
             path.frenet_to_cartesian(course_spline)
@@ -567,13 +556,13 @@ def lanekeeping_trajectory_generator(
         center_paths.sort(key=lambda x: x.cost)
         for path in center_paths:
             if check_path(vehicle, path, config):
-                bestpath = deepcopy(path)
+                best_path = deepcopy(path)
                 logging.debug(
                     "Vehicle {} finds a lanekeeping CENTER path with minimum cost: {}".format(
-                        vehicle.id, bestpath.cost
+                        vehicle.id, best_path.cost
                     )
                 )
-                return bestpath
+                return best_path
 
     """
     Step 3: If no valid path, Generate nudge trajectories
@@ -595,13 +584,13 @@ def lanekeeping_trajectory_generator(
         paths.sort(key=lambda x: x.cost)
         for path in paths:
             if check_path(vehicle, path, config):
-                bestpath = deepcopy(path)
+                best_path = deepcopy(path)
                 logging.debug(
                     "Vehicle {} finds a lanekeeping NUDGE path with minimum cost: {}".format(
-                        vehicle.id, bestpath.cost
+                        vehicle.id, best_path.cost
                     )
                 )
-                return bestpath
+                return best_path
 
     """
     Step 4: if no nudge path is found, Calculate a emergency stop path
