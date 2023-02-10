@@ -215,7 +215,7 @@ class FlowState:
             return True
         for veh_id, veh_state in self.decision_vehicles.items():
             # 换道决策车还未行驶到目标车道
-            if decision_info[veh_id][0] == "change_lane":
+            if decision_info[veh_id][0] in {"change_lane_left", "change_lane_right"}:
                 if abs(veh_state[1] - TARGET_LANE[veh_id] * LANE_WIDTH) > 0.2:
                     return False
             # 超车决策车还未完成超车
@@ -259,7 +259,7 @@ class FlowState:
                         and abs(d - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.5:
                     self_reward += 0.8
             # 换道终止状态奖励：距离目标车道线横向距离，<0.5表示换道成功：reward += 0.8
-            elif decision_info[veh_id][0] == "change_lane":
+            elif decision_info[veh_id][0] in {"change_lane_left", "change_lane_right"}:
                 if abs(d - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.5:
                     self_reward += 0.8
             # 汇入终止状态奖励：reward += 0.8
@@ -282,7 +282,7 @@ class FlowState:
                             self_reward += 0.2 / total_action_num
                     if self.states[i][veh_id][2] > aim_veh.current_state.s_d:
                         self_reward += 0.1 / total_action_num
-                elif decision_info[veh_id][0] == "change_lane":
+                elif decision_info[veh_id][0] in {"change_lane_left", "change_lane_right"}:
                     # 累计每一步动作换道完成的奖励
                     if abs(self.states[i][veh_id][1] - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.5:
                         self_reward += 0.2 / total_action_num
@@ -301,7 +301,7 @@ class FlowState:
             # 惩罚：同车道后方有车的情况下，迫使后车减速
             back_veh = self.surround_cars[veh_id]['cur_lane'].get('back', None)
             front_veh = self.surround_cars[veh_id]['cur_lane'].get('front', None)
-            if back_veh and decision_info[veh_id][0] == "change_lane":
+            if back_veh and decision_info[veh_id][0] in {"change_lane_left", "change_lane_right"}:
                 for i in range(len(self.actions[back_veh.id])):
                     if self.actions[back_veh.id][i] in {'DC', 'KL_DC'} and self.actions[veh_id][i] in {'LCL', 'LCR'}:
                         other_reward -= 0.1

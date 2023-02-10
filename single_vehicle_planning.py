@@ -502,9 +502,8 @@ def stop_trajectory_generator(
             + cost.stop(config["weights"])
         )
     paths.sort(key=lambda x: x.cost)
-
-    bestpath = deepcopy(paths[0])
-    return bestpath
+    best_path = deepcopy(paths[0])
+    return best_path
 
 
 def lanekeeping_trajectory_generator(

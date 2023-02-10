@@ -87,28 +87,6 @@ def main():
             if veh.behaviour == "KL" else veh.current_state.d
         vehicles[veh.id] = veh
 
-    """
-    Init static obstacle
-    """
-    test_obs = {
-        "type": "static",
-        "length": 4,
-        "width": 3,
-        "pos": {"x": 14, "y": -5, "yaw": -0.0},
-    }
-    pedestrian = {
-        "type": "pedestrian",
-        "length": 2,
-        "width": 2,
-        "pos": [],
-    }
-    start_x, start_y = 13, -7
-    for t in np.arange(1, 7, config["DT"]):
-        pedestrian["pos"].append({"t": t, "x": start_x, "y": start_y})
-        start_y += 1.0 * config["DT"]
-    # static_obs_list = [pedestrian]
-    static_obs_list = []
-
     # write current state to csv file
     if config["CSV"]:
         with open("trajectories.csv", "w") as f:
@@ -117,6 +95,7 @@ def main():
                 ["t", "vehicle_id", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
             )
     MIN_DIST = 100
+    static_obs_list = []
 
     """
     Step 2. Main Loop

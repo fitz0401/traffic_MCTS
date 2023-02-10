@@ -5,8 +5,8 @@ from flow_state import FlowState
 
 
 def main():
-    # flow, target_decision = yaml_flow()
-    flow, target_decision = random_flow(4)
+    # flow = yaml_flow()
+    flow = random_flow(4)
     decision_info_ori = copy.deepcopy(decision_info)
 
     start_time = time.time()
@@ -28,7 +28,7 @@ def main():
                 decision_info[veh_i.id][0] = "cruise"
 
     # Interaction judge & Grouping
-    interaction_info = judge_interaction(flow, target_decision)
+    interaction_info = judge_interaction(flow)
     flow_groups = grouping(flow, interaction_info)
     # 随机分组测试
     # flow_groups = random_grouping(flow)
@@ -38,7 +38,7 @@ def main():
     # Plot flow
     fig, ax = plt.subplots()
     fig.set_size_inches(12, 9)
-    plot_flow(ax, flow, 2, target_decision)
+    plot_flow(ax, flow, 2, decision_info_ori)
 
     # 分组决策
     final_nodes = {}
@@ -110,7 +110,7 @@ def main():
     for final_node in final_nodes.values():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否抵达目标车道
-            if decision_info[veh_idx][0] == "change_lane":
+            if decision_info[veh_idx][0] in {"change_lane_left", "change_lane_right"}:
                 if abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5:
                     success = 0
                     print("Vehicle doesn't at aimed lane! veh_id", veh_idx,
