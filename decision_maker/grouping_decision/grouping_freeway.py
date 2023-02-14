@@ -3,8 +3,7 @@ import time
 import random
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-import yaml
-from decision_maker.constant import *
+from constant import *
 from decision_maker.vehicle_state import (
     Vehicle,
     LANE_WIDTH,

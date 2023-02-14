@@ -17,7 +17,7 @@ import numpy as np
 import yaml
 import single_vehicle_planning as single_vehicle_planner
 import utils.roadgraph as roadgraph
-from decision_maker.constant import (
+from constant import (
     LANE_WIDTH
 )
 
@@ -433,7 +433,8 @@ def planner(
         path = single_vehicle_planner.stop_trajectory_generator(
             vehicle, lanes, road_width, obs_list, config, plan_T,
         )
-    elif vehicle.behaviour == "Decision":
+    # 决策成功
+    elif vehicle.behaviour == "Decision" and decision_states:
         temp_decision_states = []
         for decision_state in decision_states[vehicle.id]:
             t = decision_state[0]
@@ -448,7 +449,7 @@ def planner(
             temp_decision_states.append((t - plan_T, state))
             if t - plan_T >= config["MIN_T"]:
                 break
-        # print("temp_decision_states:", temp_decision_states)
+        # 所有决策动作已经执行完毕
         if temp_decision_states == [] or t - plan_T < 0.5:
             vehicle.behaviour = "KL"
         course_spline = lanes[vehicle.lane_id].course_spline
@@ -460,6 +461,12 @@ def planner(
             config,
             plan_T,
             temp_decision_states,
+        )
+    # 决策失败
+    elif vehicle.behaviour == "Decision" and not decision_states:
+        course_spline = lanes[vehicle.lane_id].course_spline
+        path = single_vehicle_planner.lanekeeping_trajectory_generator(
+            vehicle, course_spline, road_width, obs_list, config, plan_T,
         )
     else:
         logging.error(

@@ -2,7 +2,7 @@ import copy
 import time
 import random
 import matplotlib.pyplot as plt
-from decision_maker.constant import *
+from constant import *
 from utils.vehicle import build_vehicle
 
 

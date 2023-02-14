@@ -2,7 +2,7 @@ from copy import deepcopy
 import hashlib
 import itertools
 import random
-from decision_maker.constant import *
+from constant import *
 
 
 class Vehicle:

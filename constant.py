@@ -23,17 +23,17 @@ aMax = 0.73  # 最大期望加速度
 bMax = 1.67  # 最大期望减速度
 SQRT_AB = np.sqrt(aMax * bMax)
 PAR = 0.6
-with open(file_path + "/../config.yaml", "r", encoding='utf-8') as f:
+with open(file_path + "/config.yaml", "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 # Road param
-roadgraph_path = file_path + "/../" + config["ROAD_PATH"]
+roadgraph_path = file_path + "/" + config["ROAD_PATH"]
 edges, lanes, junction_lanes = roadgraph.build_roadgraph(roadgraph_path)
 LANE_WIDTH = edges['E1'].lane_width
 LANE_NUMS = len(lanes)
-if roadgraph_path == file_path + "/../roadgraph_ramp.yaml":
+if roadgraph_path == file_path + "/roadgraph_ramp.yaml":
     LANE_NUMS -= 1
-elif roadgraph_path == file_path + "/../roadgraph_roundabout.yaml":
+elif roadgraph_path == file_path + "/roadgraph_roundabout.yaml":
     LANE_NUMS -= 2
 scenario_size = [150, LANE_WIDTH * LANE_NUMS]
 RAMP_LENGTH = lanes[list(lanes.keys())[-1]].course_spline.s[-2]
