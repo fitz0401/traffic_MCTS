@@ -41,7 +41,7 @@ RAMP_ANGLE = math.pi / 9
 INTER_S = [50, 70]
 
 # Decision param
-prediction_time = 20  # seconds
+prediction_time = 10  # seconds
 DT = 1.5  # decision interval (second)
 T_group = 4.5   # Update group interval (second)
 phi = {i: math.pi / 4 for i in range(len_flow)}

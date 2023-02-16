@@ -1,6 +1,6 @@
 ANIMATION: True
 VERBOSE: False # print detailed debug message
-VIDEO: True # save plotting as video
+VIDEO: False # save plotting as video
 VIDEO_NAME: "demo_dp"
 CSV: True # write trajectories in trajectories.csv
 # ROAD_PATH: "roadgraph_intersect.yaml" # roadgraph yaml path
@@ -41,7 +41,7 @@ vehicle:
     max_speed: 55 # 最大速度 m/s
     L: 2.9 # wheel base 轴距, 暂未使用
     R: 1.5 # minimum turning radius 最小转弯半径， 暂未使用
-    ds: 0.1 # course distanse， 暂未使用
+    ds: 0.1 # course distance， 暂未使用
   truck:
     length: 7.2 # 车长
     width: 2.3

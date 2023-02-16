@@ -27,8 +27,8 @@ def main():
 def yaml_flow():
     flow = []
     # Read from init_state.yaml from yaml
-    with open("../../init_state.yaml", "r") as f:
-        init_state = yaml.load(f, Loader=yaml.FullLoader)
+    with open("init_state.yaml", "r") as fd:
+        init_state = yaml.load(fd, Loader=yaml.FullLoader)
     for vehicle in init_state["vehicles"]:
         # 获取车流信息
         flow.append(
@@ -39,7 +39,7 @@ def yaml_flow():
                 s0_d=vehicle["vel"],
                 d0=vehicle["d"] + vehicle["lane_id"] * LANE_WIDTH,
                 lane_id=list(lanes.keys())[0],
-                target_speed=9.0,
+                target_speed=8.0,
                 behaviour="KL" if vehicle["vehicle_type"] == "cruise" else "Decision",
                 lanes=lanes,
                 config=config,
@@ -69,7 +69,7 @@ def random_flow(random_seed):
             s0_d=vel,
             d0=d,
             lane_id=list(lanes.keys())[0],
-            target_speed=9.0,
+            target_speed=8.0,
             behaviour="Decision",
             lanes=lanes,
             config=config,
@@ -89,14 +89,14 @@ def random_flow(random_seed):
         else:
             TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4
                                              else random.choice((-1, 1)))
-        # 获取target_decision：turn_left / turn_right / keep
         if TARGET_LANE[veh.id] == lane_id:
-            decision_info[veh.id][0] = "cruise"
-            veh.behaviour = "KL"
+            decision_info[veh.id][0] = "decision" if random.uniform(0, 1) < 0.9 else "cruise"
         elif TARGET_LANE[veh.id] > lane_id:
             decision_info[veh.id][0] = "change_lane_left"
         else:
             decision_info[veh.id][0] = "change_lane_right"
+        if decision_info[veh.id][0] == "cruise":
+            veh.behaviour = "KL"
     # sort flow first by s decreasingly
     flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     print('flow:', flow)
@@ -134,25 +134,25 @@ def judge_interaction(flow):
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                 continue
             # 无交互：前车直行，左后方车直行或左变道 / 右后方车直行或右变道
-            if decision_info[veh_i.id][0] == "cruise":
+            if decision_info[veh_i.id][0] in {"cruise", "decision"}:
                 if (veh_j_lane_id - veh_i_lane_id == 1 and
-                        decision_info[veh_j.id][0] in {"cruise", "change_lane_left"}):
+                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_left"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
                 elif (veh_j_lane_id - veh_i_lane_id == -1 and
-                      decision_info[veh_j.id][0] in {"cruise", "change_lane_right"}):
+                      decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_right"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 无交互：前车左变道，右后方车直行或右变道
             if decision_info[veh_i.id][0] == "change_lane_left":
                 if (veh_j_lane_id - veh_i_lane_id == -1 and
-                        decision_info[veh_j.id][0] in {"cruise", "change_lane_right"}):
+                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_right"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 无交互：前车右变道，左后方车直行或左变道
             if decision_info[veh_i.id][0] == "change_lane_right":
                 if (veh_j_lane_id - veh_i_lane_id == 1 and
-                        decision_info[veh_j.id][0] in {"cruise", "change_lane_left"}):
+                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_left"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 上述情况都不满足，i和j存在交互
@@ -284,9 +284,12 @@ def plot_flow(ax, flow, pause_t, target_decision=None):
             rotation=yaw / math.pi * 180,
         )
         if target_decision:
-            if target_decision[vehicle.id][0] == "cruise":
+            if target_decision[vehicle.id][0] in {"cruise", "decision"}:
                 ax.arrow(x, y, 5 * math.cos(yaw), 5 * math.sin(yaw),
                          length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
+            elif target_decision[vehicle.id][0] == "overtake":
+                ax.arrow(x, y, 5 * math.cos(yaw), 5 * math.sin(yaw),
+                         length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='r')
             elif target_decision[vehicle.id][0] == "change_lane_left":
                 ax.arrow(x, y, 5 * math.cos(yaw + math.pi / 5), 5 * math.sin(yaw + math.pi / 5),
                          length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
@@ -298,6 +301,24 @@ def plot_flow(ax, flow, pause_t, target_decision=None):
     ax.axis("equal")
     ax.axis(xmin=-10, xmax=scenario_size[0] + 10, ymin=0, ymax=scenario_size[1])
     plt.pause(pause_t)
+
+
+def find_overtake_aim(flow):
+    for i, veh_i in enumerate(flow):
+        veh_i_lane_id = int((veh_i.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+        if decision_info[veh_i.id][0] == "overtake":
+            for veh_j in flow[0:i]:
+                veh_j_lane_id = int((veh_j.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+                # 超车对象只能是巡航车
+                if veh_i_lane_id == veh_j_lane_id \
+                        and decision_info[veh_j.id][0] in {"cruise", "decision"}:
+                    if len(decision_info[veh_i.id]) == 1:
+                        decision_info[veh_i.id].append(veh_j.id)
+                    else:
+                        decision_info[veh_i.id][1] = veh_j.id
+            # 没有超车对象，无需超车
+            if len(decision_info[veh_i.id]) == 1:
+                decision_info[veh_i.id][0] = "cruise"
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
+import logging
 from copy import deepcopy
 import copy
 import csv
-import constant
 from planning_module import *
 from constant import (
     RAMP_LENGTH,
@@ -19,43 +19,63 @@ from decision_maker.multi_scenario_decision import (
 )
 
 
-def update_decision_behaviour(vehicle_id, vehicles, lanes, decision_info_ori):
-    vehicle = vehicles[vehicle_id]
-    # Check Lane Change
-    if (
-        vehicle.behaviour == "Decision"
-        and abs(vehicle.current_state.d) > lanes[vehicle.lane_id].width / 2
-    ):
-        logging.info("Vehicle {} change lane via decision successfully".format(vehicle_id))
-        if vehicle.current_state.d > 0:
-            target_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
-        else:
-            target_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
-        if target_lane_id:
-            vehicles[vehicle_id] = vehicle.change_to_next_lane(
-                target_lane_id, lanes[target_lane_id].course_spline
+def update_decision_behaviour(planning_flow, lanes, decision_info_ori):
+    is_finish_decision = True
+    for vehicle_id, vehicle in planning_flow.items():
+        # Check Lane Change
+        if (
+            vehicle.behaviour == "Decision"
+            and abs(vehicle.current_state.d) > lanes[vehicle.lane_id].width / 2
+        ):
+            logging.info("Vehicle {} change lane via decision successfully".format(vehicle_id))
+            if vehicle.current_state.d > 0:
+                target_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
+            else:
+                target_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
+            if target_lane_id:
+                planning_flow[vehicle_id] = vehicle.change_to_next_lane(
+                    target_lane_id, lanes[target_lane_id].course_spline
+                )
+        # Merge_in / Merge_out behaviour
+        if (
+            decision_info_ori[vehicle.id][0] in {"merge_in", "merge_out"} and
+            lanes[vehicle.lane_id].next_s != math.inf and
+            vehicle.current_state.s >= lanes[vehicle.lane_id].next_s
+        ):
+            next_lanes = lanes[vehicle.lane_id].go_straight_lane[0]
+            planning_flow[vehicle_id] = vehicle.change_to_next_lane(
+                next_lanes, lanes[next_lanes].course_spline
             )
-    # Merge_in / Merge_out behaviour
-    if (
-        decision_info_ori[vehicle.id][0] in {"merge_in", "merge_out"} and
-        lanes[vehicle.lane_id].next_s != math.inf and
-        vehicle.current_state.s >= lanes[vehicle.lane_id].next_s
-    ):
-        next_lanes = lanes[vehicle.lane_id].go_straight_lane[0]
-        vehicles[vehicle_id] = vehicle.change_to_next_lane(
-            next_lanes, lanes[next_lanes].course_spline
-        )
-        vehicles[vehicle_id].behaviour = "KL"
-        decision_info_ori[vehicle.id][0] = "cruise"
-        logging.info("Vehicle {} finish merge in/ out action, now drives in {}".format(vehicle_id, next_lanes))
-    # Lane Change behaviour
-    elif(
-        decision_info_ori[vehicle.id][0] in {"change_lane_left", "change_lane_right"} and
-        int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
-    ):
-        # vehicles[vehicle_id].behaviour = "KL"
-        decision_info_ori[vehicle.id][0] = "cruise"
-        logging.info("Vehicle {} finish lane change action".format(vehicle_id))
+            decision_info_ori[vehicle.id][0] = "decision"
+            logging.info("Vehicle {} finish merge in/ out action, now drives in {}".format(vehicle_id, next_lanes))
+        # Lane Change behaviour
+        elif(
+            decision_info_ori[vehicle.id][0] in {"change_lane_left", "change_lane_right"} and
+            int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
+        ):
+            decision_info_ori[vehicle.id][0] = "decision"
+            logging.info("Vehicle {} finish lane change action".format(vehicle_id))
+        # Overtake behaviour
+        elif (
+                decision_info_ori[vehicle.id][0] == "overtake" and
+                vehicle.current_state.s >
+                planning_flow[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length
+        ):
+            decision_info_ori[vehicle.id][0] = "decision"
+            logging.info("Vehicle {} finish overtake action".format(vehicle_id))
+        # When all vehicles drive in target lane, turn into KL mode.
+        if(
+            int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) != TARGET_LANE[vehicle_id] or
+            (decision_info_ori[vehicle.id][0] == "overtake" and vehicle.current_state.s <
+             planning_flow[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length)
+        ):
+            is_finish_decision = False
+    if is_finish_decision:
+        for vehicle in planning_flow.values():
+            decision_info_ori[vehicle.id][0] = "cruise"
+            vehicle.behaviour = "KL"
+        logging.info("All vehicle finish decision")
+    return is_finish_decision
 
 
 def build_map(roadgraph_path):
@@ -80,8 +100,6 @@ def decision_flow_to_planning_flow(decision_flow, lanes):
         veh.lane_id = list(lanes.keys())[int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)]
         veh.current_state.d = veh.current_state.d - int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH
         # TODO：区分场景
-        if int(veh.lane_id[veh.lane_id.find('_') + 1:]) == TARGET_LANE[veh.id]:
-            veh.behaviour = "KL"
         planning_flow[veh.id] = veh
     return planning_flow
 
@@ -102,8 +120,11 @@ def planning_flow_to_decision_flow(planning_flow, lanes):
 def main():
     if config["VERBOSE"]:
         log_level = logging.DEBUG
+        logging.debug = print
     else:
         log_level = logging.INFO
+        logging.info = print
+        logging.warning = print
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s", level=log_level
     )
@@ -120,28 +141,46 @@ def main():
     """
     Step 2. Init vehicles
     """
+    ''' Method1： 导入pickle文件 '''
     # with open("decision_maker/multi_scenario_decision/decision_state.pickle", "rb") as f:
-    #     flow = pickle.load(f)
+    #     decision_flow = pickle.load(f)
     #     decision_info = pickle.load(f)
     #     decision_states = pickle.load(f)
-    decision_flow = grouping_freeway.random_flow(3)
+    ''' Method2： 决策-规划闭环 '''
+    # 导入yaml格式车流
+    # decision_flow = grouping_freeway.yaml_flow()
+    # 导入随机车流
+    decision_flow = grouping_freeway.random_flow(8)
+    # 如有超车指令，查找超车目标
+    grouping_freeway.find_overtake_aim(decision_flow)
     planning_flow = decision_flow_to_planning_flow(decision_flow, lanes)
     decision_info_ori = copy.deepcopy(decision_info)
-    # write current state to csv file
+    # write current state & target decision to csv file
     if config["CSV"]:
-        with open("trajectories.csv", "w") as fd:
-            writer = csv.writer(fd)
+        with open("flow_record.csv", "w") as fd1:
+            writer = csv.writer(fd1)
             writer.writerow(
-                ["t", "vehicle_id", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
+                ["vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init(m/s)"]
+            )
+            for veh in decision_flow:
+                writer.writerow(
+                    [veh.id, decision_info_ori[veh.id][0], TARGET_LANE[veh.id],
+                     veh.current_state.s, veh.current_state.d, veh.current_state.s_d]
+                )
+        with open("trajectories.csv", "w") as fd2:
+            writer = csv.writer(fd2)
+            writer.writerow(
+                ["t", "vehicle_id", "group_id", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
             )
 
     """
     Step 3. Main Loop
     """
     planning_timestep = 3
-    decision_timestep = 36
+    decision_timestep = 30
     predictions = {}
     decision_states = None
+    is_finish_decision = False
     for i in range(SIM_LOOP):
         start = time.time()
         """
@@ -159,7 +198,7 @@ def main():
                 logging.warning("Vehicle {} not in predictions".format(vehicle_id))
 
         """
-        Step 3.2 : Check Arrival
+        Step 3.2 : Check Arrival & Record Trajectories
         """
         for vehicle_id in copy.copy(planning_flow):
             vehicle = planning_flow[vehicle_id]
@@ -171,6 +210,7 @@ def main():
                         [
                             T,
                             vehicle.id,
+                            group_idx[vehicle.id],
                             vehicle.current_state.x,
                             vehicle.current_state.y,
                             vehicle.current_state.yaw,
@@ -188,43 +228,43 @@ def main():
             break
 
         """
-        Step 3.3 : Decision(30i * DT) & Planning(3i * DT)
+        Step 3.3 : Decision(N * i * DT) & Planning(n * i * DT)
         """
-        finish_decision = True
-        for info in decision_info_ori.values():
-            if info[0] != "cruise":
-                finish_decision = False
-        # 每隔30 * 0.1s重新进行一次决策
-        if i % decision_timestep == 0 and not finish_decision:
+        # 每隔N * 0.1s重新进行一次决策
+        if i % decision_timestep == 0 and not is_finish_decision:
             """
             Decider
             """
             # 更新决策信息
             for veh in decision_flow:
                 decision_info[veh.id] = [decision_info_ori[veh.id][0]]
+                if decision_info_ori[veh.id][0] == "overtake":
+                    decision_info[veh.id].append(decision_info_ori[veh.id][1])
                 group_idx[veh.id] = 0
                 flow_record[veh.id] = {}
                 action_record[veh.id] = {}
             decision_flow = planning_flow_to_decision_flow(planning_flow, lanes)
             # 获取决策信息
-            success_flag, decision_states = decision_grouping_freeway.freeway_decision(decision_flow)
+            success_info, decision_states = decision_grouping_freeway.freeway_decision(decision_flow)
             for veh_decision_state in decision_states.values():
                 for idx in range(len(veh_decision_state)):
                     veh_decision_state[idx] = (veh_decision_state[idx][0] + T, veh_decision_state[idx][1])
-            if not success_flag:
-                decision_states = None
-                print("Sim Time: %f, Decision Fail! Vehicles all KL")
+            # 打印决策结果
+            logging.info("------------------------------")
+            for veh_id in group_idx.keys():
+                if success_info[group_idx[veh_id]] == 0:
+                    logging.info("Vehicle: %d in group %d decision failure." % (veh_id, group_idx[veh_id]))
             end = time.time()
             planning_flow = decision_flow_to_planning_flow(decision_flow, lanes)
-            logging.info("Sim Time: %f, One decision loop time: %f", T, end - start)
+            logging.info("Sim Time: %f, One decision loop time: %f" % (T, end - start))
             logging.info("------------------------------")
-        # 每隔3 * 0.1s重新进行一次规划
+        # 每隔n * 0.1s重新进行一次规划
         if i % planning_timestep == 0:
             """
             Update Behaviour & Decision_info
             """
-            for vehicle_id, vehicle in planning_flow.items():
-                update_decision_behaviour(vehicle_id, planning_flow, lanes, decision_info_ori)
+            if not is_finish_decision:
+                is_finish_decision = update_decision_behaviour(planning_flow, lanes, decision_info_ori)
             """
             Planner
             """
@@ -272,9 +312,10 @@ def main():
                 predictions[vehicle_id] = result_path[1]
                 planning_flow[vehicle_id].behaviour = result_path[2]
 
-        focus_car_id = 1
+        focus_car_id = 0
         if ANIMATION:
-            plot_trajectory(planning_flow, static_obs_list, predictions, lanes, edges, T, focus_car_id)
+            plot_trajectory(planning_flow, static_obs_list, predictions,
+                            lanes, edges, T, focus_car_id, decision_info_ori)
     exit_plot()
 
 

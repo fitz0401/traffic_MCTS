@@ -187,7 +187,7 @@ def decision_trajectory_generator(
     if fullpath is not None and len(fullpath.states) != 0:
         return fullpath
     else:
-        logging.warning(
+        logging.debug(
             "Vehicle {} cannot find a decision path, return keep_lane path".format(
                 vehicle.id
             )
@@ -525,14 +525,14 @@ def lanekeeping_trajectory_generator(
     sample_d = sample_d[sample_d != 0]
     center_d = [0]
     sample_t = [config["MIN_T"]]  # Sample course time
-    sample_vel = np.arange(
-        max(1e-9, vehicle.current_state.vel - d_t_sample * n_s_d_sample),
-        min(
-            target_vel + d_t_sample * n_s_d_sample,
-            vehicle.current_state.vel + vehicle.max_accel * 4,
-        ),
-        d_t_sample,
-    )  # sample target longtitude vel(Velocity keeping)
+    if current_state.vel * sample_t[0] > course_spline.s[-1] - current_state.s:
+        sample_vel = np.linspace(min(current_state.vel, 10 / 3.6), 25 / 3.6, 4)
+    else:
+        sample_vel = np.linspace(
+            max(1e-9, current_state.vel - d_t_sample * n_s_d_sample),
+            max(current_state.vel + d_t_sample * n_s_d_sample * 1.01, target_vel),
+            5,
+        )  # sample target longtitude vel(Velocity keeping)
 
     """
     Step 2: Generate Center line trajectories

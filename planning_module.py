@@ -88,7 +88,7 @@ def plot_init():
     )
 
 
-def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T, focus_car_id):
+def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T, focus_car_id, decision_info_ori):
     global main_fig, vel_fig, acc_fig
     main_fig.cla()
     vel_fig.cla()
@@ -121,8 +121,10 @@ def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T,
 
     for vehicle_id in vehicles:
         vehicle = vehicles[vehicle_id]
-        if vehicle.behaviour == "Decision":
+        if vehicle.behaviour == "Decision" and decision_info_ori[vehicle_id][0] != "decision":
             vehicle_color = "orangered"
+        elif vehicle.behaviour == "Decision" and decision_info_ori[vehicle_id][0] == "decision":
+            vehicle_color = "blue"
         else:
             vehicle_color = "green"
         if vehicle.id in best_paths:
@@ -443,25 +445,28 @@ def planner(
             state = (
                 decision_state[1][0],
                 decision_state[1][1] - (int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:])) * LANE_WIDTH
-                if decision_state[1][3] > 0 else decision_state[1][1],
+                if decision_state[1][3] >= 0 else decision_state[1][1],
                 decision_state[1][2],
             )
             temp_decision_states.append((t - plan_T, state))
             if t - plan_T >= config["MIN_T"]:
                 break
+        course_spline = lanes[vehicle.lane_id].course_spline
         # 所有决策动作已经执行完毕
         if temp_decision_states == [] or t - plan_T < 0.5:
-            vehicle.behaviour = "KL"
-        course_spline = lanes[vehicle.lane_id].course_spline
-        path = single_vehicle_planner.decision_trajectory_generator(
-            vehicle,
-            course_spline,
-            road_width,
-            obs_list,
-            config,
-            plan_T,
-            temp_decision_states,
-        )
+            path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                vehicle, course_spline, road_width, obs_list, config, plan_T,
+            )
+        else:
+            path = single_vehicle_planner.decision_trajectory_generator(
+                vehicle,
+                course_spline,
+                road_width,
+                obs_list,
+                config,
+                plan_T,
+                temp_decision_states,
+            )
     # 决策失败
     elif vehicle.behaviour == "Decision" and not decision_states:
         course_spline = lanes[vehicle.lane_id].course_spline

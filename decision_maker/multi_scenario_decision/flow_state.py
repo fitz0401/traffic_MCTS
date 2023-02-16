@@ -91,9 +91,9 @@ class FlowState:
 
         # available actions
         self.action_for_each = {}
-        t = self.t + DT
+        next_t = self.t + DT
         for veh in self.flow:
-            if t >= self.TIME_LIMIT:
+            if next_t >= self.TIME_LIMIT:
                 break
             if veh.id in self.decision_vehicles:
                 veh_state = self.decision_vehicles[veh.id]
@@ -109,6 +109,7 @@ class FlowState:
                         s += vel * DT
                     elif action == 'AC':
                         vel += self.ACC * DT
+                        vel = min(vel, 9)
                         s += vel * DT + 0.5 * self.ACC * DT * DT
                     elif action == 'DC':
                         vel -= self.ACC * DT
@@ -142,9 +143,9 @@ class FlowState:
             else:
                 for predict_veh in self.predicted_flow:
                     if predict_veh.id == veh.id:
-                        if decision_info[veh.id][0] == "query" and self.t <= decision_info[veh.id][-1]:
+                        if decision_info[veh.id][0] == "query" and next_t <= decision_info[veh.id][-1]:
                             self.action_for_each[veh.id] = {
-                                action_record[veh.id][int(self.t/DT) - 1]:
+                                action_record[veh.id][int(next_t/DT) - 1]:
                                     (predict_veh.current_state.s,
                                      predict_veh.current_state.d,
                                      predict_veh.current_state.s_d,
@@ -197,7 +198,7 @@ class FlowState:
                         d0=next_state[veh_id][1],
                         lane_id=list(lanes.keys())[next_state[veh_id][3]] if next_state[veh_id][3] < 0
                         else list(lanes.keys())[0],
-                        target_speed=10.0,
+                        target_speed=8.0,
                         behaviour=decision_info[veh_id][0],
                         lanes=lanes,
                         config=config,
@@ -230,7 +231,7 @@ class FlowState:
                 ego_veh_lane_id = get_lane_id(ego_veh)
                 aim_veh_lane_id = get_lane_id(aim_veh)
                 if (not ego_veh_lane_id == aim_veh_lane_id) \
-                        or ego_veh.s <= aim_veh.s + 1.5 * ego_veh.length:
+                        or ego_veh.current_state.s <= aim_veh.current_state.s + 1.5 * ego_veh.length:
                     return False
             # 匝道车辆还未完成汇入
             elif decision_info[veh_id][0] == "merge_in" and veh_state[3] != 0:
@@ -255,7 +256,7 @@ class FlowState:
                     if veh.id == decision_info[veh_id][1]:
                         aim_veh = veh
                         break
-                if s > aim_veh.s + aim_veh.length \
+                if s > aim_veh.current_state.s + aim_veh.length \
                         and abs(d - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.5:
                     self_reward += 0.8
             # 换道终止状态奖励：距离目标车道线横向距离，<0.5表示换道成功：reward += 0.8
@@ -276,7 +277,7 @@ class FlowState:
             for i in range(len(self.actions[veh_id])):
                 if decision_info[veh_id][0] == "overtake":
                     # 累计每一步动作超车完成的奖励
-                    if self.states[i][veh_id][0] > aim_veh.s + aim_veh.length:
+                    if self.states[i][veh_id][0] > aim_veh.current_state.s + aim_veh.length:
                         self_reward += 0.1 / total_action_num
                         if abs(self.states[i][veh_id][1] - TARGET_LANE[veh_id] * LANE_WIDTH) < 0.2:
                             self_reward += 0.2 / total_action_num
@@ -297,6 +298,9 @@ class FlowState:
                 elif decision_info[veh_id][0] in {"merge_in", "merge_out"}:
                     # 速度奖励
                     self_reward += 0.05 * self.states[i][veh_id][2] / 10.0 / total_action_num
+                elif decision_info[veh_id][0] == "decision":
+                    # 速度奖励
+                    self_reward += 0.2 * self.states[i][veh_id][2] / 10.0 / total_action_num
 
             # 惩罚：同车道后方有车的情况下，迫使后车减速
             back_veh = self.surround_cars[veh_id]['cur_lane'].get('back', None)
@@ -395,7 +399,7 @@ class FlowState:
                             s0_d=veh.current_state.s_d,
                             d0=veh.current_state.d,
                             lane_id=veh.lane_id,
-                            target_speed=10.0,
+                            target_speed=8.0,
                             behaviour=decision_info[veh.id][0],
                             lanes=lanes,
                             config=config,
@@ -424,7 +428,7 @@ class FlowState:
                             s0_d=veh.current_state.s_d,
                             d0=veh.current_state.d,
                             lane_id=veh.lane_id,
-                            target_speed=10.0,
+                            target_speed=8.0,
                             behaviour=decision_info[veh.id][0],
                             lanes=lanes,
                             config=config,
@@ -455,8 +459,8 @@ class FlowState:
                         continue
                     is_collided, _ = check_collsion_new(
                         np.array([ego_veh.current_state.x, ego_veh.current_state.y]),
-                        ego_veh.length,
-                        ego_veh.width,
+                        ego_veh.length*1.5,
+                        ego_veh.width*1.1,
                         ego_veh.current_state.yaw,
                         np.array([obs_veh.current_state.x, obs_veh.current_state.y]),
                         obs_veh.length,

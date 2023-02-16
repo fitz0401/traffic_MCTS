@@ -16,10 +16,6 @@ import logging
 
 # MCTS scalar.  Larger scalar will increase exploitation, smaller will increase exploration.
 SCALAR = 2 / (2 * math.sqrt(2.0))
-
-logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger('MyLogger')
-
 EXPAND_NODE = 0
 
 
@@ -58,8 +54,8 @@ class Node:
 def uct_search(budget, root):
     for iteration in range(int(budget)):
         if iteration % 100 == 0:
-            logger.info("simulation: %d" % iteration)
-            logger.info(root)
+            logging.debug("simulation: %d" % iteration)
+            logging.debug(root)
         front = tree_policy(root)
         reward = default_policy(front.state)  # can parallelize here
         backpropagation(front, reward)
@@ -75,7 +71,7 @@ def default_policy(state):
 def tree_policy(node):
     # a hack to force 'exploitation' in a game where there are many options,
     # and you may never/not want to fully expand first
-    while not node.state.terminal():
+    while node and not node.state.terminal():
         if len(node.children) == 0:
             return expand(node)
         elif random.uniform(0, 1) < 0.5:
@@ -111,7 +107,8 @@ def best_child(node, scalar):
             best_children = [child]
             best_score = score
     if len(best_children) == 0:
-        logger.warning("OOPS: no best child found, probably fatal")
+        logging.warning("OOPS: no best child found, probably fatal")
+        return None
     return random.choice(best_children)
 
 

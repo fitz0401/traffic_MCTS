@@ -11,21 +11,7 @@ def main():
 
     start_time = time.time()
     # 找到超车对象
-    for i, veh_i in enumerate(flow):
-        veh_i_lane_id = int((veh_i.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
-        if decision_info[veh_i.id][0] == "overtake":
-            for veh_j in flow[0:i]:
-                veh_j_lane_id = int((veh_j.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
-                # 超车对象只能是巡航车
-                if veh_i_lane_id == veh_j_lane_id \
-                        and decision_info[veh_j.id][0] == "cruise":
-                    if len(decision_info[veh_i.id]) == 1:
-                        decision_info[veh_i.id].append(veh_j.id)
-                    else:
-                        decision_info[veh_i.id][1] = veh_j.id
-            # 没有超车对象，无需超车
-            if len(decision_info[veh_i.id]) == 1:
-                decision_info[veh_i.id][0] = "cruise"
+    find_overtake_aim(flow)
 
     # Interaction judge & Grouping
     interaction_info = judge_interaction(flow)
@@ -61,14 +47,20 @@ def main():
         # 记录当前组信息，置入下一个组的决策过程
         former_flow += group
         actions = {veh.id: [] for veh in local_flow}
+        # 记录保持车道的车辆数
+        lane_keep_veh_num = 0
         for veh in group:
             if decision_info[veh.id][0] == "cruise":
                 continue
+            if decision_info[veh.id][0] == "decision":
+                lane_keep_veh_num += 1
             veh_lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
             mcts_init_state[veh.id] = \
                 (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh_lane_id)
-        # 本组内无决策车，无需进行决策
-        if len(mcts_init_state) == 1:
+        # 本组内无决策车 / 全是直行车，无需进行决策
+        if len(mcts_init_state) in {1, 1 + lane_keep_veh_num}:
+            for veh in group:
+                decision_info[veh.id][0] = "cruise"
             continue
         current_node = mcts.Node(
             FlowState([mcts_init_state], actions=actions, flow=local_flow)
@@ -78,6 +70,11 @@ def main():
         for t in range(int(prediction_time / DT)):
             print("-------------t=%d----------------" % t)
             current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+            if current_node is None:
+                current_node = mcts.Node(
+                    FlowState([mcts_init_state], actions=actions, flow=local_flow)
+                )
+                break
             print("Best Child: ", current_node.visits / (200 / (t / 2 + 1)) * 100, "%")
             temp_best = current_node
             while temp_best.children:
@@ -101,10 +98,8 @@ def main():
         while current_node is not None:
             flow_record[idx][current_node.state.t/DT] = current_node.state.flow
             current_node = current_node.parent
-    print("finish_time:", finish_time)
 
     # Experimental indicators: success
-    print("average_finish_time:", sum(finish_times) / len(finish_times))
     print("expand node num:", mcts.EXPAND_NODE)
     success = 1
     for final_node in final_nodes.values():
@@ -128,6 +123,9 @@ def main():
                           "group_idx", group_idx[veh_idx])
                     break
     print("success:", success)
+    if success:
+        print("finish_time:", finish_time)
+        print("average_finish_time:", sum(finish_times) / len(finish_times))
 
     # 预测交通流至最长预测时间
     flow_plot = {t: [] for t in range(int(prediction_time / DT))}
@@ -297,13 +295,18 @@ def freeway_decision(flow):
         local_flow = group + former_flow
         former_flow += group
         actions = {veh.id: [] for veh in local_flow}
+        lane_keep_veh_num = 0
         for veh in group:
             if decision_info[veh.id][0] == "cruise":
                 continue
+            if decision_info[veh.id][0] == "decision":
+                lane_keep_veh_num += 1
             veh_lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
             mcts_init_state[veh.id] = \
                 (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh_lane_id)
-        if len(mcts_init_state) == 1:
+        if len(mcts_init_state) in {1, 1 + lane_keep_veh_num}:
+            for veh in group:
+                decision_info[veh.id][0] = "cruise"
             continue
         current_node = mcts.Node(
             FlowState([mcts_init_state], actions=actions, flow=local_flow)
@@ -311,6 +314,11 @@ def freeway_decision(flow):
         # MCTS
         for t in range(int(prediction_time / DT)):
             current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+            if current_node is None:
+                current_node = mcts.Node(
+                    FlowState([mcts_init_state], actions=actions, flow=local_flow)
+                )
+                break
             temp_best = current_node
             while temp_best.children:
                 temp_best = mcts.best_child(temp_best, 0)
@@ -329,12 +337,12 @@ def freeway_decision(flow):
     print("Decision Time: %f\n" % (time.time() - start_time))
 
     # 测试
-    success = 1
-    for final_node in final_nodes.values():
+    success_info = {idx: 1 for idx in flow_groups.keys()}
+    for idx, final_node in final_nodes.items():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否抵达目标车道
             if abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5:
-                success = 0
+                success_info[idx] = 0
                 break
             # 是否完成超车
             if decision_info[veh_idx][0] == "overtake":
@@ -344,12 +352,14 @@ def freeway_decision(flow):
                         aim_veh = veh
                         break
                 if veh_state[0] < aim_veh.current_state.s + aim_veh.length:
-                    success = 0
+                    success_info[idx] = 0
                     break
 
     # 结果
     decision_state_for_planning = {}
-    for final_node in final_nodes.values():
+    for idx, final_node in final_nodes.items():
+        if success_info[idx] == 0:
+            continue
         for veh_id in final_node.state.decision_vehicles.keys():
             decision_state = []
             for i in range(int(final_node.state.t / DT) - 1):
@@ -359,7 +369,11 @@ def freeway_decision(flow):
                                            final_node.state.states[i + 1][veh_id]))
             decision_state.append((final_node.state.states[-1]["time"], final_node.state.states[-1][veh_id]))
             decision_state_for_planning[veh_id] = decision_state
-    return success, decision_state_for_planning
+    # 为无需决策/决策失败的决策车添加结果
+    for veh in flow:
+        if veh.behaviour == "Decision" and not decision_state_for_planning.get(veh.id):
+            decision_state_for_planning[veh.id] = []
+    return success_info, decision_state_for_planning
 
 
 if __name__ == "__main__":

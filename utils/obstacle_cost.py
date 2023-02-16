@@ -190,7 +190,7 @@ def calculate_car(vehicle, obs, path, config):
             return cost
         result, nearest_corner = check_collsion_new(
             np.array([path.states[i].x, path.states[i].y]),
-            car_length,
+            car_length * 1.1,
             car_width,
             path.states[i].yaw,
             np.array([obs["path"][i]["x"], obs["path"][i]["y"]]),
