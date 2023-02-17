@@ -10,6 +10,7 @@ def main():
     # flow = yaml_flow()
     flow = random_flow(0)
 
+    find_overtake_aim(flow)
     start_time = time.time()
     print('flow:', flow)
     # Interaction judge & Grouping
@@ -27,7 +28,7 @@ def main():
 def yaml_flow():
     flow = []
     # Read from init_state.yaml from yaml
-    with open("init_state.yaml", "r") as fd:
+    with open(file_path + "/init_state.yaml", "r") as fd:
         init_state = yaml.load(fd, Loader=yaml.FullLoader)
     for vehicle in init_state["vehicles"]:
         # 获取车流信息
@@ -39,7 +40,7 @@ def yaml_flow():
                 s0_d=vehicle["vel"],
                 d0=vehicle["d"] + vehicle["lane_id"] * LANE_WIDTH,
                 lane_id=list(lanes.keys())[0],
-                target_speed=8.0,
+                target_speed=random.uniform(6, 8) if vehicle["vehicle_type"] in {"decision", "cruise"} else 8,
                 behaviour="KL" if vehicle["vehicle_type"] == "cruise" else "Decision",
                 lanes=lanes,
                 config=config,
@@ -69,7 +70,7 @@ def random_flow(random_seed):
             s0_d=vel,
             d0=d,
             lane_id=list(lanes.keys())[0],
-            target_speed=8.0,
+            target_speed=random.uniform(6, 9),
             behaviour="Decision",
             lanes=lanes,
             config=config,
@@ -162,17 +163,28 @@ def judge_interaction(flow):
 
 def grouping(flow, interaction_info):
     """ group_idx: [车号|组号]; group_info：[组号|组内车流] """
-    # 从flow中的第一辆车开始进行聚类，依据车辆之间的交互可能性
     max_group_size = 3
-    group_info = {1: [flow[0]]}
-    group_idx[flow[0].id] = 1
-    # 依据交互可能性进行分组
+    group_info = {}
     group_interaction_info = []  # 记录组与组之间的交互信息
-    for i, veh_i in enumerate(flow[1:], start=1):
-        # 优先把超车车辆和被超车车辆分为一组
-        if decision_info[veh_i.id][0] == "overtake":
-            group_idx[veh_i.id] = group_idx[decision_info[veh_i.id][1]]
-            group_info[group_idx[veh_i.id]].append(veh_i)
+
+    # 优先把超车车辆和被超车车辆分为一组，此处暗含了超车车辆对优先决策
+    overtake_pairs = []
+    for ego_veh in flow:
+        if decision_info[ego_veh.id][0] == "overtake":
+            aim_veh = None
+            for other_veh in flow:
+                if other_veh.id == decision_info[ego_veh.id][1]:
+                    aim_veh = other_veh
+            overtake_pairs.append((ego_veh, aim_veh))
+    for overtake_pair in overtake_pairs:
+        group_idx[overtake_pair[0].id] = len(group_info) + 1
+        group_info[group_idx[overtake_pair[0].id]] = [overtake_pair[0]]
+        group_idx[overtake_pair[1].id] = group_idx[overtake_pair[0].id]
+        group_info[group_idx[overtake_pair[1].id]].append(overtake_pair[1])
+
+    # 依据交互可能性进行分组
+    for i, veh_i in enumerate(flow):
+        if group_idx[veh_i.id] != 0:
             continue
         # 检查车辆i能否和车辆j分为一组, 倒序遍历j~(i,0],确保临近分组
         for j in range(i - 1, -1, -1):
@@ -307,15 +319,17 @@ def find_overtake_aim(flow):
     for i, veh_i in enumerate(flow):
         veh_i_lane_id = int((veh_i.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
         if decision_info[veh_i.id][0] == "overtake":
-            for veh_j in flow[0:i]:
+            # 倒序查找同车道最近的直行车
+            for j in range(i - 1, -1, -1):
+                veh_j = flow[j]
                 veh_j_lane_id = int((veh_j.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
-                # 超车对象只能是巡航车
-                if veh_i_lane_id == veh_j_lane_id \
-                        and decision_info[veh_j.id][0] in {"cruise", "decision"}:
-                    if len(decision_info[veh_i.id]) == 1:
+                # 超车对象只能是邻近的直行车
+                if veh_i_lane_id == veh_j_lane_id:
+                    if (
+                        decision_info[veh_j.id][0] in {"cruise", "decision"}
+                    ):
                         decision_info[veh_i.id].append(veh_j.id)
-                    else:
-                        decision_info[veh_i.id][1] = veh_j.id
+                    break
             # 没有超车对象，无需超车
             if len(decision_info[veh_i.id]) == 1:
                 decision_info[veh_i.id][0] = "cruise"

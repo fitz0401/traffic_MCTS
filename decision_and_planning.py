@@ -11,7 +11,8 @@ from constant import (
     decision_info,
     group_idx,
     flow_record,
-    action_record
+    action_record,
+    DT
 )
 from decision_maker.multi_scenario_decision import (
     grouping_freeway,
@@ -59,15 +60,17 @@ def update_decision_behaviour(planning_flow, lanes, decision_info_ori):
         elif (
                 decision_info_ori[vehicle.id][0] == "overtake" and
                 vehicle.current_state.s >
-                planning_flow[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length
+                planning_flow[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length and
+                int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
             decision_info_ori[vehicle.id][0] = "decision"
             logging.info("Vehicle {} finish overtake action".format(vehicle_id))
         # When all vehicles drive in target lane, turn into KL mode.
         if(
             int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) != TARGET_LANE[vehicle_id] or
-            (decision_info_ori[vehicle.id][0] == "overtake" and vehicle.current_state.s <
-             planning_flow[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length)
+            (decision_info_ori[vehicle.id][0] == "overtake" and (vehicle.current_state.s <
+             planning_flow[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length or
+             int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]))
         ):
             is_finish_decision = False
     if is_finish_decision:
@@ -150,7 +153,7 @@ def main():
     # 导入yaml格式车流
     # decision_flow = grouping_freeway.yaml_flow()
     # 导入随机车流
-    decision_flow = grouping_freeway.random_flow(8)
+    decision_flow = grouping_freeway.random_flow(0)
     # 如有超车指令，查找超车目标
     grouping_freeway.find_overtake_aim(decision_flow)
     planning_flow = decision_flow_to_planning_flow(decision_flow, lanes)
@@ -170,7 +173,7 @@ def main():
         with open("trajectories.csv", "w") as fd2:
             writer = csv.writer(fd2)
             writer.writerow(
-                ["t", "vehicle_id", "group_id", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
+                ["t", "vehicle_id", "group_id", "action", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
             )
 
     """
@@ -180,6 +183,7 @@ def main():
     decision_timestep = 30
     predictions = {}
     decision_states = None
+    decision_T = 0
     is_finish_decision = False
     for i in range(SIM_LOOP):
         start = time.time()
@@ -200,8 +204,10 @@ def main():
         """
         Step 3.2 : Check Arrival & Record Trajectories
         """
+        action_idx = int((T - decision_T) / DT)
         for vehicle_id in copy.copy(planning_flow):
             vehicle = planning_flow[vehicle_id]
+            cur_action = action_record[vehicle_id][action_idx] if action_idx < len(action_record[vehicle_id]) else "KS"
             # write current state to csv file
             if config["CSV"]:
                 with open("trajectories.csv", "a") as fd:
@@ -211,6 +217,7 @@ def main():
                             T,
                             vehicle.id,
                             group_idx[vehicle.id],
+                            cur_action,
                             vehicle.current_state.x,
                             vehicle.current_state.y,
                             vehicle.current_state.yaw,
@@ -232,6 +239,7 @@ def main():
         """
         # 每隔N * 0.1s重新进行一次决策
         if i % decision_timestep == 0 and not is_finish_decision:
+            decision_T = T
             """
             Decider
             """
