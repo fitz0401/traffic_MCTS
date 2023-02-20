@@ -1,4 +1,3 @@
-import logging
 from copy import deepcopy
 import copy
 import csv
@@ -16,7 +15,7 @@ from constant import (
 )
 from decision_maker.multi_scenario_decision import (
     grouping,
-    decision_grouping_freeway,
+    decision_by_grouping,
 )
 
 
@@ -253,7 +252,7 @@ def main():
                 action_record[veh.id] = {}
             decision_flow = planning_flow_to_decision_flow(planning_flow, lanes)
             # 获取决策信息
-            success_info, decision_states = decision_grouping_freeway.freeway_decision(decision_flow)
+            success_info, decision_states = decision_by_grouping.group_decision(decision_flow)
             for veh_decision_state in decision_states.values():
                 for idx in range(len(veh_decision_state)):
                     veh_decision_state[idx] = (veh_decision_state[idx][0] + T, veh_decision_state[idx][1])

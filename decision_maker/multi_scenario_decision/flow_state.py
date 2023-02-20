@@ -9,14 +9,15 @@ from utils.obstacle_cost import check_collsion_new
 
 # 适配各种场景的全局函数
 def get_lane_id(vehicle):
-    # 还未完成汇入但进入0车道时，视为0车道；还未驶出环岛，视为0车道[状态和绘图认为车道已经切换]
+    # 为了便于相邻车道的碰撞检测：还未完成汇入但进入0车道时，视为0车道；还未驶出环岛，视为0车道
+    # [状态和绘图认为车道已经切换]
     merge_length = 5.5
-    if LANE_NUMS < len(lanes) and vehicle.lane_id == list(lanes.keys())[-1]:
+    if config["ROAD_PATH"] == "roadgraph_ramp.yaml":
         if vehicle.current_state.s < RAMP_LENGTH - merge_length:
             vehicle_lane_id = -1
         else:
             vehicle_lane_id = 0
-    elif LANE_NUMS == len(lanes) - 2 and vehicle.lane_id == list(lanes.keys())[-2]:
+    elif config["ROAD_PATH"] == "roadgraph_roundabout.yaml":
         if vehicle.current_state.s < merge_length:
             vehicle_lane_id = 0
         else:
@@ -33,13 +34,6 @@ def check_lane_change(veh_id, s, d, lane_id):
         else:
             return s, d, int((d + LANE_WIDTH/2) / LANE_WIDTH)
     elif lane_id == -1:
-        # 任意车道的处理：提前换至0车道进行碰撞检测
-        # if s >= RAMP_LENGTH - 5:
-        #     x, y = lanes[list(lanes.keys())[-1]].course_spline.frenet_to_cartesian1D(s, d)
-        #     refined_s = np.linspace(0, lanes['E1_0'].course_spline.s[-1], 300)
-        #     s, d = lanes['E1_0'].course_spline.cartesian_to_frenet1D(x, y, refined_s)
-        #     return s, d, 0
-
         # 对齐车道纵坐标时的处理
         if s > RAMP_LENGTH:
             return s, 0, 0
@@ -300,12 +294,15 @@ class FlowState:
                         self_reward += 0.2 / total_action_num
                     # 速度奖励
                     self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
-                elif decision_info[veh_id][0] in {"merge_in", "merge_out"}:
+                elif decision_info[veh_id][0] in {"merge_in", "decision"}:
                     # 速度奖励
                     self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
-                elif decision_info[veh_id][0] == "decision":
+                elif decision_info[veh_id][0] == "merge_out":
                     # 速度奖励
                     self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
+                    # 保持车道中心线行驶
+                    if self.states[i][veh_id][1] % LANE_WIDTH < 0.5:
+                        self_reward += 0.2 / total_action_num
 
             # 惩罚：同车道后方有车的情况下，迫使后车减速
             back_veh = self.surround_cars[veh_id]['cur_lane'].get('back', None)
@@ -344,14 +341,24 @@ class FlowState:
                 # 只在safe_merge_zone内检查左右车道的周围车
                 elif veh_i_lane_id - veh_j_lane_id == 1 and veh_i_lane_id >= 0:
                     if veh_i_lane_id == 0 and veh_j_lane_id == -1:
-                        if veh_i.current_state.s < RAMP_LENGTH - 10 or veh_j.current_state.s < RAMP_LENGTH - 10:
+                        if (
+                            (config["ROAD_PATH"] == "roadgraph_ramp.yaml" and
+                             veh_i.current_state.s < RAMP_LENGTH - 20 or veh_j.current_state.s < RAMP_LENGTH - 20) or
+                            (config["ROAD_PATH"] == "roadgraph_roundabout.yaml" and
+                             veh_i.current_state.s < INTER_S[1] - 20 or veh_j.current_state.s < INTER_S[1] - 20)
+                        ):
                             continue
                     if 'back' not in surround_cars[veh_i.id]['right_lane']:
                         surround_cars[veh_i.id]['right_lane']['back'] = veh_j
                         surround_cars[veh_j.id]['left_lane']['front'] = veh_i
                 elif veh_i_lane_id - veh_j_lane_id == -1 and veh_j_lane_id >= 0:
                     if veh_i_lane_id == -1 and veh_j_lane_id == 0:
-                        if veh_i.current_state.s < RAMP_LENGTH - 10 or veh_j.current_state.s < RAMP_LENGTH - 10:
+                        if (
+                            (config["ROAD_PATH"] == "roadgraph_ramp.yaml" and
+                             veh_i.current_state.s < RAMP_LENGTH - 20 or veh_j.current_state.s < RAMP_LENGTH - 20) or
+                            (config["ROAD_PATH"] == "roadgraph_roundabout.yaml" and
+                             veh_i.current_state.s < INTER_S[1] - 20 or veh_j.current_state.s < INTER_S[1] - 20)
+                        ):
                             continue
                     if 'back' not in surround_cars[veh_i.id]['left_lane']:
                         surround_cars[veh_i.id]['left_lane']['back'] = veh_j
