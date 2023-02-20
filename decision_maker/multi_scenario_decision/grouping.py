@@ -231,11 +231,11 @@ def judge_interaction(flow):
         # 记录车辆是否在merge_zone中
         if config["ROAD_PATH"] == "roadgraph_ramp.yaml":
             if (veh_i_lane_id == 0 or veh_i_lane_id == -1) and (
-                    RAMP_LENGTH - 20 <= veh_i.current_state.s <= RAMP_LENGTH):
+                    RAMP_LENGTH - 25 <= veh_i.current_state.s <= RAMP_LENGTH):
                 merge_zone_ids.append(i)
         elif config["ROAD_PATH"] == "roadgraph_roundabout.yaml":
             if (veh_i_lane_id == 0 or veh_i_lane_id == -1) and (
-                    INTER_S[-1] - 20 <= veh_i.current_state.s <= INTER_S[-1]):
+                    INTER_S[-1] - 25 <= veh_i.current_state.s <= INTER_S[-1]):
                 merge_zone_ids.append(i)
         for veh_j in flow[i + 1:]:
             veh_j_lane_id = get_lane_id(veh_j)

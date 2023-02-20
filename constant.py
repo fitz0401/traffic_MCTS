@@ -7,7 +7,7 @@ import os
 file_path = os.path.dirname(__file__)
 # Decision Information
 ACTION_LIST = ['KS', 'AC', 'DC', 'LCR', 'LCL']
-len_flow = 8
+len_flow = 10
 # Global vars
 TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''

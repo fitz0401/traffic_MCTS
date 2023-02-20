@@ -49,7 +49,7 @@ def update_decision_behaviour(planning_flow, lanes, decision_info_ori):
             decision_info_ori[vehicle.id][0] = "decision"
             logging.info("Vehicle {} finish merge in/ out action, now drives in {}".format(vehicle_id, next_lanes))
         # Lane Change behaviour
-        elif(
+        elif (
             decision_info_ori[vehicle.id][0] in {"change_lane_left", "change_lane_right"} and
             int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
@@ -64,12 +64,24 @@ def update_decision_behaviour(planning_flow, lanes, decision_info_ori):
         ):
             decision_info_ori[vehicle.id][0] = "decision"
             logging.info("Vehicle {} finish overtake action".format(vehicle_id))
-        # When all vehicles drive in target lane, turn into KL mode.
-        if(
-            int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) != TARGET_LANE[vehicle_id] or
+        # When all vehicles finish decision, turn into KL mode.
+        if (
+            decision_info_ori[vehicle.id][0] in {"change_lane_left", "change_lane_right"} and
+            int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) != TARGET_LANE[vehicle_id]
+        ):
+            is_finish_decision = False
+        if (
             (decision_info_ori[vehicle.id][0] == "overtake" and (vehicle.current_state.s <
              planning_flow[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length or
-             int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]))
+             int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) != TARGET_LANE[vehicle_id]))
+        ):
+            is_finish_decision = False
+        if (
+            decision_info_ori[vehicle.id][0] == "merge_in" and vehicle.lane_id != list(lanes.keys())[0]
+        ):
+            is_finish_decision = False
+        if (
+            decision_info_ori[vehicle.id][0] == "merge_out" and vehicle.lane_id != list(lanes.keys())[-2]
         ):
             is_finish_decision = False
     if is_finish_decision:
@@ -95,25 +107,33 @@ def build_map(roadgraph_path):
 
 
 def decision_flow_to_planning_flow(decision_flow, lanes):
-    # 转化到各个车道局部坐标系
+    # 转化到各个车道局部坐标系：只需要转化在主路上（统一使用0号车道坐标系）的车
     flow = copy.deepcopy(decision_flow)
     planning_flow = {}
     for veh in flow:
-        veh.lane_id = list(lanes.keys())[int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)]
-        veh.current_state.d = veh.current_state.d - int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH
-        # TODO：区分场景
+        if veh.lane_id == list(lanes.keys())[0]:
+            veh.lane_id = list(lanes.keys())[int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)]
+            veh = veh.change_to_next_lane(veh.lane_id, lanes[veh.lane_id].course_spline)
+            # veh.current_state.d = veh.current_state.d - int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH
         planning_flow[veh.id] = veh
     return planning_flow
 
 
 def planning_flow_to_decision_flow(planning_flow, lanes):
-    # TODO：区分场景
-    # 转化到路段坐标系
+    # 转化到路段坐标系：只需要转化在主路上（需要统一使用0号车道坐标系）的车
     flow = copy.deepcopy(planning_flow)
     decision_flow = []
     for veh in flow.values():
-        veh.current_state.d = veh.current_state.d + int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH
-        veh.lane_id = list(lanes.keys())[0]
+        if not (
+            (config["ROAD_PATH"] == "roadgraph_ramp.yaml" and
+             veh.lane_id == list(lanes.keys())[-1]) or
+            (config["ROAD_PATH"] == "roadgraph_roundabout.yaml" and
+             veh.lane_id in {list(lanes.keys())[-1], list(lanes.keys())[-2]})
+        ):
+            veh.lane_id = list(lanes.keys())[0]
+            veh = veh.change_to_next_lane(veh.lane_id, lanes[veh.lane_id].course_spline)
+            # veh.current_state.d = veh.current_state.d + int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH
+            # veh.lane_id = list(lanes.keys())[0]
         decision_flow.append(veh)
     decision_flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     return decision_flow
@@ -149,12 +169,13 @@ def main():
     #     decision_info = pickle.load(f)
     #     decision_states = pickle.load(f)
     ''' Method2： 决策-规划闭环 '''
+    focus_car_id = 0
     # 导入yaml格式车流
-    # decision_flow = grouping.yaml_flow()
+    decision_flow = grouping.yaml_flow()
     # 导入随机车流
     decision_flow = grouping.random_flow(0)
     # 如有超车指令，查找超车目标
-    grouping.find_overtake_aim(decision_flow)
+    # grouping.find_overtake_aim(decision_flow)
     planning_flow = decision_flow_to_planning_flow(decision_flow, lanes)
     decision_info_ori = copy.deepcopy(decision_info)
     # write current state & target decision to csv file
@@ -225,7 +246,7 @@ def main():
                         ]
                     )
             if (
-                    lanes[vehicle.lane_id].course_spline.s[-1] - vehicle.current_state.s <= 1.0
+                lanes[vehicle.lane_id].course_spline.s[-1] - vehicle.current_state.s <= 1.0
             ):
                 logging.info("Vehicle {} reached goal".format(vehicle_id))
                 planning_flow.pop(vehicle_id)
@@ -319,7 +340,6 @@ def main():
                 predictions[vehicle_id] = result_path[1]
                 planning_flow[vehicle_id].behaviour = result_path[2]
 
-        focus_car_id = 0
         if ANIMATION:
             plot_trajectory(planning_flow, static_obs_list, predictions,
                             lanes, edges, T, focus_car_id, decision_info_ori)

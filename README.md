@@ -12,15 +12,9 @@
 │   ├── mcts.py
 │   ├── multi_scenario_decision
 |   |   |   # 决策算法
-│   │   ├── decision_grouping_freeway.py
-│   │   ├── decision_grouping_ramp.py
-│   │   ├── decision_grouping_roundabout.py
-│   │   ├── decision_state.pickle
-│   │   ├── flow_state.py
+│   │   ├── decision_by_grouping.py
 |   |   |   # 分组算法
-│   │   ├── grouping_freeway.py
-│   │   ├── grouping_ramp.py
-│   │   ├── grouping_roundabout.py
+│   │   ├── grouping.py
 # 记录随机生成的交通流信息和规划轨迹
 ├── flow_record.csv
 ├── trajectories.csv
@@ -46,12 +40,12 @@
   
 > 各场景分组后的决策算法
   
-  全局信息修改和车流生成同上,`main`调用的是对应场景的`grouping_*.py`下的车流随机生成和分组函数。\
+  全局信息修改和车流生成同上,`main`调用的是`grouping.py`下的车流随机生成函数。\
   直接运行决策算法，可以展示分组 & 决策结果。\
   在`constant.py`内修改`prediction_time`可以提高单次决策的成功率。
 
-> 直道决策规划闭环
+> 直道、匝道、换道决策规划闭环
   
-  全局信息修改和车流生成同上,`main`调用的是对应场景的`grouping_*.py`下的车流随机生成和分组函数。\
+  全局信息修改和车流生成同上,`main`调用的是`decision_by_grouping.py`下的车流决策函数。\
   直接运行`decision_and_planning.py`，可以展示规划结果。\
   结果信息存储在`flow_record.csv`和`trajectories.csv`中，分别是所有车辆的初始信息及决策意图、规划轨迹。
