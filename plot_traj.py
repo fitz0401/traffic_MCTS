@@ -193,7 +193,7 @@ gradient_color = [
 ]
 
 frame_id = 0
-for start_time in range(1, 180,2):
+for start_time in range(1, 230, 2):
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     plot_roadgraph(edges, lanes)
     if start_time % 10 == 1:

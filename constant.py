@@ -7,7 +7,7 @@ import os
 file_path = os.path.dirname(__file__)
 # Decision Information
 ACTION_LIST = ['KS', 'AC', 'DC', 'LCR', 'LCL']
-len_flow = 10
+len_flow = 8
 # Global vars
 TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''
@@ -43,6 +43,6 @@ INTER_S = [50, 70]
 # Decision param
 prediction_time = 10  # seconds
 DT = 1.5  # decision interval (second)
-T_group = 4.5   # Update group interval (second)
+T_group = 3   # Update group interval (second)
 phi = {i: math.pi / 4 for i in range(len_flow)}
 gamma = {i: 1 for i in range(len_flow)}

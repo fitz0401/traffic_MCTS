@@ -1,7 +1,7 @@
 import pickle
 from decision_maker import mcts
-from grouping_roundabout import *
-from flow_state import FlowState
+from decision_maker.multi_scenario_decision.grouping import *
+from decision_maker.multi_scenario_decision.flow_state import FlowState
 
 
 def main():

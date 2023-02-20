@@ -1,12 +1,12 @@
 import pickle
 from decision_maker import mcts
-from decision_maker.multi_scenario_decision.grouping_freeway import *
+from decision_maker.multi_scenario_decision.grouping import *
 from decision_maker.multi_scenario_decision.flow_state import FlowState
 
 
 def main():
-    # flow = yaml_flow()
-    flow = random_flow(0)
+    flow = yaml_flow()
+    # flow = random_flow(0)
     decision_info_ori = copy.deepcopy(decision_info)
 
     start_time = time.time()
@@ -340,10 +340,6 @@ def freeway_decision(flow):
     success_info = {idx: 1 for idx in flow_groups.keys()}
     for idx, final_node in final_nodes.items():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
-            # 是否抵达目标车道
-            if abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5:
-                success_info[idx] = 0
-                break
             # 是否完成超车
             if decision_info[veh_idx][0] == "overtake":
                 aim_veh = None
@@ -351,9 +347,18 @@ def freeway_decision(flow):
                     if veh.id == decision_info[veh_idx][1]:
                         aim_veh = veh
                         break
-                if veh_state[0] < aim_veh.current_state.s + aim_veh.length:
-                    success_info[idx] = 0
-                    break
+                # 重规划下的超车动作：完成换道 / 完成纵坐标超越即视为成功
+                if(
+                    veh_state[0] > aim_veh.current_state.s + aim_veh.length or
+                    abs(veh_state[1] - aim_veh.current_state.d) > aim_veh.width
+                ):
+                    continue
+                success_info[idx] = 0
+                break
+            # 是否抵达目标车道
+            if abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5:
+                success_info[idx] = 0
+                break
 
     # 结果
     decision_state_for_planning = {}
