@@ -38,7 +38,7 @@ elif roadgraph_path == file_path + "/roadgraph_roundabout.yaml":
 scenario_size = [150, LANE_WIDTH * LANE_NUMS]
 RAMP_LENGTH = lanes[list(lanes.keys())[-1]].course_spline.s[-2]
 RAMP_ANGLE = math.pi / 9
-INTER_S = [50, 70]
+INTER_S = [50, RAMP_LENGTH]
 
 # Decision param
 prediction_time = 10  # seconds

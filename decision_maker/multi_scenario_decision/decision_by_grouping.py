@@ -5,8 +5,8 @@ from decision_maker.multi_scenario_decision.flow_state import FlowState
 
 
 def main():
-    flow = yaml_flow()
-    # flow = random_flow(0)
+    # flow = yaml_flow()
+    flow = random_flow(2)
     decision_info_ori = copy.deepcopy(decision_info)
 
     start_time = time.time()
@@ -23,7 +23,12 @@ def main():
 
     # Plot flow
     fig, ax = plt.subplots()
-    fig.set_size_inches(22, 4)
+    if config["ROAD_PATH"] in {"roadgraph.yaml", "roadgraph_freeway.yaml"}:
+        fig.set_size_inches(16, 4)
+    elif config["ROAD_PATH"] == "roadgraph_ramp.yaml":
+        fig.set_size_inches(16, 4)
+    elif config["ROAD_PATH"] == "roadgraph_roundabout.yaml":
+        fig.set_size_inches(12, 9)
     plot_flow(ax, flow, 2, decision_info_ori)
 
     # 分组决策
@@ -54,7 +59,7 @@ def main():
                 continue
             if decision_info[veh.id][0] == "decision":
                 lane_keep_veh_num += 1
-            veh_lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+            veh_lane_id = get_lane_id(veh)
             mcts_init_state[veh.id] = \
                 (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh_lane_id)
         # 本组内无决策车 / 全是直行车，无需进行决策
@@ -99,13 +104,16 @@ def main():
             flow_record[idx][current_node.state.t/DT] = current_node.state.flow
             current_node = current_node.parent
 
-    # Experimental indicators: success
+    # Experimental indicators
     print("expand node num:", mcts.EXPAND_NODE)
     success = 1
     for final_node in final_nodes.values():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否抵达目标车道
-            if abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5:
+            if (
+                decision_info[veh_idx][0] in {"change_lane_left", "change_lane_right"} and
+                abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5
+            ):
                 success = 0
                 print("Vehicle doesn't at aimed lane! veh_id", veh_idx,
                       "group_idx", group_idx[veh_idx])
@@ -122,6 +130,20 @@ def main():
                     print("Vehicle doesn't finish overtaking! veh_id", veh_idx,
                           "group_idx", group_idx[veh_idx])
                     break
+            # 是否完成汇入
+            if decision_info[veh_idx][0] == "merge_in":
+                if veh_state[3] != 0:
+                    success = 0
+                    print("Vehicle doesn't merge in! veh_id", veh_idx,
+                          "group_idx", group_idx[veh_idx])
+                    break
+            # 是否完成汇出
+            if decision_info[veh_idx][0] == "merge_out":
+                if veh_state[3] != -2:
+                    success = 0
+                    print("Vehicle doesn't merge out! veh_id", veh_idx,
+                          "group_idx", group_idx[veh_idx])
+                    break
     print("success:", success)
     if success:
         print("finish_time:", finish_time)
@@ -136,7 +158,10 @@ def main():
         # Experimental indicators: minimum distance
         for i, ego_veh in enumerate(flow_plot[t + 1]):
             for other_veh in flow_plot[t + 1][i + 1:]:
-                if abs(ego_veh.current_state.d - other_veh.current_state.d) < ego_veh.width:
+                if (
+                        abs(ego_veh.current_state.d - other_veh.current_state.d) < ego_veh.width
+                        and ego_veh.lane_id == other_veh.lane_id
+                ):
                     min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s) \
                         if abs(ego_veh.current_state.s - other_veh.current_state.s) < min_dist else min_dist
     print("min_distance:", min_dist - 5)
@@ -175,18 +200,35 @@ def predict_flow(flow, t):
                      for veh in flow}
     # flow 已按照s降序排列
     for i, veh_i in enumerate(flow):
-        veh_i_lane_id = int((veh_i.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+        veh_i_lane_id = get_lane_id(veh_i)
         for veh_j in flow[i + 1:]:
-            veh_j_lane_id = int((veh_j.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+            veh_j_lane_id = get_lane_id(veh_j)
             if veh_i_lane_id == veh_j_lane_id:
                 if 'back' not in surround_cars[veh_i.id]['cur_lane']:
                     surround_cars[veh_i.id]['cur_lane']['back'] = veh_j
                     surround_cars[veh_j.id]['cur_lane']['front'] = veh_i
+            # 只在safe_merge_zone内检查左右车道的周围车
             elif veh_i_lane_id - veh_j_lane_id == 1:
+                if veh_i_lane_id == 0 and veh_j_lane_id == -1:
+                    if (
+                        (config["ROAD_PATH"] == "roadgraph_ramp.yaml" and
+                         veh_i.current_state.s < RAMP_LENGTH - 20 or veh_j.current_state.s < RAMP_LENGTH - 20) or
+                        (config["ROAD_PATH"] == "roadgraph_roundabout.yaml" and
+                         veh_i.current_state.s < INTER_S[1] - 20 or veh_j.current_state.s < INTER_S[1] - 20)
+                    ):
+                        continue
                 if 'back' not in surround_cars[veh_i.id]['right_lane']:
                     surround_cars[veh_i.id]['right_lane']['back'] = veh_j
                     surround_cars[veh_j.id]['left_lane']['front'] = veh_i
             elif veh_i_lane_id - veh_j_lane_id == -1:
+                if veh_i_lane_id == -1 and veh_j_lane_id == 0:
+                    if (
+                        (config["ROAD_PATH"] == "roadgraph_ramp.yaml" and
+                         veh_i.current_state.s < RAMP_LENGTH - 20 or veh_j.current_state.s < RAMP_LENGTH - 20) or
+                        (config["ROAD_PATH"] == "roadgraph_roundabout.yaml" and
+                         veh_i.current_state.s < INTER_S[1] - 20 or veh_j.current_state.s < INTER_S[1] - 20)
+                    ):
+                        continue
                 if 'back' not in surround_cars[veh_i.id]['left_lane']:
                     surround_cars[veh_i.id]['left_lane']['back'] = veh_j
                     surround_cars[veh_j.id]['right_lane']['front'] = veh_i
@@ -274,7 +316,7 @@ def predict_flow(flow, t):
     return next_flow
 
 
-def freeway_decision(flow):
+def group_decision(flow):
     # 分组
     interaction_info = judge_interaction(flow)
     flow_groups = grouping(flow, interaction_info)
@@ -284,6 +326,7 @@ def freeway_decision(flow):
     final_nodes = {}
     start_time = time.time()
     former_flow = []
+
     # 随机决策顺序测试
     dict_key_ls = list(flow_groups.keys())
     random.shuffle(dict_key_ls)
@@ -301,7 +344,7 @@ def freeway_decision(flow):
                 continue
             if decision_info[veh.id][0] == "decision":
                 lane_keep_veh_num += 1
-            veh_lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+            veh_lane_id = get_lane_id(veh)
             mcts_init_state[veh.id] = \
                 (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh_lane_id)
         if len(mcts_init_state) in {1, 1 + lane_keep_veh_num}:
@@ -311,7 +354,6 @@ def freeway_decision(flow):
         current_node = mcts.Node(
             FlowState([mcts_init_state], actions=actions, flow=local_flow)
         )
-        # MCTS
         for t in range(int(prediction_time / DT)):
             current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
             if current_node is None:
@@ -324,13 +366,11 @@ def freeway_decision(flow):
                 temp_best = mcts.best_child(temp_best, 0)
             if current_node.state.terminal():
                 break
-        # 决策完成的车辆设置为查询模式
         for veh in group:
             decision_info[veh.id][0] = "query"
             decision_info[veh.id].append(current_node.state.t)
             action_record[veh.id] = current_node.state.actions[veh.id]
         final_nodes[idx] = copy.deepcopy(current_node)
-        # 过程回放
         while current_node is not None:
             flow_record[idx][current_node.state.t / DT] = current_node.state.flow
             current_node = current_node.parent
@@ -348,9 +388,9 @@ def freeway_decision(flow):
                         aim_veh = veh
                         break
                 # 重规划下的超车动作：完成换道 / 完成纵坐标超越即视为成功
-                if(
-                    veh_state[0] > aim_veh.current_state.s + aim_veh.length or
-                    abs(veh_state[1] - aim_veh.current_state.d) > aim_veh.width
+                if (
+                        veh_state[0] > aim_veh.current_state.s + aim_veh.length or
+                        abs(veh_state[1] - aim_veh.current_state.d) > aim_veh.width
                 ):
                     continue
                 success_info[idx] = 0
