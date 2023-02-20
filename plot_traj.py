@@ -192,15 +192,16 @@ gradient_color = [
     for c_name, c in colors.items()
 ]
 
+# get one of trajectory length
+trajectory_length = len(trajectories[0])
 frame_id = 0
-for start_time in range(1, 230, 2):
+for end_time in range(10, trajectory_length, 2):
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     plot_roadgraph(edges, lanes)
-    if start_time % 10 == 1:
-        print(f"Processing frame {start_time}")
+    if end_time % 10 == 1:
+        print(f"Processing frame {end_time}")
     
-
-    end_time = start_time + 30    
+    start_time = end_time - 30 if end_time > 30 else 0
     # sort trajectories by 'x' decreasing
     trajectories =  {k: v for k, v in sorted(trajectories.items(), key=lambda x: x[1]['x'].iloc[end_time], reverse=True)}
     pos_time = -1
@@ -211,7 +212,8 @@ for start_time in range(1, 230, 2):
         yp = trajectory[start_time:end_time]['y'].values
         yawp = trajectory[start_time:end_time]['yaw'].values
         timep = trajectory[start_time:end_time]['t'].values
-        group_id = trajectory['group_id'].iloc[start_time]
+        group_id = trajectory['group_id'].iloc[end_time]
+        action = trajectory['action'].iloc[end_time]
         # use xp to update min_x and max_x
         min_x = min(min_x, np.min(xp))
         max_x = max(max_x, np.max(xp))
@@ -243,11 +245,11 @@ for start_time in range(1, 230, 2):
 
         # plot_headlights
         intention = vehicle_info[vehicle_info['vehicle_id'] == vehicle_id]['target_decision'].item()
-        if False and intention  == 'change_lane_right':
+        if action == 'LCR':
             plot_headlights(c_x, c_y, yaw, 'right')
-        elif False and  intention == 'change_lane_left':
+        elif action== 'LCL':
             plot_headlights(c_x, c_y, yaw, 'left')
-        elif False:
+        elif action== 'DC':
             plot_headlights(c_x, c_y, yaw, 'stop')
 
     # pos_time = -10
@@ -265,7 +267,7 @@ for start_time in range(1, 230, 2):
     # plot_body(c_x, c_y, yaw)
 
     #plot timestamp
-    ax.text(0.5, 0.9, f"Time: {start_time/10}", transform=ax.transAxes, fontsize=20, color='black', ha='center', va='center')
+    ax.text(0.5, 0.9, f"Time: {end_time/10}", transform=ax.transAxes, fontsize=20, color='black', ha='center', va='center')
     ax.set_xlim(min_x - 1, max_x + 1)
     ax.set_aspect(1.0)
     plt.xticks([])
