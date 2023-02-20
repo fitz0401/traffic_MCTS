@@ -1,6 +1,6 @@
 import pickle
 from decision_maker import mcts
-from decision_maker.multi_scenario_decision.grouping_freeway import *
+from decision_maker.multi_scenario_decision.grouping import *
 from decision_maker.multi_scenario_decision.flow_state import FlowState
 
 

@@ -15,7 +15,7 @@ from constant import (
     DT
 )
 from decision_maker.multi_scenario_decision import (
-    grouping_freeway,
+    grouping,
     decision_grouping_freeway,
 )
 
@@ -151,11 +151,11 @@ def main():
     #     decision_states = pickle.load(f)
     ''' Method2： 决策-规划闭环 '''
     # 导入yaml格式车流
-    # decision_flow = grouping_freeway.yaml_flow()
+    # decision_flow = grouping.yaml_flow()
     # 导入随机车流
-    decision_flow = grouping_freeway.random_flow(0)
+    decision_flow = grouping.random_flow(0)
     # 如有超车指令，查找超车目标
-    grouping_freeway.find_overtake_aim(decision_flow)
+    grouping.find_overtake_aim(decision_flow)
     planning_flow = decision_flow_to_planning_flow(decision_flow, lanes)
     decision_info_ori = copy.deepcopy(decision_info)
     # write current state & target decision to csv file
