@@ -91,7 +91,15 @@ def plot_traj(x, y, colormap):
     lc = LineCollection(segments, cmap=colormap, norm=norm)
     # Set the values used for colormapping
     lc.set_array(np.linspace(0, 1, len(x)))
-    lc.set_linewidth(20)
+    #获取当前figure的实例
+    fig = plt.gcf()
+    #获取figure的大小
+    fig_size = fig.get_size_inches()
+    #获取dpi
+    dpi = fig.get_dpi()
+    #计算出canvasWidth
+    canvasWidth = fig_size[0]*dpi
+    lc.set_linewidth(canvasWidth/len(x)/w)
     ax.add_collection(lc)
 
 
@@ -230,6 +238,7 @@ for start_time in range(1, 180,2):
         c_y = yp[pos_time]
         yaw = yawp[pos_time]
         plot_body(c_x, c_y, yaw)
+        
 
 
         # plot_headlights
@@ -255,6 +264,8 @@ for start_time in range(1, 180,2):
     # yaw = yaw[pos_time]
     # plot_body(c_x, c_y, yaw)
 
+    #plot timestamp
+    ax.text(0.5, 0.9, f"Time: {start_time/10}", transform=ax.transAxes, fontsize=20, color='black', ha='center', va='center')
     ax.set_xlim(min_x - 1, max_x + 1)
     ax.set_aspect(1.0)
     plt.xticks([])
