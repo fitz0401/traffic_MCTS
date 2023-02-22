@@ -5,16 +5,18 @@ from decision_maker.multi_scenario_decision.flow_state import FlowState
 
 
 def main():
+    road_info = RoadInfo("freeway")
+
     # flow = yaml_flow()
-    flow = random_flow(2)
+    flow = random_flow(road_info, 0)
     decision_info_ori = copy.deepcopy(decision_info)
 
     start_time = time.time()
     # 找到超车对象
-    find_overtake_aim(flow)
+    find_overtake_aim(flow, road_info)
 
     # Interaction judge & Grouping
-    interaction_info = judge_interaction(flow)
+    interaction_info = judge_interaction(flow, road_info)
     flow_groups = grouping(flow, interaction_info)
     # 随机分组测试
     # flow_groups = random_grouping(flow)
@@ -23,13 +25,13 @@ def main():
 
     # Plot flow
     fig, ax = plt.subplots()
-    if config["ROAD_PATH"] in {"roadgraph.yaml", "roadgraph_freeway.yaml"}:
+    if road_info.road_type == "freeway":
         fig.set_size_inches(16, 4)
-    elif config["ROAD_PATH"] == "roadgraph_ramp.yaml":
+    elif road_info.road_type == "ramp":
         fig.set_size_inches(16, 4)
-    elif config["ROAD_PATH"] == "roadgraph_roundabout.yaml":
+    elif road_info.road_type == "roundabout":
         fig.set_size_inches(12, 9)
-    plot_flow(ax, flow, 2, decision_info_ori)
+    plot_flow(ax, flow, road_info, 2, decision_info_ori)
 
     # 分组决策
     final_nodes = {}
@@ -59,7 +61,7 @@ def main():
                 continue
             if decision_info[veh.id][0] == "decision":
                 lane_keep_veh_num += 1
-            veh_lane_id = get_lane_id(veh)
+            veh_lane_id = get_lane_id(veh, road_info)
             mcts_init_state[veh.id] = \
                 (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh_lane_id)
         # 本组内无决策车 / 全是直行车，无需进行决策
@@ -68,7 +70,7 @@ def main():
                 decision_info[veh.id][0] = "cruise"
             continue
         current_node = mcts.Node(
-            FlowState([mcts_init_state], actions=actions, flow=local_flow)
+            FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
         )
         print("root_node:", current_node)
         # MCTS
@@ -77,7 +79,7 @@ def main():
             current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
             if current_node is None:
                 current_node = mcts.Node(
-                    FlowState([mcts_init_state], actions=actions, flow=local_flow)
+                    FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
                 )
                 break
             print("Best Child: ", current_node.visits / (200 / (t / 2 + 1)) * 100, "%")
@@ -112,7 +114,7 @@ def main():
             # 是否抵达目标车道
             if (
                 decision_info[veh_idx][0] in {"change_lane_left", "change_lane_right"} and
-                abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5
+                abs(veh_state[1] - TARGET_LANE[veh_idx] * road_info.lane_width) > 0.5
             ):
                 success = 0
                 print("Vehicle doesn't at aimed lane! veh_id", veh_idx,
@@ -154,7 +156,7 @@ def main():
     flow_plot[0] = flow
     min_dist = 100
     for t in range(int(prediction_time / DT)):
-        flow_plot[t + 1] = predict_flow(flow_plot[t], t)
+        flow_plot[t + 1] = predict_flow(flow_plot[t], road_info, t)
         # Experimental indicators: minimum distance
         for i, ego_veh in enumerate(flow_plot[t + 1]):
             for other_veh in flow_plot[t + 1][i + 1:]:
@@ -188,21 +190,21 @@ def main():
     frame_id = 0
     for t in range(int(prediction_time / DT)):
         ax.cla()
-        plot_flow(ax, flow_plot[t], 0.5)
+        plot_flow(ax, flow_plot[t], road_info, 0.5)
         plt.savefig("../../output_video" + "/frame%02d.png" % frame_id)
         frame_id += 1
 
 
-def predict_flow(flow, t):
+def predict_flow(flow, road_info, t):
     next_flow = []
     # find surround car
     surround_cars = {veh.id: {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}
                      for veh in flow}
     # flow 已按照s降序排列
     for i, veh_i in enumerate(flow):
-        veh_i_lane_id = get_lane_id(veh_i)
+        veh_i_lane_id = get_lane_id(veh_i, road_info)
         for veh_j in flow[i + 1:]:
-            veh_j_lane_id = get_lane_id(veh_j)
+            veh_j_lane_id = get_lane_id(veh_j, road_info)
             if veh_i_lane_id == veh_j_lane_id:
                 if 'back' not in surround_cars[veh_i.id]['cur_lane']:
                     surround_cars[veh_i.id]['cur_lane']['back'] = veh_j
@@ -211,10 +213,12 @@ def predict_flow(flow, t):
             elif veh_i_lane_id - veh_j_lane_id == 1:
                 if veh_i_lane_id == 0 and veh_j_lane_id == -1:
                     if (
-                        (config["ROAD_PATH"] == "roadgraph_ramp.yaml" and
-                         veh_i.current_state.s < RAMP_LENGTH - 20 or veh_j.current_state.s < RAMP_LENGTH - 20) or
-                        (config["ROAD_PATH"] == "roadgraph_roundabout.yaml" and
-                         veh_i.current_state.s < INTER_S[1] - 20 or veh_j.current_state.s < INTER_S[1] - 20)
+                        (road_info.road_type == "ramp" and
+                         veh_i.current_state.s < road_info.ramp_length - 20 or
+                         veh_j.current_state.s < road_info.ramp_length - 20) or
+                        (road_info.road_type == "roundabout" and
+                         veh_i.current_state.s < road_info.inter_s[1] - 20 or
+                         veh_j.current_state.s < road_info.inter_s[1] - 20)
                     ):
                         continue
                 if 'back' not in surround_cars[veh_i.id]['right_lane']:
@@ -223,10 +227,12 @@ def predict_flow(flow, t):
             elif veh_i_lane_id - veh_j_lane_id == -1:
                 if veh_i_lane_id == -1 and veh_j_lane_id == 0:
                     if (
-                        (config["ROAD_PATH"] == "roadgraph_ramp.yaml" and
-                         veh_i.current_state.s < RAMP_LENGTH - 20 or veh_j.current_state.s < RAMP_LENGTH - 20) or
-                        (config["ROAD_PATH"] == "roadgraph_roundabout.yaml" and
-                         veh_i.current_state.s < INTER_S[1] - 20 or veh_j.current_state.s < INTER_S[1] - 20)
+                        (road_info.road_type == "ramp" and
+                         veh_i.current_state.s < road_info.ramp_length - 20 or
+                         veh_j.current_state.s < road_info.ramp_length - 20) or
+                        (road_info.road_type == "roundabout" and
+                         veh_i.current_state.s < road_info.inter_s[1] - 20 or
+                         veh_j.current_state.s < road_info.inter_s[1] - 20)
                     ):
                         continue
                 if 'back' not in surround_cars[veh_i.id]['left_lane']:
@@ -247,7 +253,7 @@ def predict_flow(flow, t):
                 leading_car = surround_cars[veh.id]['cur_lane']['front']
             if 'front' in surround_cars[veh.id]['left_lane'] and (
                     abs(veh.current_state.d - surround_cars[veh.id]['left_lane']['front'].current_state.d)
-                    < LANE_WIDTH * 0.6
+                    < road_info.lane_width * 0.6
             ):
                 if leading_car is None:
                     leading_car = surround_cars[veh.id]['left_lane']['front']
@@ -255,7 +261,7 @@ def predict_flow(flow, t):
                     leading_car = surround_cars[veh.id]['left_lane']['front']
             if 'front' in surround_cars[veh.id]['right_lane'] and (
                     abs(veh.current_state.d - surround_cars[veh.id]['right_lane']['front'].current_state.d)
-                    < LANE_WIDTH * 0.6
+                    < road_info.lane_width * 0.6
             ):
                 if leading_car is None:
                     leading_car = surround_cars[veh.id]['right_lane']['front']
@@ -279,7 +285,7 @@ def predict_flow(flow, t):
                         lane_id=veh.lane_id,
                         target_speed=10.0,
                         behaviour=decision_info[veh.id][0],
-                        lanes=lanes,
+                        lanes=road_info.lanes,
                         config=config,
                     )
                 )
@@ -308,7 +314,7 @@ def predict_flow(flow, t):
                         lane_id=veh.lane_id,
                         target_speed=10.0,
                         behaviour=decision_info[veh.id][0],
-                        lanes=lanes,
+                        lanes=road_info.lanes,
                         config=config,
                     )
                 )
@@ -316,9 +322,9 @@ def predict_flow(flow, t):
     return next_flow
 
 
-def group_decision(flow):
+def group_decision(flow, road_info):
     # 分组
-    interaction_info = judge_interaction(flow)
+    interaction_info = judge_interaction(flow, road_info)
     flow_groups = grouping(flow, interaction_info)
     print("flow_groups: \n", flow_groups)
 
@@ -344,7 +350,7 @@ def group_decision(flow):
                 continue
             if decision_info[veh.id][0] == "decision":
                 lane_keep_veh_num += 1
-            veh_lane_id = get_lane_id(veh)
+            veh_lane_id = get_lane_id(veh, road_info)
             mcts_init_state[veh.id] = \
                 (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh_lane_id)
         if len(mcts_init_state) in {1, 1 + lane_keep_veh_num}:
@@ -352,13 +358,13 @@ def group_decision(flow):
                 decision_info[veh.id][0] = "cruise"
             continue
         current_node = mcts.Node(
-            FlowState([mcts_init_state], actions=actions, flow=local_flow)
+            FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
         )
         for t in range(int(prediction_time / DT)):
             current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
             if current_node is None:
                 current_node = mcts.Node(
-                    FlowState([mcts_init_state], actions=actions, flow=local_flow)
+                    FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
                 )
                 break
             temp_best = current_node
@@ -396,7 +402,7 @@ def group_decision(flow):
                 success_info[idx] = 0
                 break
             # 是否抵达目标车道
-            if abs(veh_state[1] - TARGET_LANE[veh_idx] * LANE_WIDTH) > 0.5:
+            if abs(veh_state[1] - TARGET_LANE[veh_idx] * road_info.lane_width) > 0.5:
                 success_info[idx] = 0
                 break
 

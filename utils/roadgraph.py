@@ -302,7 +302,7 @@ def build_roadgraph(file_path):
 
 
 def main():
-    file_path = "../roadgraph.yaml"
+    file_path = "../road_graphs/roadgraph.yaml"
     # file_path = "roadgraph_intersect.yaml"
     edges, lanes, junction_lanes = build_roadgraph(file_path)
     print(junction_lanes.keys())
