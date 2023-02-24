@@ -74,5 +74,5 @@ matplotrecorder/*
 
 #video output
 /output_video
-/decision_maker/grouping_decision/
+/decision_maker/network_decision/
 /backup/

@@ -7,31 +7,34 @@ from utils.vehicle import build_vehicle
 
 
 def main():
-    # flow = yaml_flow()
-    flow = random_flow(0)
+    road_info = RoadInfo("roundabout")
 
-    find_overtake_aim(flow)
+    # flow = yaml_flow(road_info)
+    flow = random_flow(road_info, 0)
+
+    find_overtake_aim(flow, road_info)
     start_time = time.time()
     print('flow:', flow)
     # Interaction judge & Grouping
-    interaction_info = judge_interaction(flow)
+    interaction_info = judge_interaction(flow, road_info)
     group_info = grouping(flow, interaction_info)
     print("group_info:", group_info)
     print("Grouping Time: %f\n" % (time.time() - start_time))
 
     # Plot flow
     fig, ax = plt.subplots()
-    if config["ROAD_PATH"] in {"roadgraph.yaml", "roadgraph_freeway.yaml"}:
+    if road_info.road_type == "freeway":
         fig.set_size_inches(16, 4)
-    elif config["ROAD_PATH"] == "roadgraph_ramp.yaml":
+    elif road_info.road_type == "ramp":
         fig.set_size_inches(16, 4)
-    elif config["ROAD_PATH"] == "roadgraph_roundabout.yaml":
+    elif road_info.road_type == "roundabout":
         fig.set_size_inches(12, 9)
-    plot_flow(ax, flow, 0, decision_info)
+    plot_flow(ax, flow, road_info, 0, decision_info)
 
 
-def yaml_flow():
+def yaml_flow(road_info):
     flow = []
+    lanes = road_info.lanes
     # Read from init_state.yaml from yaml
     with open(file_path + "/init_state.yaml", "r") as fd:
         init_state = yaml.load(fd, Loader=yaml.FullLoader)
@@ -43,7 +46,7 @@ def yaml_flow():
                 vtype="car",
                 s0=vehicle["s"],
                 s0_d=vehicle["vel"],
-                d0=vehicle["d"] if vehicle["lane_id"] < 0 else vehicle["d"] + vehicle["lane_id"] * LANE_WIDTH,
+                d0=vehicle["d"] if vehicle["lane_id"] < 0 else vehicle["d"] + vehicle["lane_id"] * road_info.lane_width,
                 lane_id=list(lanes.keys())[-1] if vehicle["lane_id"] < 0 else list(lanes.keys())[0],
                 target_speed=random.uniform(6, 8) if vehicle["vehicle_type"] in {"decision", "cruise"} else 8,
                 behaviour="KL" if vehicle["vehicle_type"] == "cruise" else "Decision",
@@ -59,16 +62,17 @@ def yaml_flow():
     return flow
 
 
-def random_flow(random_seed):
+def random_flow(road_info, random_seed):
     flow = []
+    lanes = road_info.lanes
     # Randomly generate vehicles
     random.seed(random_seed)
     # Freeway
-    if config["ROAD_PATH"] in {"roadgraph.yaml", "roadgraph_freeway.yaml"}:
+    if road_info.road_type == "freeway":
         while len(flow) < len_flow:
             s = random.uniform(0, 60)
-            lane_id = random.randint(0, LANE_NUMS - 1)
-            d = random.uniform(-0.1, 0.1) + lane_id * LANE_WIDTH
+            lane_id = random.randint(0, road_info.lane_num - 1)
+            d = random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)
             veh = build_vehicle(
                 id=len(flow),
@@ -92,7 +96,7 @@ def random_flow(random_seed):
             flow.append(veh)
             if lane_id == 0:
                 TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
-            elif lane_id == LANE_NUMS - 1:
+            elif lane_id == road_info.lane_num - 1:
                 TARGET_LANE[veh.id] = lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
             else:
                 TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4
@@ -106,12 +110,12 @@ def random_flow(random_seed):
             if decision_info[veh.id][0] == "cruise":
                 veh.behaviour = "KL"
     # Ramp
-    elif config["ROAD_PATH"] in {"roadgraph_ramp.yaml"}:
+    elif road_info.road_type == "ramp":
         while len(flow) < len_flow:
-            lane_id = random.randint(0, LANE_NUMS) - 1
-            s = random.uniform(0, RAMP_LENGTH) if lane_id < 0 else random.uniform(0, 60)
+            lane_id = random.randint(0, road_info.lane_num) - 1
+            s = random.uniform(0, road_info.ramp_length) if lane_id < 0 else random.uniform(0, 60)
             d = random.uniform(-0.1, 0.1) if lane_id < 0 \
-                else random.uniform(-0.1, 0.1) + lane_id * LANE_WIDTH
+                else random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)
             veh = build_vehicle(
                 id=len(flow),
@@ -138,7 +142,7 @@ def random_flow(random_seed):
                 TARGET_LANE[veh.id] = 0
             elif lane_id == 0:
                 TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
-            elif lane_id == LANE_NUMS - 1:
+            elif lane_id == road_info.lane_num - 1:
                 TARGET_LANE[veh.id] = lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
             else:
                 TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4
@@ -155,13 +159,13 @@ def random_flow(random_seed):
             if decision_info[veh.id][0] == "cruise":
                 veh.behaviour = "KL"
     # Roundabout
-    elif config["ROAD_PATH"] in {"roadgraph_roundabout.yaml"}:
+    elif road_info.road_type == "roundabout":
         while len(flow) < len_flow:
-            lane_id = random.randint(0, LANE_NUMS) - 1
-            s = random.uniform(0, INTER_S[1] - 10) if lane_id < 0 \
-                else random.uniform(0, INTER_S[-1])
+            lane_id = random.randint(0, road_info.lane_num) - 1
+            s = random.uniform(0, road_info.inter_s[1] - 10) if lane_id < 0 \
+                else random.uniform(0, road_info.inter_s[-1])
             d = random.uniform(-0.1, 0.1) if lane_id < 0 \
-                else random.uniform(-0.1, 0.1) + lane_id * LANE_WIDTH
+                else random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)
             veh = build_vehicle(
                 id=len(flow),
@@ -187,7 +191,7 @@ def random_flow(random_seed):
                 TARGET_LANE[veh.id] = 0
             elif lane_id == 0:
                 TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4 else 1)
-            elif lane_id == LANE_NUMS - 1:
+            elif lane_id == road_info.lane_num - 1:
                 TARGET_LANE[veh.id] = lane_id - (0 if random.uniform(0, 1) < 0.4 else 1)
             else:
                 TARGET_LANE[veh.id] = lane_id + (0 if random.uniform(0, 1) < 0.4
@@ -205,8 +209,8 @@ def random_flow(random_seed):
                 veh.behaviour = "KL"
             # 构建驶出环岛的车辆
             if (
-                    lane_id == 0 and s < INTER_S[0] - 10
-                    or lane_id == 1 and s < INTER_S[0] - 25
+                    lane_id == 0 and s < road_info.inter_s[0] - 10
+                    or lane_id == 1 and s < road_info.inter_s[0] - 25
             ):
                 if random.uniform(0, 1) < 0.4:
                     TARGET_LANE[veh.id] = -2
@@ -217,7 +221,7 @@ def random_flow(random_seed):
     return flow
 
 
-def judge_interaction(flow):
+def judge_interaction(flow, road_info):
     vehicle_num = len(flow)
     interaction_info = -1 * np.ones((vehicle_num, vehicle_num))  # 交互矩阵中的元素初始化为-1
     # 人为设定超车关系具备交互可能性
@@ -227,18 +231,18 @@ def judge_interaction(flow):
     merge_zone_ids = []
     # 判断车辆的交互可能性
     for i, veh_i in enumerate(flow):
-        veh_i_lane_id = get_lane_id(veh_i)
+        veh_i_lane_id = get_lane_id(veh_i, road_info)
         # 记录车辆是否在merge_zone中
-        if config["ROAD_PATH"] == "roadgraph_ramp.yaml":
+        if road_info.road_type == "ramp":
             if (veh_i_lane_id == 0 or veh_i_lane_id == -1) and (
-                    RAMP_LENGTH - 20 <= veh_i.current_state.s <= RAMP_LENGTH):
+                    road_info.ramp_length - 25 <= veh_i.current_state.s <= road_info.ramp_length):
                 merge_zone_ids.append(i)
-        elif config["ROAD_PATH"] == "roadgraph_roundabout.yaml":
+        elif road_info.road_type == "roundabout":
             if (veh_i_lane_id == 0 or veh_i_lane_id == -1) and (
-                    INTER_S[-1] - 20 <= veh_i.current_state.s <= INTER_S[-1]):
+                    road_info.inter_s[-1] - 25 <= veh_i.current_state.s <= road_info.inter_s[-1]):
                 merge_zone_ids.append(i)
         for veh_j in flow[i + 1:]:
-            veh_j_lane_id = get_lane_id(veh_j)
+            veh_j_lane_id = get_lane_id(veh_j, road_info)
             # 无交互：满足横向安全距离
             if abs(veh_i_lane_id - veh_j_lane_id) >= 3:
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
@@ -282,7 +286,7 @@ def judge_interaction(flow):
             # 上述情况都不满足，i和j存在交互
             interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 1
     # 构建merge_zone内的车辆交互
-    if config["ROAD_PATH"] in {"roadgraph_ramp.yaml", "roadgraph_roundabout.yaml"}:
+    if road_info.road_type in {"ramp", "roundabout"}:
         for i, veh_i_idx in enumerate(merge_zone_ids):
             veh_i = flow[veh_i_idx]
             for veh_j_idx in merge_zone_ids[i + 1:]:
@@ -392,11 +396,11 @@ def random_grouping(flow):
     return group_info
 
 
-def plot_flow(ax, flow, pause_t, target_decision=None):
+def plot_flow(ax, flow, road_info, pause_t, target_decision=None):
     if target_decision is None:
         target_decision = []
     plt.ion()  # 将 figure 设置为交互模式，figure 不用 plt.show() 也可以显示
-    roadgraph.plot_roadgraph(ax, edges, lanes, junction_lanes)
+    roadgraph.plot_roadgraph(ax, road_info.edges, road_info.lanes, road_info.junction_lanes)
     # 绘制车流
     for vehicle in flow:
         x = vehicle.current_state.x
@@ -446,23 +450,23 @@ def plot_flow(ax, flow, pause_t, target_decision=None):
     ax.set_facecolor("lightgray")
     ax.grid(False)
     ax.axis("equal")
-    if config["ROAD_PATH"] in {"roadgraph.yaml", "roadgraph_freeway.yaml"}:
-        ax.axis(xmin=-10, xmax=scenario_size[0] + 10, ymin=0, ymax=scenario_size[1])
-    elif config["ROAD_PATH"] == "roadgraph_ramp.yaml":
-        ax.axis(xmin=-10, xmax=scenario_size[0] + 10, ymin=-20, ymax=scenario_size[1] - LANE_WIDTH)
-    elif config["ROAD_PATH"] == "roadgraph_roundabout.yaml":
+    if road_info.road_type == "freeway":
+        ax.axis(xmin=-10, xmax=160, ymin=0, ymax=road_info.lane_num * road_info.lane_width)
+    elif road_info.road_type == "ramp":
+        ax.axis(xmin=-10, xmax=160, ymin=-20, ymax=road_info.lane_num * road_info.lane_width)
+    elif road_info.road_type == "roundabout":
         ax.axis(xmin=-10, xmax=110, ymin=-45, ymax=45)
     plt.pause(pause_t)
 
 
-def find_overtake_aim(flow):
+def find_overtake_aim(flow, road_info):
     for i, veh_i in enumerate(flow):
-        veh_i_lane_id = get_lane_id(veh_i)
+        veh_i_lane_id = get_lane_id(veh_i, road_info)
         if decision_info[veh_i.id][0] == "overtake":
             # 倒序查找同车道最近的直行车
             for j in range(i - 1, -1, -1):
                 veh_j = flow[j]
-                veh_j_lane_id = get_lane_id(veh_j)
+                veh_j_lane_id = get_lane_id(veh_j, road_info)
                 # 超车对象只能是邻近的直行车
                 if veh_i_lane_id == veh_j_lane_id:
                     if (
@@ -475,15 +479,15 @@ def find_overtake_aim(flow):
                 decision_info[veh_i.id][0] = "cruise"
 
 
-def get_lane_id(vehicle):
+def get_lane_id(vehicle, road_info):
     vehicle_lane_id = 0
-    if config["ROAD_PATH"] in {"roadgraph.yaml", "roadgraph_freeway.yaml"}:
-        vehicle_lane_id = int((vehicle.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
-    elif config["ROAD_PATH"] in {"roadgraph_ramp.yaml", "roadgraph_roundabout.yaml"}:
-        if vehicle.lane_id == list(lanes.keys())[-1]:
+    if road_info.road_type == "freeway":
+        vehicle_lane_id = int((vehicle.current_state.d + road_info.lane_width / 2) / road_info.lane_width)
+    elif road_info.road_type in {"ramp", "roundabout"}:
+        if vehicle.lane_id == list(road_info.lanes.keys())[-1]:
             vehicle_lane_id = -1
         else:
-            vehicle_lane_id = int((vehicle.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+            vehicle_lane_id = int((vehicle.current_state.d + road_info.lane_width / 2) / road_info.lane_width)
     return vehicle_lane_id
 
 
