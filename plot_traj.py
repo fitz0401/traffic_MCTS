@@ -80,7 +80,7 @@ def plot_roadgraph(edges, lanes):
     # ax.grid(True)
 
 
-def plot_traj(x, y, colormap):
+def plot_traj(x, y,yaw, colormap):
     # Create a set of line segments so that we can color them individually
     # This creates the points as a N x 1 x 2 array so that we can stack points
     # together easily to get the segments. The segments array for line collection
@@ -102,8 +102,33 @@ def plot_traj(x, y, colormap):
     lc.set_linewidth(canvasWidth/len(x)/w)
     ax.add_collection(lc)
 
+def plot_traj_new(x, y,yaw_list, colormap):
+    for i in  range(0,len(x),5):
+        color = colormap(i/len(x))
+        c_x = x[i]
+        c_y = y[i]
+        yaw = yaw_list[i]
+        ax.add_patch(
+                plt.Rectangle(
+                    (
+                        c_x - ((l) * math.cos(yaw)) + ((w / 2) * math.sin(yaw)),
+                        c_y - ((l) * math.sin(yaw)) - ((w / 2) * math.cos(yaw)),
+                    ),
+                    l,
+                    w,
+                    angle=yaw / math.pi * 180,
+                    facecolor=color,
+                    linewidth=2.5,
+                    alpha=0.9,
+                    fill=True,
+                    zorder=3,
+                )
+        )
+        
 
-def plot_body(c_x, c_y, yaw):
+    return
+
+def plot_body(c_x, c_y, yaw,color):
     ax.add_patch(
         plt.Rectangle(
             (
@@ -113,10 +138,11 @@ def plot_body(c_x, c_y, yaw):
             l,
             w,
             angle=yaw / math.pi * 180,
-            facecolor='#2c3e50',
+            facecolor=color,
+            edgecolor = '#464555',
             linewidth=2.5,
-            alpha=0.7,
-            fill=False,
+            alpha=1,
+            fill=True,
             zorder=3,
         )
     )
@@ -195,7 +221,7 @@ gradient_color = [
 # get one of trajectory length
 trajectory_length = len(trajectories[0])
 frame_id = 0
-for end_time in range(10, trajectory_length, 2):
+for end_time in range(1, trajectory_length, 2):
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     plot_roadgraph(edges, lanes)
     if end_time % 10 == 1:
@@ -234,12 +260,12 @@ for end_time in range(10, trajectory_length, 2):
         #     color = gradient_color[5]
         # if vehicle_id == 1:
         #     color = gradient_color[2]
-        plot_traj(xp, yp, color)
+        plot_traj_new(xp, yp, yawp,color)
 
         c_x = xp[pos_time]
         c_y = yp[pos_time]
         yaw = yawp[pos_time]
-        plot_body(c_x, c_y, yaw)
+        plot_body(c_x, c_y, yaw,color(255))
         
 
 
@@ -275,6 +301,7 @@ for end_time in range(10, trajectory_length, 2):
     plt.savefig(video_folder + "/beauti_frame%02d.png" % frame_id)
     # plt.savefig('fig_plot.png', bbox_inches='tight', dpi=600, pad_inches=0.05)
     # plt.show()
+    # exit()
     frame_id +=1
     plt.cla()
     plt.close()
