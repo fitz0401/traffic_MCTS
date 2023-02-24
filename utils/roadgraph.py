@@ -291,18 +291,11 @@ def build_roadgraph(file_path):
                 lane.construct_junctionlane(lane_connection, lanes, edges)
             )
 
-    logging.info(
-        'Built road graph with %d edges containing %d lanes and %d junction lanes',
-        len(edges),
-        len(lanes),
-        len(junction_lanes),
-    )
-
     return edges, lanes, junction_lanes
 
 
 def main():
-    file_path = "../road_graphs/roadgraph.yaml"
+    file_path = "../road_graphs/network_freeway.yaml"
     # file_path = "roadgraph_intersect.yaml"
     edges, lanes, junction_lanes = build_roadgraph(file_path)
     print(junction_lanes.keys())

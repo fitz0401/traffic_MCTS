@@ -90,19 +90,6 @@ def update_decision_behaviour(planning_flow, lanes, decision_info_ori):
     return is_finish_decision
 
 
-def build_map(road_type):
-    road_info = RoadInfo(road_type)
-    if road_type == "ramp":
-        road_info.lanes['E1_3'].go_straight_lane.append('E1_0')
-        road_info.lanes['E1_3'].next_s = road_info.ramp_length
-    elif road_type == "roundabout":
-        road_info.lanes['E1_4'].go_straight_lane.append('E1_0')
-        road_info.lanes['E1_4'].next_s = road_info.inter_s[1]
-        road_info.lanes['E1_0'].go_straight_lane.append('E1_3')
-        road_info.lanes['E1_0'].next_s = road_info.inter_s[0]
-    return road_info
-
-
 def decision_flow_to_planning_flow(decision_flow, road_info):
     # 转化到各个车道局部坐标系：只需要转化在主路上（统一使用0号车道坐标系）的车
     flow = copy.deepcopy(decision_flow)
@@ -122,9 +109,9 @@ def planning_flow_to_decision_flow(planning_flow, road_info):
     decision_flow = []
     for veh in flow.values():
         if not (
-            (road_info.road_type == "ramp" and
+            ("ramp" in road_info.road_type and
              veh.lane_id == list(road_info.lanes.keys())[-1]) or
-            (road_info.road_type == "roundabout" and
+            ("roundabout" in road_info.road_type and
              veh.lane_id in {list(road_info.lanes.keys())[-1], list(road_info.lanes.keys())[-2]})
         ):
             veh.lane_id = list(road_info.lanes.keys())[0]
@@ -152,10 +139,10 @@ def main():
     """
     Step 1. Build Frenet cord
     """
-    road_info = build_map("roundabout")
+    road_info = RoadInfo("freeway")
     static_obs_list = []
 
-    """5
+    """
     Step 2. Init vehicles
     """
     ''' Method1： 导入pickle文件 '''
@@ -168,7 +155,7 @@ def main():
     # 导入yaml格式车流
     # decision_flow = grouping.yaml_flow(road_info)
     # 导入随机车流
-    decision_flow = grouping.random_flow(road_info, 24)
+    decision_flow = grouping.random_flow(road_info, 2)
     # 如有超车指令，查找超车目标
     # grouping.find_overtake_aim(decision_flow)
     planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
@@ -195,7 +182,7 @@ def main():
     Step 3. Main Loop
     """
     planning_timestep = 3
-    decision_timestep = 30
+    decision_timestep = 42
     predictions = {}
     decision_states = None
     decision_T = 0
@@ -275,7 +262,7 @@ def main():
             # 打印决策结果
             logging.info("------------------------------")
             for veh_id in group_idx.keys():
-                if success_info[group_idx[veh_id]] == 0:
+                if success_info[veh_id] == 0:
                     logging.info("Vehicle: %d in group %d decision failure." % (veh_id, group_idx[veh_id]))
             end = time.time()
             planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)

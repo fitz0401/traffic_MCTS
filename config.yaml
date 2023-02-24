@@ -1,10 +1,10 @@
 ANIMATION: True
 VERBOSE: False # print detailed debug message
-VIDEO: False # save plotting as video
+VIDEO: True # save plotting as video
 VIDEO_NAME: "demo_dp"
 CSV: True # write trajectories in trajectories.csv
 # ROAD_PATH: "roadgraph_intersect.yaml" # roadgraph yaml path
-ROAD_PATH: "roadgraph_roundabout.yaml" # roadgraph yaml path
+ROAD_PATH: "roadgraph_network.yaml" # roadgraph yaml path
 
 SIM_LOOP: 500
 MAX_ROAD_WIDTH: 3.5 # [DEPRECATED]: maximum road width [m]

@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import matplotlib.colors as clr
-import utils.roadgraph as roadgraph
+from constant import RoadInfo
 import pandas as pd
 import yaml
 
@@ -193,7 +193,7 @@ with open(config_file_path, "r") as f:
 
 import decision_and_planning
 
-edges, lanes = decision_and_planning.build_map(config["ROAD_PATH"])
+road_info = RoadInfo("freeway")
 
 # load init_state.yaml
 # with open("init_state.yaml", "r") as f:
@@ -223,7 +223,7 @@ trajectory_length = len(trajectories[0])
 frame_id = 0
 for end_time in range(1, trajectory_length, 2):
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
-    plot_roadgraph(edges, lanes)
+    plot_roadgraph(road_info.edges, road_info.lanes)
     if end_time % 10 == 1:
         print(f"Processing frame {end_time}")
     

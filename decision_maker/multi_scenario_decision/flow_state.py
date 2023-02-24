@@ -12,12 +12,12 @@ def get_lane_id(vehicle, road_info):
     # 为了便于相邻车道的碰撞检测：还未完成汇入但进入0车道时，视为0车道；还未驶出环岛，视为0车道
     # [状态和绘图认为车道已经切换]
     merge_length = 5.5
-    if road_info.road_type == "ramp":
+    if "ramp" in road_info.road_type:
         if vehicle.current_state.s < road_info.ramp_length - merge_length:
             vehicle_lane_id = -1
         else:
             vehicle_lane_id = 0
-    elif road_info.road_type == "roundabout":
+    elif "roundabout" in road_info.road_type:
         if vehicle.current_state.s < merge_length:
             vehicle_lane_id = 0
         else:
@@ -104,7 +104,7 @@ class FlowState:
                         s += vel * DT
                     elif action == 'AC':
                         vel += self.ACC * DT
-                        vel = min(vel, 10)
+                        vel = min(vel, 12)
                         s += vel * DT + 0.5 * self.ACC * DT * DT
                     elif action == 'DC':
                         vel -= self.ACC * DT
@@ -296,13 +296,16 @@ class FlowState:
                     if i > 0 and self.actions[veh_id][i] == self.actions[veh_id][i - 1]:
                         self_reward += 0.2 / total_action_num
                     # 速度奖励
-                    self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
-                elif decision_info[veh_id][0] in {"merge_in", "decision"}:
+                    if 0 < self.states[i][veh_id][2] <= 10:
+                        self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
+                elif decision_info[veh_id][0] == "decision":
                     # 速度奖励
-                    self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
-                elif decision_info[veh_id][0] == "merge_out":
+                    if 0 < self.states[i][veh_id][2] <= 8:
+                        self_reward += 0.1 * self.states[i][veh_id][2] / 8.0 / total_action_num
+                elif decision_info[veh_id][0] in {"merge_in", "merge_out"}:
                     # 速度奖励
-                    self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
+                    if 0 < self.states[i][veh_id][2] <= 10:
+                        self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
                     # 保持车道中心线行驶
                     if self.states[i][veh_id][1] % self.road_info.lane_width < 0.5:
                         self_reward += 0.2 / total_action_num
@@ -345,10 +348,10 @@ class FlowState:
                 elif veh_i_lane_id - veh_j_lane_id == 1 and veh_i_lane_id >= 0:
                     if veh_i_lane_id == 0 and veh_j_lane_id == -1:
                         if (
-                            (self.road_info.road_type == "ramp" and
+                            ("ramp" in self.road_info.road_type and
                              veh_i.current_state.s < self.road_info.ramp_length - 20 or
                              veh_j.current_state.s < self.road_info.ramp_length - 20) or
-                            (self.road_info.road_type == "roundabout" and
+                            ("roundabout" in self.road_info.road_type and
                              veh_i.current_state.s < self.road_info.inter_s[1] - 20 or
                              veh_j.current_state.s < self.road_info.inter_s[1] - 20)
                         ):
@@ -359,10 +362,10 @@ class FlowState:
                 elif veh_i_lane_id - veh_j_lane_id == -1 and veh_j_lane_id >= 0:
                     if veh_i_lane_id == -1 and veh_j_lane_id == 0:
                         if (
-                            (self.road_info.road_type == "ramp" and
+                            ("ramp" in self.road_info.road_type and
                              veh_i.current_state.s < self.road_info.ramp_length - 20 or
                              veh_j.current_state.s < self.road_info.ramp_length - 20) or
-                            (self.road_info.road_type == "roundabout" and
+                            ("roundabout" in self.road_info.road_type and
                              veh_i.current_state.s < self.road_info.inter_s[1] - 20 or
                              veh_j.current_state.s < self.road_info.inter_s[1] - 20)
                         ):

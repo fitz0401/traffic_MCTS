@@ -45,7 +45,7 @@ class Vehicle:
         vehicle_new_lane = deepcopy(self)
         vehicle_new_lane.lane_id = lane_id
 
-        refined_s = np.linspace(0, course_spline.s[-1], 500)
+        refined_s = np.linspace(0, course_spline.s[-1], 1000)
         rs, _ = course_spline.find_nearest_rs(
             refined_s, self.current_state.x, self.current_state.y
         )

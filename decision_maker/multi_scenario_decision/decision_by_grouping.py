@@ -25,11 +25,11 @@ def main():
 
     # Plot flow
     fig, ax = plt.subplots()
-    if road_info.road_type == "freeway":
+    if "freeway" in road_info.road_type:
         fig.set_size_inches(16, 4)
-    elif road_info.road_type == "ramp":
+    elif "ramp" in road_info.road_type:
         fig.set_size_inches(16, 4)
-    elif road_info.road_type == "roundabout":
+    elif "roundabout" in road_info.road_type:
         fig.set_size_inches(12, 9)
     plot_flow(ax, flow, road_info, 2, decision_info_ori)
 
@@ -213,10 +213,10 @@ def predict_flow(flow, road_info, t):
             elif veh_i_lane_id - veh_j_lane_id == 1:
                 if veh_i_lane_id == 0 and veh_j_lane_id == -1:
                     if (
-                        (road_info.road_type == "ramp" and
+                        ("ramp" in road_info.road_type and
                          veh_i.current_state.s < road_info.ramp_length - 20 or
                          veh_j.current_state.s < road_info.ramp_length - 20) or
-                        (road_info.road_type == "roundabout" and
+                        ("roundabout" in road_info.road_type and
                          veh_i.current_state.s < road_info.inter_s[1] - 20 or
                          veh_j.current_state.s < road_info.inter_s[1] - 20)
                     ):
@@ -227,10 +227,10 @@ def predict_flow(flow, road_info, t):
             elif veh_i_lane_id - veh_j_lane_id == -1:
                 if veh_i_lane_id == -1 and veh_j_lane_id == 0:
                     if (
-                        (road_info.road_type == "ramp" and
+                        ("ramp" in road_info.road_type and
                          veh_i.current_state.s < road_info.ramp_length - 20 or
                          veh_j.current_state.s < road_info.ramp_length - 20) or
-                        (road_info.road_type == "roundabout" and
+                        ("roundabout" in road_info.road_type and
                          veh_i.current_state.s < road_info.inter_s[1] - 20 or
                          veh_j.current_state.s < road_info.inter_s[1] - 20)
                     ):
@@ -383,7 +383,7 @@ def group_decision(flow, road_info):
     print("Decision Time: %f\n" % (time.time() - start_time))
 
     # 测试
-    success_info = {idx: 1 for idx in flow_groups.keys()}
+    success_info = {i: 1 for i in range(len_flow)}
     for idx, final_node in final_nodes.items():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否完成超车
@@ -399,19 +399,17 @@ def group_decision(flow, road_info):
                         abs(veh_state[1] - aim_veh.current_state.d) > aim_veh.width
                 ):
                     continue
-                success_info[idx] = 0
-                break
+                success_info[veh_idx] = 0
             # 是否抵达目标车道
-            if abs(veh_state[1] - TARGET_LANE[veh_idx] * road_info.lane_width) > 0.5:
-                success_info[idx] = 0
-                break
+            elif abs(veh_state[1] - TARGET_LANE[veh_idx] * road_info.lane_width) > 0.5:
+                success_info[veh_idx] = 0
 
     # 结果
     decision_state_for_planning = {}
-    for idx, final_node in final_nodes.items():
-        if success_info[idx] == 0:
-            continue
+    for final_node in final_nodes.values():
         for veh_id in final_node.state.decision_vehicles.keys():
+            if success_info[veh_id] == 0:
+                continue
             decision_state = []
             for i in range(int(final_node.state.t / DT) - 1):
                 # 针对每个时刻，记录每辆车动作变化时的状态（即第i次动作引发的i+1状态）
