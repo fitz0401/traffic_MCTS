@@ -34,9 +34,15 @@ def main():
     network.init_flows(1)
     fig, ax = plt.subplots()
     fig.set_size_inches(20, 20)
+
     network.gol_flows_to_decision_flows()
     network.routing()
+
+    network_group_info = network.network_grouping()
     grouping.plot_flow(ax, network.gol_flows.values(), network.gol_road, 0, decision_info)
+    # grouping.plot_flow(ax, network.scenario_flows["E5"], network.roads["E5"], 0, decision_info)
+
+
 
 
 if __name__ == "__main__":

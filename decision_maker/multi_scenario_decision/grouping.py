@@ -7,10 +7,10 @@ from utils.vehicle import build_vehicle
 
 
 def main():
-    road_info = RoadInfo("ramp")
+    road_info = RoadInfo("roundabout")
 
     # flow = yaml_flow(road_info)
-    flow = random_flow(road_info, 2)
+    flow = random_flow(road_info, 24)
 
     find_overtake_aim(flow, road_info)
     start_time = time.time()
@@ -154,34 +154,42 @@ def random_flow(road_info, random_seed):
                 continue
             flow.append(veh)
             veh_routing(veh, lane_id, road_info)
-    # sort flow first by s decreasingly
-    flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     print('flow:', flow)
     return flow
 
 
 def judge_interaction(flow, road_info):
-    vehicle_num = len(flow)
-    interaction_info = -1 * np.ones((vehicle_num, vehicle_num))  # 交互矩阵中的元素初始化为-1
+    # sort flow first by s decreasingly
+    flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
+    interaction_info = {veh.id: {veh.id: -1 for veh in flow} for veh in flow}   # 交互矩阵中的元素初始化为-1
     # 人为设定超车关系具备交互可能性
-    for veh_id, veh_info in decision_info.items():
-        if veh_info[0] == "overtake":
-            interaction_info[veh_id][veh_info[1]] = interaction_info[veh_info[1]][veh_id] = 1
+    for veh in flow:
+        if decision_info[veh.id] == "overtake":
+            interaction_info[veh.id][decision_info[veh.id][1]] = interaction_info[decision_info[veh.id][1]][veh.id] = 1
     merge_zone_ids = []
     # 判断车辆的交互可能性
     for i, veh_i in enumerate(flow):
         veh_i_lane_id = get_lane_id(veh_i, road_info)
         # 记录车辆是否在merge_zone中
         if "ramp" in road_info.road_type:
-            if (veh_i_lane_id == 0 or veh_i_lane_id == -1) and (
-                    road_info.ramp_length - 25 <= veh_i.current_state.s <= road_info.ramp_length):
+            if (
+                (veh_i_lane_id == -1 or veh_i_lane_id == 0 or
+                 (veh_i_lane_id == 1 and decision_info[veh_i.id][0] == "change_lane_right"))
+                    and (road_info.ramp_length - 25 <= veh_i.current_state.s <= road_info.ramp_length)
+            ):
                 merge_zone_ids.append(i)
         elif "roundabout" in road_info.road_type:
-            if (veh_i_lane_id == 0 or veh_i_lane_id == -1) and (
-                    road_info.inter_s[-1] - 25 <= veh_i.current_state.s <= road_info.inter_s[-1]):
+            if (
+                (veh_i_lane_id == -1 or veh_i_lane_id == 0 or
+                 (veh_i_lane_id == 1 and decision_info[veh_i.id][0] == "change_lane_right"))
+                    and road_info.inter_s[1] - 25 <= veh_i.current_state.s <= road_info.inter_s[1]):
                 merge_zone_ids.append(i)
         for veh_j in flow[i + 1:]:
             veh_j_lane_id = get_lane_id(veh_j, road_info)
+            # 无交互：主路车和匝道车
+            if veh_i_lane_id < 0 <= veh_j_lane_id or veh_j_lane_id < 0 <= veh_i_lane_id:
+                interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
+                continue
             # 无交互：满足横向安全距离
             if abs(veh_i_lane_id - veh_j_lane_id) >= 3:
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
@@ -201,7 +209,7 @@ def judge_interaction(flow, road_info):
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                 continue
             # 无交互：前车直行，左后方车直行或左变道 / 右后方车直行或右变道
-            if decision_info[veh_i.id][0] in {"cruise", "decision", "merge_in"}:
+            if decision_info[veh_i.id][0] in {"cruise", "decision"}:
                 if (veh_j_lane_id - veh_i_lane_id == 1 and
                         decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_left"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
@@ -213,13 +221,13 @@ def judge_interaction(flow, road_info):
             # 无交互：前车左变道，右后方车直行或右变道
             if decision_info[veh_i.id][0] == "change_lane_left":
                 if (veh_j_lane_id - veh_i_lane_id == -1 and
-                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_right", "merge_in"}):
+                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_right"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 无交互：前车右变道，左后方车直行或左变道
-            if decision_info[veh_i.id][0] == "change_lane_right":
+            if decision_info[veh_i.id][0] in {"change_lane_right", "merge_out"}:
                 if (veh_j_lane_id - veh_i_lane_id == 1 and
-                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_left", "merge_in"}):
+                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_left"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 上述情况都不满足，i和j存在交互
@@ -284,11 +292,11 @@ def grouping(flow, interaction_info):
 
     # 生成组间交互信息group_interaction_info
     for i, veh_i in enumerate(flow):
-        if len(np.where(interaction_info[veh_i.id] == 1)[0]) == 0:
+        if list(interaction_info[veh_i.id].values()).count(1) == 0:
             group_interaction_info.append([group_idx[veh_i.id]])
             continue
         for veh_j in flow[i+1:]:
-            if interaction_info[veh_i.id, veh_j.id] == 1:
+            if interaction_info[veh_i.id][veh_j.id] == 1:
                 if group_idx[veh_i.id] == group_idx[veh_j.id]:
                     continue
                 else:
@@ -448,9 +456,8 @@ def veh_routing(vehicle, lane_id, road_info, keep_lane_rate=0.4, human_veh_rate=
         if decision_info[vehicle.id][0] == "cruise":
             vehicle.behaviour = "KL"
     else:
-        if "ramp" in road_info.road_type:
-            TARGET_LANE[vehicle.id] = 0
-            decision_info[vehicle.id][0] = "merge_in"
+        TARGET_LANE[vehicle.id] = 0
+        decision_info[vehicle.id][0] = "merge_in"
     # 构建驶出环岛的车辆
     if "roundabout" in road_info.road_type:
         if (

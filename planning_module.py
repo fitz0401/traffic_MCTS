@@ -23,7 +23,7 @@ from constant import (
 
 config_file_path = "config.yaml"
 plt_folder = "./output_video/"
-with open(config_file_path, "r") as f:
+with open(config_file_path, "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
     SIM_LOOP = config["SIM_LOOP"]
     # ROAD_WIDTH = config["MAX_ROAD_WIDTH"]  # maximum road width [m]

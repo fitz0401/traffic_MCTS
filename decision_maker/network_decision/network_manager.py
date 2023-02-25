@@ -246,4 +246,9 @@ class NetworkManager:
                         lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                     grouping.veh_routing(veh, lane_id, self.roads[scenario_id], keep_lane_rate=0.5, human_veh_rate=0)
 
-
+    def network_grouping(self):
+        network_group_info = {edge: {} for edge in vehicles_num.keys()}
+        for scenario_id, local_flows in self.scenario_flows.items():
+            interaction_info = grouping.judge_interaction(local_flows, self.roads[scenario_id])
+            network_group_info[scenario_id] = grouping.grouping(local_flows, interaction_info)
+        return network_group_info

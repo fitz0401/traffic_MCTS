@@ -117,7 +117,6 @@ def planning_flow_to_decision_flow(planning_flow, road_info):
             veh.lane_id = list(road_info.lanes.keys())[0]
             veh = veh.change_to_next_lane(veh.lane_id, road_info.lanes[veh.lane_id].course_spline)
         decision_flow.append(veh)
-    decision_flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     return decision_flow
 
 
@@ -139,7 +138,7 @@ def main():
     """
     Step 1. Build Frenet cord
     """
-    road_info = RoadInfo("freeway")
+    road_info = RoadInfo("roundabout")
     static_obs_list = []
 
     """
@@ -155,7 +154,7 @@ def main():
     # 导入yaml格式车流
     # decision_flow = grouping.yaml_flow(road_info)
     # 导入随机车流
-    decision_flow = grouping.random_flow(road_info, 2)
+    decision_flow = grouping.random_flow(road_info, 24)
     # 如有超车指令，查找超车目标
     # grouping.find_overtake_aim(decision_flow)
     planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
@@ -182,7 +181,7 @@ def main():
     Step 3. Main Loop
     """
     planning_timestep = 3
-    decision_timestep = 42
+    decision_timestep = 30
     predictions = {}
     decision_states = None
     decision_T = 0
