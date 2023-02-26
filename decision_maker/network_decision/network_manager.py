@@ -107,7 +107,7 @@ class NetworkManager:
                 lane_id = random.randint(0, self.roads[edge].lane_num - 1) if edge == "E5" \
                     else random.randint(-1, self.roads[edge].lane_num - 1)
                 offset = self.roads[edge].longitude_offset + self.roads[edge].main_road_offset
-                s = random.uniform(0, 60) if lane_id < 0 else random.uniform(offset, offset + 60)
+                s = random.uniform(10, 60) if lane_id < 0 else random.uniform(offset, offset + 60)
                 d = random.uniform(-0.1, 0.1)
                 vel = random.uniform(5, 7)
                 if lane_id < 0:
@@ -147,45 +147,32 @@ class NetworkManager:
             edge = veh.lane_id[0:2]
             local_lane_id = edge
             local_veh = None
-            # 直道车辆
-            if edge == "E5":
-                local_veh = build_vehicle(
-                    id=veh.id,
-                    vtype="car",
-                    s0=veh.current_state.s,
-                    s0_d=veh.current_state.s_d,
-                    d0=veh.current_state.d + int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH,
-                    lane_id="E1_0",
-                    target_speed=veh.target_speed,
-                    behaviour=veh.behaviour,
-                    lanes=self.roads[edge].lanes,
-                    config=config,
-                )
-            # 匝道车辆
-            elif edge in {"E2", "E3", "E4"}:
-                # 不在匝道上
-                if veh.lane_id not in {"E2_3", "E3_2", "E4_4"}:
+            if edge in {"E2", "E3", "E4", "E5"}:
+                # 在匝道上：需要进行纵坐标对齐
+                if veh.lane_id in {"E2_3", "E3_2", "E4_4"}:
+                    local_s = veh.current_state.s + self.roads[edge].main_road_offset
                     local_veh = build_vehicle(
                         id=veh.id,
                         vtype="car",
-                        s0=veh.current_state.s,
+                        s0=local_s,
                         s0_d=veh.current_state.s_d,
-                        d0=veh.current_state.d + int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH,
-                        lane_id="E1_0",
+                        d0=veh.current_state.d,
+                        lane_id=list(self.roads[edge].lanes.keys())[-1],
                         target_speed=veh.target_speed,
                         behaviour=veh.behaviour,
                         lanes=self.roads[edge].lanes,
                         config=config,
                     )
-                # 在匝道上：需要进行纵坐标对齐
+                # 不在匝道上
                 else:
+                    local_d = veh.current_state.d + int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH
                     local_veh = build_vehicle(
                         id=veh.id,
                         vtype="car",
-                        s0=veh.current_state.s + self.roads[edge].main_road_offset,
+                        s0=veh.current_state.s,
                         s0_d=veh.current_state.s_d,
-                        d0=veh.current_state.d,
-                        lane_id="E1_5",
+                        d0=local_d,
+                        lane_id=list(self.roads[local_lane_id].lanes.keys())[0],
                         target_speed=veh.target_speed,
                         behaviour=veh.behaviour,
                         lanes=self.roads[edge].lanes,
@@ -207,7 +194,7 @@ class NetworkManager:
                         s0=veh.current_state.s - self.roads[local_lane_id].longitude_offset,
                         s0_d=veh.current_state.s_d,
                         d0=veh.current_state.d + int(veh.lane_id[veh.lane_id.find('_') + 1:]) * LANE_WIDTH,
-                        lane_id="E1_0",
+                        lane_id=list(self.roads[local_lane_id].lanes.keys())[0],
                         target_speed=veh.target_speed,
                         behaviour=veh.behaviour,
                         lanes=self.roads[local_lane_id].lanes,
@@ -216,26 +203,104 @@ class NetworkManager:
                 # 在匝道上：需要进行纵坐标对齐
                 elif veh.lane_id in {"E1_2", "E1_3", "E1_4"}:
                     local_lane_id = "E1_" + str(int(veh.lane_id[3]) - 1)
+                    local_s = veh.current_state.s + self.roads[local_lane_id].main_road_offset
                     local_veh = build_vehicle(
                         id=veh.id,
                         vtype="car",
-                        s0=veh.current_state.s + self.roads[local_lane_id].main_road_offset,
+                        s0=local_s,
                         s0_d=veh.current_state.s_d,
                         d0=veh.current_state.d,
-                        lane_id="E1_3",
+                        lane_id=list(self.roads[local_lane_id].lanes.keys())[-1],
                         target_speed=veh.target_speed,
                         behaviour=veh.behaviour,
                         lanes=self.roads[local_lane_id].lanes,
                         config=config,
                     )
             self.scenario_flows[local_lane_id].append(local_veh)
+        for local_flow in self.scenario_flows.values():
+            # sort flow first by s decreasingly
+            local_flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
+
+    def decision_flows_to_gol_flows(self):
+        self.gol_flows = {}
+        for scenario_id, local_flows in self.scenario_flows.items():
+            if scenario_id in {"E2", "E3", "E4", "E5"}:
+                for veh in local_flows:
+                    # 在匝道上：纵坐标需要转换
+                    if scenario_id != "E5" and veh.lane_id == list(self.roads[scenario_id].lanes.keys())[-1]:
+                        gol_lane_id = "E2_3" if scenario_id == "E2" else ("E3_2" if scenario_id == "E3" else "E4_4")
+                        gol_s = veh.current_state.s - self.roads[scenario_id].main_road_offset
+                        self.gol_flows[veh.id] = build_vehicle(
+                            id=veh.id,
+                            vtype="car",
+                            s0=gol_s,
+                            s0_d=veh.current_state.s_d,
+                            d0=veh.current_state.d,
+                            lane_id=gol_lane_id,
+                            target_speed=veh.target_speed,
+                            behaviour=veh.behaviour,
+                            lanes=self.gol_road.lanes,
+                            config=config,
+                        )
+                    # 不在匝道上
+                    else:
+                        gol_lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+                        gol_d = (veh.current_state.d + LANE_WIDTH / 2) % LANE_WIDTH - LANE_WIDTH / 2
+                        self.gol_flows[veh.id] = build_vehicle(
+                            id=veh.id,
+                            vtype="car",
+                            s0=veh.current_state.s,
+                            s0_d=veh.current_state.s_d,
+                            d0=gol_d,
+                            lane_id=scenario_id + "_" + str(gol_lane_id),
+                            target_speed=veh.target_speed,
+                            behaviour=veh.behaviour,
+                            lanes=self.gol_road.lanes,
+                            config=config,
+                        )
+            # 环岛车辆
+            else:
+                for veh in local_flows:
+                    # 在匝道上：需要进行纵坐标转换
+                    if veh.lane_id == list(self.roads[scenario_id].lanes.keys())[-1]:
+                        gol_lane_id = "E1_" + str(int(scenario_id[3]) + 1)
+                        gol_s = veh.current_state.s - self.roads[scenario_id].main_road_offset
+                        self.gol_flows[veh.id] = build_vehicle(
+                            id=veh.id,
+                            vtype="car",
+                            s0=gol_s,
+                            s0_d=veh.current_state.s_d,
+                            d0=veh.current_state.d,
+                            lane_id=gol_lane_id,
+                            target_speed=veh.target_speed,
+                            behaviour=veh.behaviour,
+                            lanes=self.gol_road.lanes,
+                            config=config,
+                        )
+                    # 不在匝道上：需要进行纵坐标转换
+                    else:
+                        gol_lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
+                        gol_s = veh.current_state.s + self.roads[scenario_id].longitude_offset
+                        gol_d = (veh.current_state.d + LANE_WIDTH / 2) % LANE_WIDTH - LANE_WIDTH / 2
+                        self.gol_flows[veh.id] = build_vehicle(
+                            id=veh.id,
+                            vtype="car",
+                            s0=gol_s,
+                            s0_d=veh.current_state.s_d,
+                            d0=gol_d,
+                            lane_id=scenario_id[0:2] + "_" + str(gol_lane_id),
+                            target_speed=veh.target_speed,
+                            behaviour=veh.behaviour,
+                            lanes=self.gol_road.lanes,
+                            config=config,
+                        )
 
     def routing(self):
         for scenario_id, local_flows in self.scenario_flows.items():
             if scenario_id == "E5":
                 for veh in local_flows:
                     lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
-                    grouping.veh_routing(veh, lane_id, self.roads[scenario_id], keep_lane_rate=0.5, human_veh_rate=0)
+                    grouping.veh_routing(veh, lane_id, self.roads[scenario_id], keep_lane_rate=0.5, human_veh_rate=0.5)
             else:
                 for veh in local_flows:
                     if veh.lane_id == list(self.roads[scenario_id].lanes.keys())[-1]:
@@ -245,6 +310,8 @@ class NetworkManager:
                     else:
                         lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                     grouping.veh_routing(veh, lane_id, self.roads[scenario_id], keep_lane_rate=0.5, human_veh_rate=0)
+            # 如有超车指令，查找超车目标
+            grouping.find_overtake_aim(local_flows, self.roads[scenario_id])
 
     def network_grouping(self):
         network_group_info = {edge: {} for edge in vehicles_num.keys()}

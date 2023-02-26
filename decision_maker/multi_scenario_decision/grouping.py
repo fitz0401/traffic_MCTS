@@ -154,13 +154,13 @@ def random_flow(road_info, random_seed):
                 continue
             flow.append(veh)
             veh_routing(veh, lane_id, road_info)
+    # sort flow first by s decreasingly
+    flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     print('flow:', flow)
     return flow
 
 
 def judge_interaction(flow, road_info):
-    # sort flow first by s decreasingly
-    flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     interaction_info = {veh.id: {veh.id: -1 for veh in flow} for veh in flow}   # 交互矩阵中的元素初始化为-1
     # 人为设定超车关系具备交互可能性
     for veh in flow:
@@ -417,7 +417,8 @@ def find_overtake_aim(flow, road_info):
                 # 超车对象只能是邻近的直行车
                 if veh_i_lane_id == veh_j_lane_id:
                     if (
-                        decision_info[veh_j.id][0] in {"cruise", "decision"}
+                        decision_info[veh_j.id][0] in {"cruise", "decision"} and
+                        veh_j.current_state.s - veh_i.current_state.s <= 25
                     ):
                         decision_info[veh_i.id].append(veh_j.id)
                     break
@@ -448,7 +449,7 @@ def veh_routing(vehicle, lane_id, road_info, keep_lane_rate=0.4, human_veh_rate=
             TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate
                                                  else random.choice((-1, 1)))
         if TARGET_LANE[vehicle.id] == lane_id:
-            decision_info[vehicle.id][0] = "cruise" if random.uniform(0, 1) < human_veh_rate else "decision"
+            decision_info[vehicle.id][0] = "overtake" if random.uniform(0, 1) < human_veh_rate else "decision"
         elif TARGET_LANE[vehicle.id] > lane_id:
             decision_info[vehicle.id][0] = "change_lane_left"
         else:

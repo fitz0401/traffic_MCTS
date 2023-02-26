@@ -117,6 +117,7 @@ def planning_flow_to_decision_flow(planning_flow, road_info):
             veh.lane_id = list(road_info.lanes.keys())[0]
             veh = veh.change_to_next_lane(veh.lane_id, road_info.lanes[veh.lane_id].course_spline)
         decision_flow.append(veh)
+    decision_flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     return decision_flow
 
 
@@ -156,7 +157,7 @@ def main():
     # 导入随机车流
     decision_flow = grouping.random_flow(road_info, 24)
     # 如有超车指令，查找超车目标
-    # grouping.find_overtake_aim(decision_flow)
+    # grouping.find_overtake_aim(decision_flow, road_info)
     planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
     decision_info_ori = copy.deepcopy(decision_info)
     # write current state & target decision to csv file
