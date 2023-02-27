@@ -26,20 +26,22 @@ l = 4
 #     'ASBESTOS': '#7f8c8d',
 # }
 # https://mycolor.space/?hex=%23696AAD&sub=1
-colors_rgb =[
-'#ABA9BB',
-'#696AAD',
-'#B770B2',
-'#F47BA0',
-'#FF9981',
-'#FFC669',
-'#009090',
-'#2477BB',
+colors_rgb = [
+    '#ABA9BB',
+    '#696AAD',
+    '#B770B2',
+    '#F47BA0',
+    '#FF9981',
+    '#FFC669',
+    '#009090',
+    '#2477BB',
 ]
 # colors_rgb = ['#ABA9BB','#66c2a5','#fc8d62','#8da0cb','#e78ac3','#a6d854']
 # generate each color in colors a name[str] and result in colors
 colors = {name: color for name, color in zip(colors_rgb, colors_rgb)}
 video_folder = 'output_video'
+track_id = 5
+decision_interval = 30
 
 
 def plot_roadgraph(edges, lanes):
@@ -80,55 +82,33 @@ def plot_roadgraph(edges, lanes):
     # ax.grid(True)
 
 
-def plot_traj(x, y,yaw, colormap):
-    # Create a set of line segments so that we can color them individually
-    # This creates the points as a N x 1 x 2 array so that we can stack points
-    # together easily to get the segments. The segments array for line collection
-    # needs to be (numlines) x (points per line) x 2 (for x and y)
-    points = np.array([x, y]).T.reshape(-1, 1, 2)
-    segments = np.concatenate([points[:-2], points[2:]], axis=1)
-    norm = plt.Normalize(0, 1)
-    lc = LineCollection(segments, cmap=colormap, norm=norm)
-    # Set the values used for colormapping
-    lc.set_array(np.linspace(0, 1, len(x)))
-    #获取当前figure的实例
-    fig = plt.gcf()
-    #获取figure的大小
-    fig_size = fig.get_size_inches()
-    #获取dpi
-    dpi = fig.get_dpi()
-    #计算出canvasWidth
-    canvasWidth = fig_size[0]*dpi
-    lc.set_linewidth(canvasWidth/len(x)/w)
-    ax.add_collection(lc)
-
-def plot_traj_new(x, y,yaw_list, colormap):
-    for i in  range(0,len(x),1):
-        color = colormap(i/len(x))
+def plot_traj(x, y, yaw_list, colormap):
+    for i in range(0, len(x), 1):
+        color = colormap(i / len(x))
         c_x = x[i]
         c_y = y[i]
         yaw = yaw_list[i]
         ax.add_patch(
-                plt.Rectangle(
-                    (
-                        c_x - ((l) * math.cos(yaw)) + ((w / 2) * math.sin(yaw)),
-                        c_y - ((l) * math.sin(yaw)) - ((w / 2) * math.cos(yaw)),
-                    ),
-                    l,
-                    w,
-                    angle=yaw / math.pi * 180,
-                    facecolor=color,
-                    linewidth=2.5,
-                    alpha=0.9,
-                    fill=True,
-                    zorder=3,
-                )
+            plt.Rectangle(
+                (
+                    c_x - ((l) * math.cos(yaw)) + ((w / 2) * math.sin(yaw)),
+                    c_y - ((l) * math.sin(yaw)) - ((w / 2) * math.cos(yaw)),
+                ),
+                l,
+                w,
+                angle=yaw / math.pi * 180,
+                facecolor=color,
+                linewidth=2.5,
+                alpha=min(1, i / len(x) + 0.5),
+                fill=True,
+                zorder=i,
+            )
         )
-        
 
     return
 
-def plot_body(c_x, c_y, yaw,color):
+
+def plot_body(c_x, c_y, yaw, color):
     ax.add_patch(
         plt.Rectangle(
             (
@@ -139,11 +119,11 @@ def plot_body(c_x, c_y, yaw,color):
             w,
             angle=yaw / math.pi * 180,
             facecolor=color,
-            edgecolor = '#464555',
+            edgecolor='#464555',
             linewidth=2.5,
             alpha=1,
             fill=True,
-            zorder=3,
+            zorder=100,
         )
     )
 
@@ -164,7 +144,7 @@ def plot_light(c_x, c_y, yaw, pos, color):
             color=color,
             alpha=0.8,
             fill=True,
-            zorder=3,
+            zorder=100,
         )
     )
 
@@ -192,7 +172,7 @@ with open(config_file_path, "r") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 road_path = config["ROAD_PATH"]
-road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
+road_info = RoadInfo(road_path[road_path.find("_") + 1 : road_path.find(".yaml")])
 
 # load init_state.yaml
 # with open("init_state.yaml", "r") as f:
@@ -220,15 +200,20 @@ gradient_color = [
 # get one of trajectory length
 trajectory_length = len(trajectories[0])
 frame_id = 0
-for end_time in range(1, trajectory_length, 2):
+for end_time in range(1, trajectory_length, 1):
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     plot_roadgraph(road_info.edges, road_info.lanes)
     if end_time % 10 == 1:
         print(f"Processing frame {end_time}")
-    
+
     start_time = end_time - 30 if end_time > 30 else 0
     # sort trajectories by 'x' decreasing
-    trajectories =  {k: v for k, v in sorted(trajectories.items(), key=lambda x: x[1]['x'].iloc[end_time], reverse=True)}
+    trajectories = {
+        k: v
+        for k, v in sorted(
+            trajectories.items(), key=lambda x: x[1]['x'].iloc[end_time], reverse=True
+        )
+    }
     pos_time = -1
     min_x = 1e10
     max_x = 0
@@ -239,9 +224,12 @@ for end_time in range(1, trajectory_length, 2):
         timep = trajectory[start_time:end_time]['t'].values
         group_id = trajectory['group_id'].iloc[end_time]
         action = trajectory['action'].iloc[end_time]
-        # use xp to update min_x and max_x
-        min_x = min(min_x, np.min(xp))
-        max_x = max(max_x, np.max(xp))
+        
+        if vehicle_id == track_id:
+            min_x = min(min_x, np.min(xp))
+            max_x = max(max_x, np.max(xp))
+            ax.set_xlim(min_x - 10, max_x + 10)
+            ax.set_ylim(np.min(yp) - 10, np.max(yp) + 10)
         # x = np.linspace(np.min(xp), np.max(xp), 100)
         # y = np.interp(x, xp, yp)
         # yaw = np.interp(x, xp, yawp)
@@ -250,50 +238,57 @@ for end_time in range(1, trajectory_length, 2):
             vehicle_id < len(vehicle_info)
             and vehicle_info[vehicle_info['vehicle_id'] == vehicle_id][
                 'target_decision'
-            ].item()!= 'cruise'
+            ].item()
+            != 'cruise'
         ):
             color = gradient_color[group_id % len(gradient_color)]
         else:
             color = gradient_color[0]
+
         # if vehicle_id == 0:
         #     color = gradient_color[5]
         # if vehicle_id == 1:
         #     color = gradient_color[2]
-        plot_traj_new(xp, yp, yawp,color)
+        plot_traj(xp, yp, yawp, color)
 
         c_x = xp[pos_time]
         c_y = yp[pos_time]
         yaw = yawp[pos_time]
-        plot_body(c_x, c_y, yaw,color(255))
-        
-
+        plot_body(c_x, c_y, yaw, color(255))
+        # add text
+        ax.text(
+            c_x - (l / 2) * math.cos(yaw) - (0.3 * math.sin(yaw)),
+            c_y - (l / 2) * math.sin(yaw) - (0.2 * math.cos(yaw)),
+            f"{vehicle_id}",
+            fontsize=24,
+            color='black',
+            zorder=100,
+            clip_on=True,
+        )
 
         # plot_headlights
-        intention = vehicle_info[vehicle_info['vehicle_id'] == vehicle_id]['target_decision'].item()
+        intention = vehicle_info[vehicle_info['vehicle_id'] == vehicle_id][
+            'target_decision'
+        ].item()
         if action == 'LCR':
             plot_headlights(c_x, c_y, yaw, 'right')
-        elif action== 'LCL':
+        elif action == 'LCL':
             plot_headlights(c_x, c_y, yaw, 'left')
-        elif action== 'DC':
+        elif action == 'DC':
             plot_headlights(c_x, c_y, yaw, 'stop')
 
-    # pos_time = -10
-    # xp = trajectories[4][start_time - 40 : end_time - 40]['x'].values - 10
-    # yp = trajectories[4][start_time - 40 : end_time - 40]['y'].values - 4.5
-    # yawp = trajectories[4][start_time - 40 : end_time - 40]['yaw'].values
-    # x = np.linspace(np.min(xp), np.max(xp), 100)
-    # y = np.interp(x, xp, yp)
-    # yaw = np.interp(x, xp, yawp)
-    # color = gradient_color[-1]
-    # plot_traj(x, y, color)
-    # c_x = x[pos_time]
-    # c_y = y[pos_time]
-    # yaw = yaw[pos_time]
-    # plot_body(c_x, c_y, yaw)
-
-    #plot timestamp
-    ax.text(0.5, 0.9, f"Time: {end_time/10}", transform=ax.transAxes, fontsize=20, color='black', ha='center', va='center')
-    ax.set_xlim(min_x - 1, max_x + 1)
+    # plot timestamp
+    ax.text(
+        0.5,
+        0.9,
+        f"Time: {end_time/10}",
+        transform=ax.transAxes,
+        fontsize=20,
+        color='black',
+        ha='center',
+        va='center',
+        zorder=1000,
+    )
     ax.set_aspect(1.0)
     plt.xticks([])
     plt.yticks([])
@@ -301,7 +296,11 @@ for end_time in range(1, trajectory_length, 2):
     # plt.savefig('fig_plot.png', bbox_inches='tight', dpi=600, pad_inches=0.05)
     # plt.show()
     # exit()
-    frame_id +=1
+    frame_id += 1
+    if end_time % decision_interval == 0:
+        for i in range(1, 5):
+            plt.savefig(video_folder + "/beauti_frame%02d.png" % frame_id)
+            frame_id += 1
     plt.cla()
     plt.close()
 
