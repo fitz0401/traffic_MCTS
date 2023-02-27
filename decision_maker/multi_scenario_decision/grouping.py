@@ -94,7 +94,11 @@ def random_flow(road_info, random_seed):
             if not is_valid_veh:
                 continue
             flow.append(veh)
-            veh_routing(veh, lane_id, road_info)
+            veh_routing(veh, lane_id, road_info,
+                        keep_lane_rate=0.4,
+                        human_veh_rate=0.2,
+                        overtake_rate=0.3,
+                        narrow_lane_rate=0.4)
     # Ramp
     elif "ramp" in road_info.road_type:
         while len(flow) < len_flow:
@@ -123,7 +127,11 @@ def random_flow(road_info, random_seed):
             if not is_valid_veh:
                 continue
             flow.append(veh)
-            veh_routing(veh, lane_id, road_info)
+            veh_routing(veh, lane_id, road_info,
+                        keep_lane_rate=0.4,
+                        human_veh_rate=0.1,
+                        overtake_rate=0.0,
+                        narrow_lane_rate=0.4)
     # Roundabout
     elif "roundabout" in road_info.road_type:
         while len(flow) < len_flow:
@@ -153,7 +161,12 @@ def random_flow(road_info, random_seed):
             if not is_valid_veh:
                 continue
             flow.append(veh)
-            veh_routing(veh, lane_id, road_info)
+            veh_routing(veh, lane_id, road_info,
+                        keep_lane_rate=0.4,
+                        human_veh_rate=0.1,
+                        overtake_rate=0.0,
+                        merge_out_rate=0.5,
+                        narrow_lane_rate=0.4)
     # sort flow first by s decreasingly
     flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     print('flow:', flow)
@@ -439,17 +452,23 @@ def get_lane_id(vehicle, road_info):
     return vehicle_lane_id
 
 
-def veh_routing(vehicle, lane_id, road_info, keep_lane_rate=0.4, human_veh_rate=0.1, merge_out_rate=0.5):
+def veh_routing(vehicle, lane_id, road_info,
+                keep_lane_rate=0.4,
+                human_veh_rate=0.0,
+                overtake_rate=0.0,
+                merge_out_rate=0.5,
+                narrow_lane_rate=0.3):
     if lane_id >= 0:
         if lane_id == 0:
             TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate else 1)
         elif lane_id == road_info.lane_num - 1:
-            TARGET_LANE[vehicle.id] = lane_id - (0 if random.uniform(0, 1) < keep_lane_rate else 1)
+            TARGET_LANE[vehicle.id] = lane_id - (1 if random.uniform(0, 1) < narrow_lane_rate else 0)
         else:
             TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate
                                                  else random.choice((-1, 1)))
         if TARGET_LANE[vehicle.id] == lane_id:
-            decision_info[vehicle.id][0] = "overtake" if random.uniform(0, 1) < human_veh_rate else "decision"
+            decision_info[vehicle.id][0] = "cruise" if random.uniform(0, 1) < human_veh_rate \
+                else ("overtake" if random.uniform(0, 1) < overtake_rate else "decision")
         elif TARGET_LANE[vehicle.id] > lane_id:
             decision_info[vehicle.id][0] = "change_lane_left"
         else:

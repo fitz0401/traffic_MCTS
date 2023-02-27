@@ -413,6 +413,10 @@ class FlowState:
             elif decision_info[veh.id][0] == "cruise" or \
                     (decision_info[veh.id][0] == "query" and self.t + DT > decision_info[veh.id][-1]):
                 if leading_car is None:
+                    # 预测车辆驶出场景，不考虑即可
+                    if veh.current_state.s + veh.current_state.s_d * DT \
+                            > self.road_info.lanes[veh.lane_id].course_spline.s[-1]:
+                        continue
                     predict_flow.append(
                         build_vehicle(
                             id=veh.id,
@@ -442,6 +446,9 @@ class FlowState:
                     )
                     acc = max(acc, veh.max_decel)
                     vel = max(0, veh.current_state.s_d + acc * DT)
+                    if veh.current_state.s + (vel + veh.current_state.s_d) / 2 * DT \
+                            > self.road_info.lanes[veh.lane_id].course_spline.s[-1]:
+                        continue
                     predict_flow.append(
                         build_vehicle(
                             id=veh.id,

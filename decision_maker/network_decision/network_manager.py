@@ -18,11 +18,11 @@ def build_gol_map(road_info):
     road_info.lanes['E1_0'].next_s.append(280)
     # Roundabout_in
     road_info.lanes['E1_2'].go_straight_lane.append('E1_0')
-    road_info.lanes['E1_2'].next_s = road_info.lanes['E1_2'].course_spline.s[-2]
+    road_info.lanes['E1_2'].next_s = [road_info.lanes['E1_2'].course_spline.s[-2]]
     road_info.lanes['E1_3'].go_straight_lane.append('E1_0')
-    road_info.lanes['E1_3'].next_s = road_info.lanes['E1_3'].course_spline.s[-2]
+    road_info.lanes['E1_3'].next_s = [road_info.lanes['E1_3'].course_spline.s[-2]]
     road_info.lanes['E1_4'].go_straight_lane.append('E1_0')
-    road_info.lanes['E1_4'].next_s = road_info.lanes['E1_4'].course_spline.s[-2]
+    road_info.lanes['E1_4'].next_s = [road_info.lanes['E1_4'].course_spline.s[-2]]
     # Freeway_out
     road_info.lanes['E2_0'].go_straight_lane.append('E1_4')
     road_info.lanes['E2_0'].next_s = [70]
@@ -32,38 +32,43 @@ def build_gol_map(road_info):
     road_info.lanes['E4_0'].next_s = [70]
     # Freeway_in
     road_info.lanes['E2_3'].go_straight_lane.append('E2_0')
-    road_info.lanes['E2_3'].next_s = road_info.lanes['E2_3'].course_spline.s[-2]
+    road_info.lanes['E2_3'].next_s = [road_info.lanes['E2_3'].course_spline.s[-2]]
     road_info.lanes['E3_2'].go_straight_lane.append('E3_0')
-    road_info.lanes['E3_2'].next_s = road_info.lanes['E3_2'].course_spline.s[-2]
+    road_info.lanes['E3_2'].next_s = [road_info.lanes['E3_2'].course_spline.s[-2]]
     road_info.lanes['E4_4'].go_straight_lane.append('E4_0')
-    road_info.lanes['E4_4'].next_s = road_info.lanes['E4_4'].course_spline.s[-2]
+    road_info.lanes['E4_4'].next_s = [road_info.lanes['E4_4'].course_spline.s[-2]]
     # Freeway_connect
+    # E1
+    road_info.lanes['E1_0'].go_straight_lane.append('E1_0')
+    road_info.lanes['E1_0'].next_s.append(road_info.lanes['E1_0'].course_spline.s[-1] - 1)
+    road_info.lanes['E1_1'].go_straight_lane.append('E1_1')
+    road_info.lanes['E1_1'].next_s = [road_info.lanes['E1_1'].course_spline.s[-1] - 1]
     # E2
     road_info.lanes['E2_0'].go_straight_lane.append('E3_0')
-    road_info.lanes['E2_0'].next_s.append(road_info.lanes['E2_0'].course_spline.s[-1])
+    road_info.lanes['E2_0'].next_s.append(road_info.lanes['E2_0'].course_spline.s[-1] - 1)
     road_info.lanes['E2_1'].go_straight_lane.append('E3_1')
-    road_info.lanes['E2_1'].next_s = road_info.lanes['E2_1'].course_spline.s[-1]
+    road_info.lanes['E2_1'].next_s = [road_info.lanes['E2_1'].course_spline.s[-1] - 1]
     # E3
     road_info.lanes['E3_0'].go_straight_lane.append('E4_0')
-    road_info.lanes['E3_0'].next_s.append(road_info.lanes['E3_0'].course_spline.s[-1])
+    road_info.lanes['E3_0'].next_s.append(road_info.lanes['E3_0'].course_spline.s[-1] - 1)
     road_info.lanes['E3_1'].go_straight_lane.append('E4_1')
-    road_info.lanes['E3_1'].next_s = road_info.lanes['E3_1'].course_spline.s[-1]
+    road_info.lanes['E3_1'].next_s = [road_info.lanes['E3_1'].course_spline.s[-1] - 1]
     # E4
     road_info.lanes['E4_0'].go_straight_lane.append('E5_0')
-    road_info.lanes['E4_0'].next_s.append(road_info.lanes['E4_0'].course_spline.s[-1])
+    road_info.lanes['E4_0'].next_s.append(road_info.lanes['E4_0'].course_spline.s[-1] - 1)
     road_info.lanes['E4_1'].go_straight_lane.append('E5_1')
-    road_info.lanes['E4_1'].next_s = road_info.lanes['E4_1'].course_spline.s[-1]
+    road_info.lanes['E4_1'].next_s = [road_info.lanes['E4_1'].course_spline.s[-1] - 1]
     road_info.lanes['E4_2'].go_straight_lane.append('E5_2')
-    road_info.lanes['E4_2'].next_s = road_info.lanes['E4_2'].course_spline.s[-1]
+    road_info.lanes['E4_2'].next_s = [road_info.lanes['E4_2'].course_spline.s[-1] - 1]
     road_info.lanes['E4_3'].go_straight_lane.append('E5_3')
-    road_info.lanes['E4_3'].next_s = road_info.lanes['E4_3'].course_spline.s[-1]
+    road_info.lanes['E4_3'].next_s = [road_info.lanes['E4_3'].course_spline.s[-1] - 1]
     # E5
     road_info.lanes['E5_0'].go_straight_lane.append('E2_0')
-    road_info.lanes['E5_0'].next_s = road_info.lanes['E5_0'].course_spline.s[-1]
+    road_info.lanes['E5_0'].next_s = [road_info.lanes['E5_0'].course_spline.s[-1] - 1]
     road_info.lanes['E5_1'].go_straight_lane.append('E2_1')
-    road_info.lanes['E5_1'].next_s = road_info.lanes['E5_1'].course_spline.s[-1]
+    road_info.lanes['E5_1'].next_s = [road_info.lanes['E5_1'].course_spline.s[-1] - 1]
     road_info.lanes['E5_2'].go_straight_lane.append('E2_2')
-    road_info.lanes['E5_2'].next_s = road_info.lanes['E5_2'].course_spline.s[-1]
+    road_info.lanes['E5_2'].next_s = [road_info.lanes['E5_2'].course_spline.s[-1] - 1]
 
 
 class NetworkManager:
@@ -300,7 +305,8 @@ class NetworkManager:
             if scenario_id == "E5":
                 for veh in local_flows:
                     lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
-                    grouping.veh_routing(veh, lane_id, self.roads[scenario_id], keep_lane_rate=0.5, human_veh_rate=0.5)
+                    grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
+                                         keep_lane_rate=0.5, overtake_rate=0.5, narrow_lane_rate=1)
             else:
                 for veh in local_flows:
                     if veh.lane_id == list(self.roads[scenario_id].lanes.keys())[-1]:
@@ -309,7 +315,18 @@ class NetworkManager:
                         lane_id = -2
                     else:
                         lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
-                    grouping.veh_routing(veh, lane_id, self.roads[scenario_id], keep_lane_rate=0.5, human_veh_rate=0)
+                    if scenario_id in {"E1_1", "E1_2", "E1_3"}:
+                        grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
+                                             keep_lane_rate=0.5, narrow_lane_rate=0.8, merge_out_rate=0.8)
+                    elif scenario_id == "E2":
+                        grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
+                                             keep_lane_rate=0.5, narrow_lane_rate=1, merge_out_rate=0.1)
+                    elif scenario_id == "E3":
+                        grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
+                                             keep_lane_rate=0.5, narrow_lane_rate=0.3, merge_out_rate=0.5)
+                    elif scenario_id == "E4":
+                        grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
+                                             keep_lane_rate=0.5, narrow_lane_rate=0, merge_out_rate=0.8)
             # 如有超车指令，查找超车目标
             grouping.find_overtake_aim(local_flows, self.roads[scenario_id])
 

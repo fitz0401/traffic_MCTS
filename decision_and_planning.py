@@ -17,32 +17,37 @@ from decision_maker.multi_scenario_decision import (
 )
 
 
-def update_decision_behaviour(planning_flow, lanes, decision_info_ori):
+def update_decision_behaviour(planning_flow, road_info, decision_info_ori):
     is_finish_decision = True
     for vehicle_id, vehicle in planning_flow.items():
         # Check Lane Change
         if (
             vehicle.behaviour == "Decision"
-            and abs(vehicle.current_state.d) > lanes[vehicle.lane_id].width / 2
+            and abs(vehicle.current_state.d) > road_info.lanes[vehicle.lane_id].width / 2
         ):
+            if (
+                ("ramp" in road_info.road_type and vehicle.lane_id == list(road_info.lanes.keys())[-1])
+                or ("roundabout" in road_info.road_type and vehicle.lane_id in list(road_info.lanes.keys())[-2:])
+            ):
+                continue
             logging.info("Vehicle {} change lane via decision successfully".format(vehicle_id))
             if vehicle.current_state.d > 0:
-                target_lane_id = roadgraph.left_lane(lanes, vehicle.lane_id)
+                target_lane_id = roadgraph.left_lane(road_info.lanes, vehicle.lane_id)
             else:
-                target_lane_id = roadgraph.right_lane(lanes, vehicle.lane_id)
+                target_lane_id = roadgraph.right_lane(road_info.lanes, vehicle.lane_id)
             if target_lane_id:
                 planning_flow[vehicle_id] = vehicle.change_to_next_lane(
-                    target_lane_id, lanes[target_lane_id].course_spline
+                    target_lane_id, road_info.lanes[target_lane_id].course_spline
                 )
         # Merge_in / Merge_out behaviour
         if (
             decision_info_ori[vehicle.id][0] in {"merge_in", "merge_out"} and
-            lanes[vehicle.lane_id].next_s != math.inf and
-            vehicle.current_state.s >= lanes[vehicle.lane_id].next_s
+            road_info.lanes[vehicle.lane_id].next_s != math.inf and
+            vehicle.current_state.s >= road_info.lanes[vehicle.lane_id].next_s
         ):
-            next_lanes = lanes[vehicle.lane_id].go_straight_lane[0]
+            next_lanes = road_info.lanes[vehicle.lane_id].go_straight_lane[0]
             planning_flow[vehicle_id] = vehicle.change_to_next_lane(
-                next_lanes, lanes[next_lanes].course_spline
+                next_lanes, road_info.lanes[next_lanes].course_spline
             )
             decision_info_ori[vehicle.id][0] = "decision"
             logging.info("Vehicle {} finish merge in/ out action, now drives in {}".format(vehicle_id, next_lanes))
@@ -75,11 +80,13 @@ def update_decision_behaviour(planning_flow, lanes, decision_info_ori):
         ):
             is_finish_decision = False
         if (
-            decision_info_ori[vehicle.id][0] == "merge_in" and vehicle.lane_id != list(lanes.keys())[0]
+            decision_info_ori[vehicle.id][0] == "merge_in"
+                and vehicle.lane_id != list(road_info.lanes.keys())[0]
         ):
             is_finish_decision = False
         if (
-            decision_info_ori[vehicle.id][0] == "merge_out" and vehicle.lane_id != list(lanes.keys())[-2]
+            decision_info_ori[vehicle.id][0] == "merge_out"
+                and vehicle.lane_id != list(road_info.lanes.keys())[-2]
         ):
             is_finish_decision = False
     if is_finish_decision:
@@ -155,7 +162,7 @@ def main():
     # 导入yaml格式车流
     # decision_flow = grouping.yaml_flow(road_info)
     # 导入随机车流
-    decision_flow = grouping.random_flow(road_info, 24)
+    decision_flow = grouping.random_flow(road_info, 0)
     # 如有超车指令，查找超车目标
     # grouping.find_overtake_aim(decision_flow, road_info)
     planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
@@ -265,7 +272,6 @@ def main():
                 if success_info[veh_id] == 0:
                     logging.info("Vehicle: %d in group %d decision failure." % (veh_id, group_idx[veh_id]))
             end = time.time()
-            planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
             logging.info("Sim Time: %f, One decision loop time: %f" % (T, end - start))
             logging.info("------------------------------")
         # 每隔n * 0.1s重新进行一次规划
@@ -274,7 +280,7 @@ def main():
             Update Behaviour & Decision_info
             """
             if not is_finish_decision:
-                is_finish_decision = update_decision_behaviour(planning_flow, road_info.lanes, decision_info_ori)
+                is_finish_decision = update_decision_behaviour(planning_flow, road_info, decision_info_ori)
             """
             Planner
             """

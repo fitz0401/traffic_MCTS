@@ -103,7 +103,7 @@ def plot_traj(x, y,yaw, colormap):
     ax.add_collection(lc)
 
 def plot_traj_new(x, y,yaw_list, colormap):
-    for i in  range(0,len(x),5):
+    for i in  range(0,len(x),1):
         color = colormap(i/len(x))
         c_x = x[i]
         c_y = y[i]
@@ -191,9 +191,8 @@ config_file_path = "config.yaml"
 with open(config_file_path, "r") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
-import decision_and_planning
-
-road_info = RoadInfo("freeway")
+road_path = config["ROAD_PATH"]
+road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
 
 # load init_state.yaml
 # with open("init_state.yaml", "r") as f:
