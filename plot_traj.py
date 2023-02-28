@@ -40,6 +40,9 @@ colors_rgb = [
 # generate each color in colors a name[str] and result in colors
 colors = {name: color for name, color in zip(colors_rgb, colors_rgb)}
 video_folder = 'output_video'
+
+PLOT_ONCE = False
+fig_margin = 15
 track_id = 5
 decision_interval = 30
 
@@ -99,7 +102,7 @@ def plot_traj(x, y, yaw_list, colormap):
                 angle=yaw / math.pi * 180,
                 facecolor=color,
                 linewidth=2.5,
-                alpha=min(1, i / len(x) + 0.5),
+                alpha=min(1, i / len(x) / 2),
                 fill=True,
                 zorder=i,
             )
@@ -109,23 +112,22 @@ def plot_traj(x, y, yaw_list, colormap):
 
 
 def plot_body(c_x, c_y, yaw, color):
-    ax.add_patch(
-        plt.Rectangle(
-            (
-                c_x - ((l) * math.cos(yaw)) + ((w / 2) * math.sin(yaw)),
-                c_y - ((l) * math.sin(yaw)) - ((w / 2) * math.cos(yaw)),
-            ),
-            l,
-            w,
-            angle=yaw / math.pi * 180,
-            facecolor=color,
-            edgecolor='#464555',
-            linewidth=2.5,
-            alpha=1,
-            fill=True,
-            zorder=100,
-        )
+    rectangle = plt.Rectangle(
+        (
+            c_x - ((l) * math.cos(yaw)) + ((w / 2) * math.sin(yaw)),
+            c_y - ((l) * math.sin(yaw)) - ((w / 2) * math.cos(yaw)),
+        ),
+        l,
+        w,
+        angle=yaw / math.pi * 180,
+        facecolor=color,
+        edgecolor='#464555',
+        linewidth=2.5,
+        alpha=1,
+        fill=True,
+        zorder=100,
     )
+    ax.add_patch(rectangle)
 
 
 def plot_light(c_x, c_y, yaw, pos, color):
@@ -224,12 +226,12 @@ for end_time in range(1, trajectory_length, 1):
         timep = trajectory[start_time:end_time]['t'].values
         group_id = trajectory['group_id'].iloc[end_time]
         action = trajectory['action'].iloc[end_time]
-        
+
         if vehicle_id == track_id:
             min_x = min(min_x, np.min(xp))
             max_x = max(max_x, np.max(xp))
-            ax.set_xlim(min_x - 10, max_x + 10)
-            ax.set_ylim(np.min(yp) - 10, np.max(yp) + 10)
+            ax.set_xlim(min_x - fig_margin, max_x + fig_margin)
+            ax.set_ylim(np.min(yp) - fig_margin, np.max(yp) + fig_margin)
         # x = np.linspace(np.min(xp), np.max(xp), 100)
         # y = np.interp(x, xp, yp)
         # yaw = np.interp(x, xp, yawp)
@@ -261,6 +263,7 @@ for end_time in range(1, trajectory_length, 1):
             c_y - (l / 2) * math.sin(yaw) - (0.2 * math.cos(yaw)),
             f"{vehicle_id}",
             fontsize=24,
+            weight='bold',
             color='black',
             zorder=100,
             clip_on=True,
@@ -292,10 +295,17 @@ for end_time in range(1, trajectory_length, 1):
     ax.set_aspect(1.0)
     plt.xticks([])
     plt.yticks([])
+    if PLOT_ONCE:
+        plt.show()
+        plt.savefig(
+            video_folder + '/fig_plot.png',
+            bbox_inches='tight',
+            dpi=600,
+            pad_inches=0.05,
+        )
+        exit()
+
     plt.savefig(video_folder + "/beauti_frame%02d.png" % frame_id)
-    # plt.savefig('fig_plot.png', bbox_inches='tight', dpi=600, pad_inches=0.05)
-    # plt.show()
-    # exit()
     frame_id += 1
     if end_time % decision_interval == 0:
         for i in range(1, 5):
