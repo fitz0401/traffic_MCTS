@@ -10,14 +10,19 @@ from utils.obstacle_cost import check_collsion_new
 # 适配各种场景的全局函数
 def get_lane_id(vehicle, road_info):
     # 为了便于相邻车道的碰撞检测：还未完成汇入但进入0车道时，视为0车道；还未驶出环岛，视为0车道
-    # [状态和绘图认为车道已经切换]
-    merge_length = 5.5
-    if "ramp" in road_info.road_type:
+    # 该函数只用于碰撞检测和查找周边车；状态和绘图认为车道已经切换
+    merge_length = 10
+    if "ramp" in road_info.road_type and vehicle.lane_id == list(road_info.lanes.keys())[-1]:
         if vehicle.current_state.s < road_info.ramp_length - merge_length:
             vehicle_lane_id = -1
         else:
             vehicle_lane_id = 0
-    elif "roundabout" in road_info.road_type:
+    elif "roundabout" in road_info.road_type and vehicle.lane_id == list(road_info.lanes.keys())[-1]:
+        if vehicle.current_state.s < road_info.inter_s[1] - merge_length:
+            vehicle_lane_id = -1
+        else:
+            vehicle_lane_id = 0
+    elif "roundabout" in road_info.road_type and vehicle.lane_id == list(road_info.lanes.keys())[-2]:
         if vehicle.current_state.s < merge_length:
             vehicle_lane_id = 0
         else:
@@ -29,13 +34,18 @@ def get_lane_id(vehicle, road_info):
 
 def check_lane_change(veh_id, s, d, lane_id, road_info):
     if lane_id >= 0:
-        if lane_id == 0 and decision_info[veh_id][0] == "merge_out" and s > road_info.inter_s[0]:
+        if (
+            lane_id == 0 and decision_info[veh_id][0] == "merge_out"
+                and road_info.inter_s[0] < s < road_info.inter_s[0] + 5
+        ):
             return s, 0, -2
         else:
             return s, d, int((d + road_info.lane_width/2) / road_info.lane_width)
     elif lane_id == -1:
-        # 对齐车道纵坐标时的处理
-        if s > road_info.ramp_length:
+        if (
+            ("ramp" in road_info.road_type and s > road_info.ramp_length)
+            or ("roundabout" in road_info.road_type and s > road_info.inter_s[1])
+        ):
             return s, 0, 0
         else:
             return s, d, lane_id
@@ -413,18 +423,27 @@ class FlowState:
             elif decision_info[veh.id][0] == "cruise" or \
                     (decision_info[veh.id][0] == "query" and self.t + DT > decision_info[veh.id][-1]):
                 if leading_car is None:
-                    # 预测车辆驶出场景，不考虑即可
-                    if veh.current_state.s + veh.current_state.s_d * DT \
-                            > self.road_info.lanes[veh.lane_id].course_spline.s[-1]:
-                        continue
+                    s = veh.current_state.s + veh.current_state.s_d * DT
+                    d = veh.current_state.d
+                    lane_id = veh.lane_id
+                    # 防止匝道上的车辆越界
+                    if (
+                        "ramp" in self.road_info.road_type or "roundabout" in self.road_info.road_type
+                            and veh.lane_id == list(self.road_info.lanes.keys())[-1]
+                    ):
+                        s, d, lane_id = check_lane_change(veh.id,
+                                                          veh.current_state.s + veh.current_state.s_d * DT,
+                                                          veh.current_state.d,
+                                                          0,
+                                                          self.road_info)
                     predict_flow.append(
                         build_vehicle(
                             id=veh.id,
                             vtype="car",
-                            s0=veh.current_state.s + veh.current_state.s_d * DT,
+                            s0=s,
                             s0_d=veh.current_state.s_d,
-                            d0=veh.current_state.d,
-                            lane_id=veh.lane_id,
+                            d0=d,
+                            lane_id=lane_id if isinstance(lane_id, str) else list(self.road_info.lanes.keys())[lane_id],
                             target_speed=8.0,
                             behaviour=decision_info[veh.id][0],
                             lanes=self.road_info.lanes,
@@ -446,17 +465,26 @@ class FlowState:
                     )
                     acc = max(acc, veh.max_decel)
                     vel = max(0, veh.current_state.s_d + acc * DT)
-                    if veh.current_state.s + (vel + veh.current_state.s_d) / 2 * DT \
-                            > self.road_info.lanes[veh.lane_id].course_spline.s[-1]:
-                        continue
+                    s = veh.current_state.s + (vel + veh.current_state.s_d) / 2 * DT
+                    d = veh.current_state.d
+                    lane_id = veh.lane_id
+                    if (
+                            "ramp" in self.road_info.road_type or "roundabout" in self.road_info.road_type
+                            and veh.lane_id == list(self.road_info.lanes.keys())[-1]
+                    ):
+                        s, d, lane_id = check_lane_change(veh.id,
+                                                          veh.current_state.s + veh.current_state.s_d * DT,
+                                                          veh.current_state.d,
+                                                          0,
+                                                          self.road_info)
                     predict_flow.append(
                         build_vehicle(
                             id=veh.id,
                             vtype="car",
-                            s0=veh.current_state.s + (vel + veh.current_state.s_d) / 2 * DT,
+                            s0=s,
                             s0_d=veh.current_state.s_d,
-                            d0=veh.current_state.d,
-                            lane_id=veh.lane_id,
+                            d0=d,
+                            lane_id=lane_id if isinstance(lane_id, str) else list(self.road_info.lanes.keys())[lane_id],
                             target_speed=8.0,
                             behaviour=decision_info[veh.id][0],
                             lanes=self.road_info.lanes,

@@ -43,7 +43,7 @@ video_folder = 'output_video'
 
 PLOT_ONCE = False
 fig_margin = 15
-track_id = 5
+track_id = -1
 decision_interval = 30
 
 
@@ -262,7 +262,7 @@ for end_time in range(1, trajectory_length, 1):
             c_x - (l / 2) * math.cos(yaw) - (0.3 * math.sin(yaw)),
             c_y - (l / 2) * math.sin(yaw) - (0.2 * math.cos(yaw)),
             f"{vehicle_id}",
-            fontsize=24,
+            fontsize=8,
             weight='bold',
             color='black',
             zorder=100,

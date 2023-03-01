@@ -67,7 +67,8 @@ def exit_plot():
 
 def plot_init():
     plt.ion()
-    fig = plt.figure(figsize=(12, 6), constrained_layout=True)
+    fig = plt.figure(figsize=((20, 20) if config["ROAD_PATH"] == "roadgraph_network.yaml" else (12, 6)),
+                     constrained_layout=True)
     axs = fig.subplot_mosaic(
         [["Left", "TopRight"], ["Left", "BottomRight"]],
         gridspec_kw={"width_ratios": [3, 1]},
@@ -445,7 +446,7 @@ def planner(
             state = (
                 decision_state[1][0],
                 decision_state[1][1] - (int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:])) * LANE_WIDTH
-                if decision_state[1][3] >= 0 else decision_state[1][1],
+                if decision_state[1][3] > 0 else decision_state[1][1],
                 decision_state[1][2],
             )
             temp_decision_states.append((t - plan_T, state))

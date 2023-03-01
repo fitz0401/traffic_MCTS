@@ -10,7 +10,7 @@ with open(file_path + "/config.yaml", "r", encoding='utf-8') as f:
 
 # Road network param
 LANE_WIDTH = 4
-vehicles_num = {"E1_1": 6, "E1_2": 6, "E1_3": 6, "E2": 10, "E3": 8, "E4": 10, "E5": 10}
+vehicles_num = {"E1_1": 6, "E1_2": 6, "E1_3": 6, "E2": 15, "E3": 10, "E4": 15, "E5": 15}
 scenario_num = len(vehicles_num.keys())
 
 # Decision Information
@@ -23,6 +23,7 @@ decision_info = {i: ["cruise"] for i in range(len_flow)}
 group_idx = {i: 0 for i in range(len_flow)}
 flow_record = {i: {} for i in range(len_flow)}
 action_record = {i: {} for i in range(len_flow)}
+scenario_change = {i: True for i in range(len_flow)}
 
 # IDM param
 SAFE_DIST = 2  # least safe distance between two cars

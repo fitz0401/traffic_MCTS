@@ -225,10 +225,7 @@ class Spline2D:
         """
         dx = self.sx.calcd(s)
         dy = self.sy.calcd(s)
-        try:
-            yaw = math.atan2(dy, dx)
-        except:
-            print(1)
+        yaw = math.atan2(dy, dx)
         return yaw
 
     def frenet_to_cartesian1D(self, s, d):

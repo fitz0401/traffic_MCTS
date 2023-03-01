@@ -1,5 +1,6 @@
 import copy
 import csv
+import multiprocessing
 from planning_module import *
 from constant import *
 from decision_maker.multi_scenario_decision import (
@@ -7,6 +8,7 @@ from decision_maker.multi_scenario_decision import (
     decision_by_grouping,
 )
 from decision_maker.network_decision.network_manager import NetworkManager
+from utils.vehicle import build_vehicle
 
 
 def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
@@ -29,19 +31,37 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
                 )
         # Check Scenario Change
         if(
-            vehicle.lane_id in {"E1_0", "E1_1",
-                                "E2_0", "E2_1",
+            vehicle.lane_id in {"E2_0", "E2_1",
                                 "E3_0", "E3_1",
                                 "E4_0", "E4_1", "E4_2", "E4_3",
                                 "E5_0", "E5_1", "E5_2"}
             and vehicle.current_state.s >= gol_road.lanes[vehicle.lane_id].next_s[-1]
         ):
             next_lanes = gol_road.lanes[vehicle.lane_id].go_straight_lane[-1]
-            gol_flows[vehicle_id] = vehicle.change_to_next_lane(
-                next_lanes, gol_road.lanes[next_lanes].course_spline
+            gol_flows[vehicle_id] = build_vehicle(
+                id=vehicle_id,
+                vtype="car",
+                s0=0,
+                s0_d=gol_flows[vehicle_id].current_state.s_d,
+                d0=gol_flows[vehicle_id].current_state.d,
+                lane_id=next_lanes,
+                target_speed=random.uniform(6, 9),
+                behaviour=gol_flows[vehicle_id].behaviour,
+                lanes=gol_road.lanes,
+                config=config,
             )
-            decision_info_ori[vehicle.id][0] = "decision"
+            decision_info_ori[vehicle.id] = ["cruise"] if decision_info_ori[vehicle.id][0] == "cruise" else ["decision"]
+            scenario_change[vehicle.id] = False if decision_info_ori[vehicle.id][0] == "cruise" else True
             logging.info("Vehicle {} changes scenario, now drives in {}".format(vehicle_id, next_lanes))
+        if (
+            vehicle.lane_id in {"E1_0", "E1_1"}
+            and vehicle.current_state.s >= gol_road.lanes[vehicle.lane_id].next_s[-1]
+        ):
+            gol_flows[vehicle_id].current_state.s = 0
+            gol_flows[vehicle_id].target_speed = random.uniform(6, 9)
+            decision_info_ori[vehicle.id] = ["cruise"] if decision_info_ori[vehicle.id][0] == "cruise" else ["decision"]
+            scenario_change[vehicle.id] = False if decision_info_ori[vehicle.id][0] == "cruise" else True
+            logging.info("Vehicle {} changes scenario, now drives in {}".format(vehicle_id, vehicle.lane_id))
         # Merge_in behaviour
         if (
             decision_info_ori[vehicle.id][0] == "merge_in" and
@@ -51,7 +71,9 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             gol_flows[vehicle_id] = vehicle.change_to_next_lane(
                 next_lanes, gol_road.lanes[next_lanes].course_spline
             )
-            decision_info_ori[vehicle.id][0] = "decision"
+            decision_info_ori[vehicle.id] = ["decision"]
+            gol_flows[vehicle_id].target_speed = 10
+            scenario_change[vehicle.id] = True
             logging.info("Vehicle {} finish merge in action, now drives in {}".format(vehicle_id, next_lanes))
         # Merge_out behaviour
         elif decision_info_ori[vehicle.id][0] == "merge_out":
@@ -72,19 +94,27 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
                     next_lanes, gol_road.lanes[next_lanes].course_spline
                 )
                 # merge_out 后立即切换为 merge_in
-                decision_info_ori[vehicle.id][0] = "merge_in"
+                decision_info_ori[vehicle.id] = ["merge_in"]
                 logging.info("Vehicle {} finish merge out action, now drives in {}".format(vehicle_id, next_lanes))
+        # Lane Change behaviour
+        elif (
+                decision_info_ori[vehicle.id][0] in {"change_lane_left", "change_lane_right"} and
+                int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
+        ):
+            decision_info_ori[vehicle.id] = ["decision"]
+            logging.info("Vehicle {} finish lane change action".format(vehicle_id))
         # Overtake behaviour
         elif (
             decision_info_ori[vehicle.id][0] == "overtake" and
             vehicle.current_state.s > gol_flows[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length
             and int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
-            decision_info_ori[vehicle.id][0] = "decision"
+            decision_info_ori[vehicle.id] = ["decision"]
+            gol_flows[vehicle_id].target_speed = 10
             logging.info("Vehicle {} finish overtake action".format(vehicle_id))
 
 
-def decision_states_process(scenario_decision_states, scenario_roads):
+def decision_states_process(sim_T, scenario_decision_states, scenario_roads):
     gol_decision_states = {}
     for scenario_id, decision_states in scenario_decision_states.items():
         for veh_id, decision_state in decision_states.items():
@@ -109,7 +139,7 @@ def decision_states_process(scenario_decision_states, scenario_roads):
                     )
                 else:
                     state = decision_state[idx][1]
-                veh_decision_state.append((decision_state[idx][0], state))
+                veh_decision_state.append((sim_T + decision_state[idx][0], state))
             gol_decision_states[veh_id] = veh_decision_state
     return gol_decision_states
 
@@ -177,9 +207,10 @@ def main():
     network.decision_flows_to_gol_flows()
     planning_timestep = 3
     decision_timestep = 30
-    routing_timestep = 3 * decision_timestep
     predictions = {}
     scenario_decision_states = {}
+    success_info = {}
+    param_record = {}
     gol_decision_states = None
     decision_T = 0
     for i in range(SIM_LOOP):
@@ -191,7 +222,7 @@ def main():
         for vehicle_id, vehicle in network.gol_flows.items():
             if i == 0:
                 continue
-            if vehicle_id in predictions:
+            if vehicle_id in predictions and len(predictions[vehicle_id].states) > 1:
                 vehicle.current_state = copy.deepcopy(predictions[vehicle_id].states[1])
                 del predictions[vehicle_id].states[0]
                 vehicle.current_state.t = T
@@ -221,13 +252,7 @@ def main():
                         ]
                     )
         """
-        Step 3.3 : Generate Routing Information
-        """
-        # if i % routing_timestep == 0:
-        #     network.routing()
-        #     decision_info_ori = copy.deepcopy(decision_info)
-        """
-        Step 3.4 : Decision(N * i * DT) & Planning(n * i * DT)
+        Step 3.3 : Decision(N * i * DT) & Planning(n * i * DT)
         """
         if i % decision_timestep == 0:
             decision_T = T
@@ -236,28 +261,53 @@ def main():
             """
             # 全局车流转化为局部车流，并更新决策信息
             network.gol_flows_to_decision_flows()
+            for veh_id in network.gol_flows.keys():
+                decision_info[veh_id] = copy.deepcopy(decision_info_ori[veh_id])
+                group_idx[veh_id] = 0
+                flow_record[veh_id] = {}
+                action_record[veh_id] = {}
+            """
+            Routing
+            """
+            network.routing()
+            decision_info_ori = copy.deepcopy(decision_info)
             logging.info("------------------------------")
+            '''
+            单线程
+            '''
+            # for scenario_id, decision_flow in network.scenario_flows.items():
+            #     logging.info("Sim Scenario: %s" % scenario_id)
+            #     success_info[scenario_id], scenario_decision_states[scenario_id] = \
+            #         decision_by_grouping.group_decision(decision_flow, network.roads[scenario_id])
+            '''
+            多线程
+            '''
+            param_list = []
             for scenario_id, decision_flow in network.scenario_flows.items():
-                logging.info("Sim Scenario: %s" % scenario_id)
+                param_list.append((decision_flow,
+                                   network.roads[scenario_id],
+                                   True))
+            pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+            decision_results = pool.starmap(decision_by_grouping.group_decision, param_list)
+            pool.close()
+            for idx, result in enumerate(decision_results):
+                success_info[list(vehicles_num.keys())[idx]] = result[0]
+                scenario_decision_states[list(vehicles_num.keys())[idx]] = result[1]
+                param_record.update(result[2])
+            for veh_id in network.gol_flows.keys():
+                group_idx[veh_id] = param_record[veh_id][0]
+                action_record[veh_id] = param_record[veh_id][1]
+            '''
+            决策结果处理
+            '''
+            for scenario_id, decision_flow in network.scenario_flows.items():
                 for veh in decision_flow:
-                    decision_info[veh.id] = [decision_info_ori[veh.id][0]]
-                    if decision_info_ori[veh.id][0] == "overtake":
-                        decision_info[veh.id].append(decision_info_ori[veh.id][1])
-                    group_idx[veh.id] = 0
-                    flow_record[veh.id] = {}
-                    action_record[veh.id] = {}
-                success_info, scenario_decision_states[scenario_id] = \
-                    decision_by_grouping.group_decision(decision_flow, network.roads[scenario_id])
-                for veh_decision_state in scenario_decision_states[scenario_id].values():
-                    for idx in range(len(veh_decision_state)):
-                        veh_decision_state[idx] = (veh_decision_state[idx][0] + T, veh_decision_state[idx][1])
-                for veh_id in group_idx.keys():
-                    if success_info[veh_id] == 0:
+                    if success_info[scenario_id][veh.id] == 0:
                         logging.info("Vehicle: %d in group %d and scenario %s decision failure." %
-                                     (veh_id, group_idx[veh_id], scenario_id))
-            gol_decision_states = decision_states_process(scenario_decision_states, network.roads)
+                                     (veh.id, group_idx[veh.id], scenario_id))
+            gol_decision_states = decision_states_process(decision_T, scenario_decision_states, network.roads)
             end = time.time()
-            logging.info("Sim Time: %f, One decision loop time: %f" % (T, end - start))
+            logging.info("Sim Time: %f, One decision loop time: %f" % (decision_T, end - start))
             logging.info("------------------------------")
         if i % planning_timestep == 0:
             """

@@ -5,7 +5,8 @@ from decision_maker.multi_scenario_decision.flow_state import FlowState
 
 
 def main():
-    road_info = RoadInfo("freeway")
+    road_path = config["ROAD_PATH"]
+    road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
 
     # flow = yaml_flow()
     flow = random_flow(road_info, 0)
@@ -322,7 +323,7 @@ def predict_flow(flow, road_info, t):
     return next_flow
 
 
-def group_decision(flow, road_info):
+def group_decision(flow, road_info, is_multi_processing=False):
     # 分组
     interaction_info = judge_interaction(flow, road_info)
     flow_groups = grouping(flow, interaction_info)
@@ -422,6 +423,10 @@ def group_decision(flow, road_info):
     for veh in flow:
         if veh.behaviour == "Decision" and not decision_state_for_planning.get(veh.id):
             decision_state_for_planning[veh.id] = []
+    # 记录多进程执行过程变量
+    if is_multi_processing:
+        param_record = {veh.id: (group_idx[veh.id], action_record[veh.id]) for veh in flow}
+        return success_info, decision_state_for_planning, param_record
     return success_info, decision_state_for_planning
 
 

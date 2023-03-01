@@ -146,7 +146,8 @@ def main():
     """
     Step 1. Build Frenet cord
     """
-    road_info = RoadInfo("roundabout")
+    road_path = config["ROAD_PATH"]
+    road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
     static_obs_list = []
 
     """
@@ -162,7 +163,7 @@ def main():
     # 导入yaml格式车流
     # decision_flow = grouping.yaml_flow(road_info)
     # 导入随机车流
-    decision_flow = grouping.random_flow(road_info, 0)
+    decision_flow = grouping.random_flow(road_info, 1)
     # 如有超车指令，查找超车目标
     # grouping.find_overtake_aim(decision_flow, road_info)
     planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)

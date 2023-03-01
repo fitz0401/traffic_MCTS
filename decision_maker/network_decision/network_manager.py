@@ -111,8 +111,9 @@ class NetworkManager:
             while len(flow) < vehicles_num[edge]:
                 lane_id = random.randint(0, self.roads[edge].lane_num - 1) if edge == "E5" \
                     else random.randint(-1, self.roads[edge].lane_num - 1)
-                offset = self.roads[edge].longitude_offset + self.roads[edge].main_road_offset
-                s = random.uniform(10, 60) if lane_id < 0 else random.uniform(offset, offset + 60)
+                offset = self.roads[edge].longitude_offset
+                s = random.uniform(10, 60) if lane_id < 0 \
+                    else random.uniform(offset, offset + (90 if "E1" in edge else 200))
                 d = random.uniform(-0.1, 0.1)
                 vel = random.uniform(5, 7)
                 if lane_id < 0:
@@ -304,11 +305,15 @@ class NetworkManager:
         for scenario_id, local_flows in self.scenario_flows.items():
             if scenario_id == "E5":
                 for veh in local_flows:
+                    if not scenario_change[veh.id]:
+                        continue
                     lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                     grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                         keep_lane_rate=0.5, overtake_rate=0.5, narrow_lane_rate=1)
+                                         keep_lane_rate=0.5, overtake_rate=0.5, turn_right_rate=0.3)
             else:
                 for veh in local_flows:
+                    if not scenario_change[veh.id]:
+                        continue
                     if veh.lane_id == list(self.roads[scenario_id].lanes.keys())[-1]:
                         lane_id = -1
                     elif veh.lane_id == list(self.roads[scenario_id].lanes.keys())[-2]:
@@ -317,16 +322,16 @@ class NetworkManager:
                         lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                     if scenario_id in {"E1_1", "E1_2", "E1_3"}:
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                             keep_lane_rate=0.5, narrow_lane_rate=0.8, merge_out_rate=0.8)
+                                             keep_lane_rate=0.5, turn_right_rate=1, merge_out_rate=1)
                     elif scenario_id == "E2":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                             keep_lane_rate=0.5, narrow_lane_rate=1, merge_out_rate=0.1)
+                                             keep_lane_rate=0.5, turn_right_rate=1, merge_out_rate=0.1)
                     elif scenario_id == "E3":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                             keep_lane_rate=0.5, narrow_lane_rate=0.3, merge_out_rate=0.5)
+                                             keep_lane_rate=0.8, turn_right_rate=0.3, merge_out_rate=0.5)
                     elif scenario_id == "E4":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                             keep_lane_rate=0.5, narrow_lane_rate=0, merge_out_rate=0.8)
+                                             keep_lane_rate=0.5, turn_right_rate=0, merge_out_rate=0.8)
             # 如有超车指令，查找超车目标
             grouping.find_overtake_aim(local_flows, self.roads[scenario_id])
 
