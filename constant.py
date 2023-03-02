@@ -10,7 +10,7 @@ with open(file_path + "/config.yaml", "r", encoding='utf-8') as f:
 
 # Road network param
 LANE_WIDTH = 4
-vehicles_num = {"E1_1": 6, "E1_2": 6, "E1_3": 6, "E2": 15, "E3": 10, "E4": 15, "E5": 15}
+vehicles_num = {"E1_1": 6, "E1_2": 6, "E1_3": 6, "E2": 12, "E3": 8, "E4": 12, "E5": 12}
 scenario_num = len(vehicles_num.keys())
 
 # Decision Information

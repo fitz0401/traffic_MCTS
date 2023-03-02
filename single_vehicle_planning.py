@@ -192,9 +192,7 @@ def decision_trajectory_generator(
                 vehicle.id
             )
         )
-        return lanekeeping_trajectory_generator(
-            vehicle, course_spline, road_width, obs_list, config, T,
-        )
+        return None
 
 
 def lanechange_trajectory_generator(
@@ -507,7 +505,7 @@ def stop_trajectory_generator(
 
 
 def lanekeeping_trajectory_generator(
-    vehicle, course_spline, road_width, obs_list, config, T
+    vehicle, course_spline, road_width, obs_list, config, T, is_dec=False
 ) -> Trajectory:
     current_state = vehicle.current_state
     target_vel = vehicle.target_speed
@@ -528,11 +526,18 @@ def lanekeeping_trajectory_generator(
     if current_state.vel * sample_t[0] > course_spline.s[-1] - current_state.s:
         sample_vel = np.linspace(min(current_state.vel, 10 / 3.6), 25 / 3.6, 4)
     else:
-        sample_vel = np.linspace(
-            max(1e-9, current_state.vel - d_t_sample * n_s_d_sample),
-            max(current_state.vel + d_t_sample * n_s_d_sample * 1.01, target_vel),
-            5,
-        )  # sample target longtitude vel(Velocity keeping)
+        if not is_dec:
+            sample_vel = np.linspace(
+                max(1e-9, current_state.vel - d_t_sample * n_s_d_sample),
+                max(current_state.vel + d_t_sample * n_s_d_sample * 1.01, target_vel),
+                5,
+            )  # sample target longtitude vel(Velocity keeping)
+        else:
+            sample_vel = np.linspace(
+                max(1e-9, current_state.vel - d_t_sample * n_s_d_sample),
+                current_state.vel,
+                5,
+            )  # sample target longtitude vel(Velocity decrease)
 
     """
     Step 2: Generate Center line trajectories

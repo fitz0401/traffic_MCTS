@@ -15,12 +15,9 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
     for vehicle_id, vehicle in gol_flows.items():
         # Check Lane Change
         if (
-            vehicle.behaviour == "Decision"
+            decision_info_ori[vehicle_id][0] not in {"cruise", "decision", "merge_in", "merge_out"}
             and abs(vehicle.current_state.d) > gol_road.lanes[vehicle.lane_id].width / 2
         ):
-            if vehicle.lane_id in {"E1_2", "E1_3", "E1_4", "E2_3", "E3_2", "E4_4"}:
-                continue
-            logging.info("Vehicle {} change lane via decision successfully".format(vehicle_id))
             if vehicle.current_state.d > 0:
                 target_lane_id = roadgraph.left_lane(gol_road.lanes, vehicle.lane_id)
             else:
@@ -29,6 +26,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
                 gol_flows[vehicle_id] = vehicle.change_to_next_lane(
                     target_lane_id, gol_road.lanes[target_lane_id].course_spline
                 )
+            logging.info("Vehicle {} change lane via decision successfully".format(vehicle_id))
         # Check Scenario Change
         if(
             vehicle.lane_id in {"E2_0", "E2_1",
@@ -41,7 +39,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             gol_flows[vehicle_id] = build_vehicle(
                 id=vehicle_id,
                 vtype="car",
-                s0=0,
+                s0=gol_flows[vehicle_id].current_state.s - gol_road.lanes[vehicle.lane_id].next_s[-1],
                 s0_d=gol_flows[vehicle_id].current_state.s_d,
                 d0=gol_flows[vehicle_id].current_state.d,
                 lane_id=next_lanes,
@@ -57,7 +55,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             vehicle.lane_id in {"E1_0", "E1_1"}
             and vehicle.current_state.s >= gol_road.lanes[vehicle.lane_id].next_s[-1]
         ):
-            gol_flows[vehicle_id].current_state.s = 0
+            gol_flows[vehicle_id].current_state.s -= gol_road.lanes[vehicle.lane_id].next_s[-1]
             gol_flows[vehicle_id].target_speed = random.uniform(6, 9)
             decision_info_ori[vehicle.id] = ["cruise"] if decision_info_ori[vehicle.id][0] == "cruise" else ["decision"]
             scenario_change[vehicle.id] = False if decision_info_ori[vehicle.id][0] == "cruise" else True
@@ -114,18 +112,18 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             logging.info("Vehicle {} finish overtake action".format(vehicle_id))
 
 
-def decision_states_process(sim_T, scenario_decision_states, scenario_roads):
+def decision_states_process(sim_T, scenario_decision_states, scenario_roads, gol_flows, decision_info_ori):
     gol_decision_states = {}
     for scenario_id, decision_states in scenario_decision_states.items():
         for veh_id, decision_state in decision_states.items():
             veh_decision_state = []
             for idx in range(len(decision_state)):
+                # process longitude
                 if decision_state[idx][1][3] == -1:
                     state = (
                         decision_state[idx][1][0] - scenario_roads[scenario_id].main_road_offset,
                         decision_state[idx][1][1],
-                        decision_state[idx][1][2],
-                        decision_state[idx][1][3]
+                        decision_state[idx][1][2]
                     )
                 elif(
                     scenario_id in {"E1_1", "E1_2", "E1_3"}
@@ -134,11 +132,21 @@ def decision_states_process(sim_T, scenario_decision_states, scenario_roads):
                     state = (
                         decision_state[idx][1][0] + scenario_roads[scenario_id].longitude_offset,
                         decision_state[idx][1][1],
-                        decision_state[idx][1][2],
-                        decision_state[idx][1][3]
+                        decision_state[idx][1][2]
                     )
                 else:
-                    state = decision_state[idx][1]
+                    state = (decision_state[idx][1][0], decision_state[idx][1][1], decision_state[idx][1][2])
+                # process latitude
+                veh = gol_flows[veh_id]
+                if (
+                        decision_state[idx][1][3] > 0 or
+                        decision_state[idx][1][3] == 0 and decision_info_ori[veh_id][0] != "merge_in"
+                ):
+                    state = (
+                        state[0],
+                        state[1] - (int(veh.lane_id[veh.lane_id.find('_') + 1:])) * LANE_WIDTH,
+                        state[2],
+                    )
                 veh_decision_state.append((sim_T + decision_state[idx][0], state))
             gol_decision_states[veh_id] = veh_decision_state
     return gol_decision_states
@@ -188,13 +196,8 @@ def main():
         with open("flow_record.csv", "w") as fd1:
             writer = csv.writer(fd1)
             writer.writerow(
-                ["vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init(m/s)"]
+                ["t", "vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init(m/s)"]
             )
-            for veh in network.gol_flows.values():
-                writer.writerow(
-                    [veh.id, decision_info_ori[veh.id][0], TARGET_LANE[veh.id],
-                     veh.current_state.s, veh.current_state.d, veh.current_state.s_d]
-                )
         with open("trajectories.csv", "w") as fd2:
             writer = csv.writer(fd2)
             writer.writerow(
@@ -271,6 +274,14 @@ def main():
             """
             network.routing()
             decision_info_ori = copy.deepcopy(decision_info)
+            for vehicle_id, vehicle in network.gol_flows.items():
+                if config["CSV"]:
+                    with open("flow_record.csv", "a") as fd:
+                        writer = csv.writer(fd)
+                        writer.writerow(
+                            [T, vehicle_id, decision_info_ori[vehicle_id][0], TARGET_LANE[vehicle_id],
+                             vehicle.current_state.s, vehicle.current_state.d, vehicle.current_state.s_d]
+                        )
             logging.info("------------------------------")
             '''
             单线程
@@ -305,7 +316,11 @@ def main():
                     if success_info[scenario_id][veh.id] == 0:
                         logging.info("Vehicle: %d in group %d and scenario %s decision failure." %
                                      (veh.id, group_idx[veh.id], scenario_id))
-            gol_decision_states = decision_states_process(decision_T, scenario_decision_states, network.roads)
+            gol_decision_states = decision_states_process(decision_T,
+                                                          scenario_decision_states,
+                                                          network.roads,
+                                                          network.gol_flows,
+                                                          decision_info_ori)
             end = time.time()
             logging.info("Sim Time: %f, One decision loop time: %f" % (decision_T, end - start))
             logging.info("------------------------------")
@@ -328,7 +343,8 @@ def main():
                             network.gol_road.lanes,
                             static_obs_list,
                             T,
-                            gol_decision_states,
+                            gol_decision_states[vehicle_id],
+                            decision_info_ori[vehicle_id][0]
                         )
                     )
             """

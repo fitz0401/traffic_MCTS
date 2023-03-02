@@ -45,6 +45,7 @@ PLOT_ONCE = False
 fig_margin = 15
 track_id = -1
 decision_interval = 30
+plot_range = 5
 
 
 def plot_roadgraph(edges, lanes):
@@ -74,7 +75,7 @@ def plot_roadgraph(edges, lanes):
                 *zip(*lane.left_bound[:]),
                 color='lightgrey',
                 linestyle=(3, (10, 10)),
-                linewidth=4,
+                linewidth=2,
             )
             if lane_index == edge.lane_num - 1:
                 ax.plot(*zip(*lane.left_bound), color='lightgrey', linewidth=5)
@@ -202,7 +203,7 @@ gradient_color = [
 # get one of trajectory length
 trajectory_length = len(trajectories[0])
 frame_id = 0
-for end_time in range(1, trajectory_length, 1):
+for end_time in range(1, trajectory_length, plot_range):
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     plot_roadgraph(road_info.edges, road_info.lanes)
     if end_time % 10 == 1:
@@ -237,11 +238,8 @@ for end_time in range(1, trajectory_length, 1):
         # yaw = np.interp(x, xp, yawp)
         # color = gradient_color[i % len(gradient_color)]
         if (
-            vehicle_id < len(vehicle_info)
-            and vehicle_info[vehicle_info['vehicle_id'] == vehicle_id][
-                'target_decision'
-            ].item()
-            != 'cruise'
+            vehicle_id < len(vehicle_info) and
+            'cruise' not in vehicle_info[vehicle_info['vehicle_id'] == vehicle_id]['target_decision']
         ):
             color = gradient_color[group_id % len(gradient_color)]
         else:
@@ -270,9 +268,6 @@ for end_time in range(1, trajectory_length, 1):
         )
 
         # plot_headlights
-        intention = vehicle_info[vehicle_info['vehicle_id'] == vehicle_id][
-            'target_decision'
-        ].item()
         if action == 'LCR':
             plot_headlights(c_x, c_y, yaw, 'right')
         elif action == 'LCL':

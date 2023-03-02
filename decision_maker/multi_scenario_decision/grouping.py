@@ -184,7 +184,7 @@ def judge_interaction(flow, road_info):
     for i, veh_i in enumerate(flow):
         veh_i_lane_id = get_lane_id(veh_i, road_info)
         # 记录车辆是否在merge_zone中
-        merge_zone_length = 35
+        merge_zone_length = 30
         if "ramp" in road_info.road_type:
             if (
                 (veh_i_lane_id == -1 or veh_i_lane_id == 0 or
@@ -432,13 +432,14 @@ def find_overtake_aim(flow, road_info):
                 if veh_i_lane_id == veh_j_lane_id:
                     if (
                         decision_info[veh_j.id][0] in {"cruise", "decision"} and
-                        veh_j.current_state.s - veh_i.current_state.s <= 25
+                        veh_j.current_state.s - veh_i.current_state.s <= 20 and
+                        veh_j.target_speed < veh_i.target_speed
                     ):
                         decision_info[veh_i.id].append(veh_j.id)
                     break
             # 没有超车对象，无需超车
             if len(decision_info[veh_i.id]) == 1:
-                decision_info[veh_i.id][0] = "cruise"
+                decision_info[veh_i.id][0] = "decision"
 
 
 def get_lane_id(vehicle, road_info):
@@ -476,8 +477,6 @@ def veh_routing(vehicle, lane_id, road_info,
             decision_info[vehicle.id] = ["change_lane_left"]
         else:
             decision_info[vehicle.id] = ["change_lane_right"]
-        if decision_info[vehicle.id] == ["cruise"]:
-            vehicle.behaviour = "KL"
     else:
         TARGET_LANE[vehicle.id] = 0
         decision_info[vehicle.id] = ["merge_in"]
@@ -485,11 +484,12 @@ def veh_routing(vehicle, lane_id, road_info,
     if "roundabout" in road_info.road_type:
         if (
             lane_id == 0 and vehicle.current_state.s < road_info.inter_s[0] - 10
-            or lane_id == 1 and vehicle.current_state.s < road_info.inter_s[0] - 40
+            # or lane_id == 1 and vehicle.current_state.s < road_info.inter_s[0] - 40
         ):
             if random.uniform(0, 1) < merge_out_rate:
                 TARGET_LANE[vehicle.id] = -2
                 decision_info[vehicle.id] = ["merge_out"]
+    vehicle.behaviour = "KL" if decision_info[vehicle.id] == ["cruise"] else "Decision"
     scenario_change[vehicle.id] = False
 
 

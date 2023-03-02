@@ -334,7 +334,7 @@ def update_behaviour(vehicle_id, vehicles, lanes):
 
 
 def planner(
-        vehicle_id, vehicles, predictions, lanes, static_obs_list, plan_T, decision_states=None,
+        vehicle_id, vehicles, predictions, lanes, static_obs_list, plan_T, decision_states=None, decision_info=None
 ):
     start = time.time()
     vehicle = vehicles[vehicle_id]
@@ -436,20 +436,16 @@ def planner(
         path = single_vehicle_planner.stop_trajectory_generator(
             vehicle, lanes, road_width, obs_list, config, plan_T,
         )
-    # 决策成功
     elif vehicle.behaviour == "Decision" and decision_states:
         temp_decision_states = []
-        for decision_state in decision_states[vehicle.id]:
+        for decision_state in decision_states:
             t = decision_state[0]
             if t <= plan_T:
                 continue
-            state = (
-                decision_state[1][0],
-                decision_state[1][1] - (int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:])) * LANE_WIDTH
-                if decision_state[1][3] > 0 else decision_state[1][1],
-                decision_state[1][2],
-            )
-            temp_decision_states.append((t - plan_T, state))
+            # 已完成换道动作，不再执行决策下发的换道指令点
+            if decision_info == "decision" and abs(decision_state[1][1]) > LANE_WIDTH / 4:
+                continue
+            temp_decision_states.append((t - plan_T, decision_state[1]))
             if t - plan_T >= config["MIN_T"]:
                 break
         course_spline = lanes[vehicle.lane_id].course_spline
@@ -468,12 +464,30 @@ def planner(
                 plan_T,
                 temp_decision_states,
             )
-    # 决策失败
+            if not path and decision_info and decision_info in {"merge_in"}:
+                if vehicle.current_state.s > lanes[vehicle.lane_id].course_spline.s[-2] - 10:
+                    path = single_vehicle_planner.stop_trajectory_generator(
+                        vehicle, lanes, road_width, obs_list, config, plan_T,
+                    )
+                else:
+                    path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                        vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=True
+                    )
+            elif not path:
+                path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                    vehicle, course_spline, road_width, obs_list, config, plan_T
+                )
+    # 决策失败或已完成决策目标
     elif vehicle.behaviour == "Decision" and not decision_states:
         course_spline = lanes[vehicle.lane_id].course_spline
-        path = single_vehicle_planner.lanekeeping_trajectory_generator(
-            vehicle, course_spline, road_width, obs_list, config, plan_T,
-        )
+        if decision_info and decision_info in {"merge_in"}:
+            path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=True
+            )
+        else:
+            path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                vehicle, course_spline, road_width, obs_list, config, plan_T
+            )
     else:
         logging.error(
             "Vehicle {} Unknown behaviour: {}".format(vehicle.id, vehicle.behaviour)

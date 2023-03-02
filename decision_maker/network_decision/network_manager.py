@@ -2,9 +2,7 @@ import random
 from constant import *
 from utils.vehicle import build_vehicle
 from decision_maker.multi_scenario_decision import (
-    flow_state,
     grouping,
-    decision_by_grouping
 )
 
 
@@ -40,35 +38,35 @@ def build_gol_map(road_info):
     # Freeway_connect
     # E1
     road_info.lanes['E1_0'].go_straight_lane.append('E1_0')
-    road_info.lanes['E1_0'].next_s.append(road_info.lanes['E1_0'].course_spline.s[-1] - 1)
+    road_info.lanes['E1_0'].next_s.append(road_info.lanes['E1_0'].course_spline.s[-1] - 5)
     road_info.lanes['E1_1'].go_straight_lane.append('E1_1')
-    road_info.lanes['E1_1'].next_s = [road_info.lanes['E1_1'].course_spline.s[-1] - 1]
+    road_info.lanes['E1_1'].next_s = [road_info.lanes['E1_1'].course_spline.s[-1] - 5]
     # E2
     road_info.lanes['E2_0'].go_straight_lane.append('E3_0')
-    road_info.lanes['E2_0'].next_s.append(road_info.lanes['E2_0'].course_spline.s[-1] - 1)
+    road_info.lanes['E2_0'].next_s.append(road_info.lanes['E2_0'].course_spline.s[-1] - 5)
     road_info.lanes['E2_1'].go_straight_lane.append('E3_1')
-    road_info.lanes['E2_1'].next_s = [road_info.lanes['E2_1'].course_spline.s[-1] - 1]
+    road_info.lanes['E2_1'].next_s = [road_info.lanes['E2_1'].course_spline.s[-1] - 5]
     # E3
     road_info.lanes['E3_0'].go_straight_lane.append('E4_0')
-    road_info.lanes['E3_0'].next_s.append(road_info.lanes['E3_0'].course_spline.s[-1] - 1)
+    road_info.lanes['E3_0'].next_s.append(road_info.lanes['E3_0'].course_spline.s[-1] - 5)
     road_info.lanes['E3_1'].go_straight_lane.append('E4_1')
-    road_info.lanes['E3_1'].next_s = [road_info.lanes['E3_1'].course_spline.s[-1] - 1]
+    road_info.lanes['E3_1'].next_s = [road_info.lanes['E3_1'].course_spline.s[-1] - 5]
     # E4
     road_info.lanes['E4_0'].go_straight_lane.append('E5_0')
-    road_info.lanes['E4_0'].next_s.append(road_info.lanes['E4_0'].course_spline.s[-1] - 1)
+    road_info.lanes['E4_0'].next_s.append(road_info.lanes['E4_0'].course_spline.s[-1] - 5)
     road_info.lanes['E4_1'].go_straight_lane.append('E5_1')
-    road_info.lanes['E4_1'].next_s = [road_info.lanes['E4_1'].course_spline.s[-1] - 1]
+    road_info.lanes['E4_1'].next_s = [road_info.lanes['E4_1'].course_spline.s[-1] - 5]
     road_info.lanes['E4_2'].go_straight_lane.append('E5_2')
-    road_info.lanes['E4_2'].next_s = [road_info.lanes['E4_2'].course_spline.s[-1] - 1]
+    road_info.lanes['E4_2'].next_s = [road_info.lanes['E4_2'].course_spline.s[-1] - 5]
     road_info.lanes['E4_3'].go_straight_lane.append('E5_3')
-    road_info.lanes['E4_3'].next_s = [road_info.lanes['E4_3'].course_spline.s[-1] - 1]
+    road_info.lanes['E4_3'].next_s = [road_info.lanes['E4_3'].course_spline.s[-1] - 5]
     # E5
     road_info.lanes['E5_0'].go_straight_lane.append('E2_0')
-    road_info.lanes['E5_0'].next_s = [road_info.lanes['E5_0'].course_spline.s[-1] - 1]
+    road_info.lanes['E5_0'].next_s = [road_info.lanes['E5_0'].course_spline.s[-1] - 5]
     road_info.lanes['E5_1'].go_straight_lane.append('E2_1')
-    road_info.lanes['E5_1'].next_s = [road_info.lanes['E5_1'].course_spline.s[-1] - 1]
+    road_info.lanes['E5_1'].next_s = [road_info.lanes['E5_1'].course_spline.s[-1] - 5]
     road_info.lanes['E5_2'].go_straight_lane.append('E2_2')
-    road_info.lanes['E5_2'].next_s = [road_info.lanes['E5_2'].course_spline.s[-1] - 1]
+    road_info.lanes['E5_2'].next_s = [road_info.lanes['E5_2'].course_spline.s[-1] - 5]
 
 
 class NetworkManager:
@@ -115,7 +113,7 @@ class NetworkManager:
                 s = random.uniform(10, 60) if lane_id < 0 \
                     else random.uniform(offset, offset + (90 if "E1" in edge else 200))
                 d = random.uniform(-0.1, 0.1)
-                vel = random.uniform(5, 7)
+                vel = random.uniform(6, 8)
                 if lane_id < 0:
                     if edge[0: 2] == "E1":
                         gol_lane_id = edge[0: 3] + str(int(edge[3]) + 1)
@@ -131,7 +129,7 @@ class NetworkManager:
                     s0_d=vel,
                     d0=d,
                     lane_id=gol_lane_id,
-                    target_speed=random.uniform(6, 9),
+                    target_speed=random.uniform(8, 10),
                     behaviour="Decision",
                     lanes=self.gol_road.lanes,
                     config=config,
@@ -309,7 +307,7 @@ class NetworkManager:
                         continue
                     lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                     grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                         keep_lane_rate=0.5, overtake_rate=0.5, turn_right_rate=0.3)
+                                         keep_lane_rate=0.6, overtake_rate=0.8, turn_right_rate=1)
             else:
                 for veh in local_flows:
                     if not scenario_change[veh.id]:
@@ -322,16 +320,20 @@ class NetworkManager:
                         lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                     if scenario_id in {"E1_1", "E1_2", "E1_3"}:
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                             keep_lane_rate=0.5, turn_right_rate=1, merge_out_rate=1)
+                                             keep_lane_rate=0.5, overtake_rate=0,
+                                             turn_right_rate=0.6, merge_out_rate=0.8)
                     elif scenario_id == "E2":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                             keep_lane_rate=0.5, turn_right_rate=1, merge_out_rate=0.1)
+                                             keep_lane_rate=1, overtake_rate=0,
+                                             turn_right_rate=1, merge_out_rate=0.4)
                     elif scenario_id == "E3":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                             keep_lane_rate=0.8, turn_right_rate=0.3, merge_out_rate=0.5)
+                                             keep_lane_rate=1, overtake_rate=0,
+                                             turn_right_rate=0.3, merge_out_rate=0.6)
                     elif scenario_id == "E4":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                             keep_lane_rate=0.5, turn_right_rate=0, merge_out_rate=0.8)
+                                             keep_lane_rate=0.2, overtake_rate=0.6,
+                                             turn_right_rate=0, merge_out_rate=0.2)
             # 如有超车指令，查找超车目标
             grouping.find_overtake_aim(local_flows, self.roads[scenario_id])
 

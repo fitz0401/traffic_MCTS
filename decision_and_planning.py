@@ -128,6 +128,28 @@ def planning_flow_to_decision_flow(planning_flow, road_info):
     return decision_flow
 
 
+def decision_states_process(sim_T, decision_states, planning_flow, decision_info_ori):
+    planning_states = {}
+    for veh_id, decision_state in decision_states.items():
+        veh_decision_state = []
+        veh = planning_flow[veh_id]
+        for idx in range(len(decision_state)):
+            if (
+                decision_state[idx][1][3] > 0 or
+                decision_state[idx][1][3] == 0 and decision_info_ori[veh_id][0] != "merge_in"
+            ):
+                state = (
+                    decision_state[idx][1][0],
+                    decision_state[idx][1][1] - (int(veh.lane_id[veh.lane_id.find('_') + 1:])) * LANE_WIDTH,
+                    decision_state[idx][1][2],
+                )
+            else:
+                state = (decision_state[idx][1][0], decision_state[idx][1][1], decision_state[idx][1][2])
+            veh_decision_state.append((sim_T + decision_state[idx][0], state))
+        planning_states[veh_id] = veh_decision_state
+    return planning_states
+
+
 def main():
     if config["VERBOSE"]:
         log_level = logging.DEBUG
@@ -163,7 +185,7 @@ def main():
     # 导入yaml格式车流
     # decision_flow = grouping.yaml_flow(road_info)
     # 导入随机车流
-    decision_flow = grouping.random_flow(road_info, 1)
+    decision_flow = grouping.random_flow(road_info, 0)
     # 如有超车指令，查找超车目标
     # grouping.find_overtake_aim(decision_flow, road_info)
     planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
@@ -192,7 +214,7 @@ def main():
     planning_timestep = 3
     decision_timestep = 30
     predictions = {}
-    decision_states = None
+    planning_states = None
     decision_T = 0
     is_finish_decision = False
     for i in range(SIM_LOOP):
@@ -262,11 +284,9 @@ def main():
                 flow_record[veh.id] = {}
                 action_record[veh.id] = {}
             decision_flow = planning_flow_to_decision_flow(planning_flow, road_info)
-            # 获取决策信息
+            # 获取并处理决策信息
             success_info, decision_states = decision_by_grouping.group_decision(decision_flow, road_info)
-            for veh_decision_state in decision_states.values():
-                for idx in range(len(veh_decision_state)):
-                    veh_decision_state[idx] = (veh_decision_state[idx][0] + T, veh_decision_state[idx][1])
+            planning_states = decision_states_process(T, decision_states, planning_flow, decision_info_ori)
             # 打印决策结果
             logging.info("------------------------------")
             for veh_id in group_idx.keys():
@@ -315,7 +335,8 @@ def main():
                             road_info.lanes,
                             static_obs_list,
                             T,
-                            decision_states,
+                            planning_states[vehicle_id],
+                            decision_info_ori[vehicle_id][0]
                         )
                     )
 
