@@ -45,7 +45,7 @@ PLOT_ONCE = False
 fig_margin = 15
 track_id = -1
 decision_interval = 30
-plot_range = 5
+plot_range = 2
 
 
 def plot_roadgraph(edges, lanes):

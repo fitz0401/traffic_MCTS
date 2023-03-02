@@ -60,6 +60,13 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             decision_info_ori[vehicle.id] = ["cruise"] if decision_info_ori[vehicle.id][0] == "cruise" else ["decision"]
             scenario_change[vehicle.id] = False if decision_info_ori[vehicle.id][0] == "cruise" else True
             logging.info("Vehicle {} changes scenario, now drives in {}".format(vehicle_id, vehicle.lane_id))
+        if (
+            vehicle.lane_id == "E1_0" and
+            (140 <= vehicle.current_state.s < 141 or 240 <= vehicle.current_state.s < 241) and
+            decision_info_ori[vehicle.id][0] in {"decision", "cruise"} and
+            random.uniform(0, 1) < 0.5
+        ):
+            decision_info_ori[vehicle.id] = ["merge_out"]
         # Merge_in behaviour
         if (
             decision_info_ori[vehicle.id][0] == "merge_in" and
@@ -178,7 +185,7 @@ def main():
     Step 2. Init vehicles
     """
     # 导入随机全局车流
-    network.init_flows(1)
+    network.init_flows(4)
     # 分场景下发路由信息
     network.gol_flows_to_decision_flows()
     network.routing()

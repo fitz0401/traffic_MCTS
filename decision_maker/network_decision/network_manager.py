@@ -321,15 +321,15 @@ class NetworkManager:
                     if scenario_id in {"E1_1", "E1_2", "E1_3"}:
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                              keep_lane_rate=0.5, overtake_rate=0,
-                                             turn_right_rate=0.6, merge_out_rate=0.8)
+                                             turn_right_rate=0.5, merge_out_rate=0.5)
                     elif scenario_id == "E2":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                              keep_lane_rate=1, overtake_rate=0,
-                                             turn_right_rate=1, merge_out_rate=0.4)
+                                             turn_right_rate=1, merge_out_rate=0.3)
                     elif scenario_id == "E3":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                              keep_lane_rate=1, overtake_rate=0,
-                                             turn_right_rate=0.3, merge_out_rate=0.6)
+                                             turn_right_rate=0.3, merge_out_rate=0.7)
                     elif scenario_id == "E4":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                              keep_lane_rate=0.2, overtake_rate=0.6,

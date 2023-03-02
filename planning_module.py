@@ -443,7 +443,7 @@ def planner(
             if t <= plan_T:
                 continue
             # 已完成换道动作，不再执行决策下发的换道指令点
-            if decision_info == "decision" and abs(decision_state[1][1]) > LANE_WIDTH / 4:
+            if decision_info == "decision" and abs(decision_state[1][1]) > LANE_WIDTH / 8:
                 continue
             temp_decision_states.append((t - plan_T, decision_state[1]))
             if t - plan_T >= config["MIN_T"]:
@@ -466,12 +466,12 @@ def planner(
             )
             if not path and decision_info and decision_info in {"merge_in"}:
                 if vehicle.current_state.s > lanes[vehicle.lane_id].course_spline.s[-2] - 10:
-                    path = single_vehicle_planner.stop_trajectory_generator(
-                        vehicle, lanes, road_width, obs_list, config, plan_T,
+                    path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                        vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=2
                     )
                 else:
                     path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                        vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=True
+                        vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=1
                     )
             elif not path:
                 path = single_vehicle_planner.lanekeeping_trajectory_generator(
@@ -481,9 +481,14 @@ def planner(
     elif vehicle.behaviour == "Decision" and not decision_states:
         course_spline = lanes[vehicle.lane_id].course_spline
         if decision_info and decision_info in {"merge_in"}:
-            path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=True
-            )
+            if vehicle.current_state.s > lanes[vehicle.lane_id].course_spline.s[-2] - 10:
+                path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                    vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=2
+                )
+            else:
+                path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                    vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=1
+                )
         else:
             path = single_vehicle_planner.lanekeeping_trajectory_generator(
                 vehicle, course_spline, road_width, obs_list, config, plan_T
