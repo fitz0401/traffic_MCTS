@@ -1,7 +1,7 @@
 import pickle
 from decision_maker import mcts
 from decision_maker.multi_scenario_decision.grouping import *
-from decision_maker.multi_scenario_decision.flow_state import FlowState
+from decision_maker.multi_scenario_decision.flow_state import FlowState, check_lane_change
 
 
 def main():
@@ -10,15 +10,16 @@ def main():
 
     # flow = yaml_flow()
     flow = random_flow(road_info, 0)
+    # 找到超车对象
+    find_overtake_aim(flow, road_info)
     decision_info_ori = copy.deepcopy(decision_info)
 
     start_time = time.time()
-    # 找到超车对象
-    find_overtake_aim(flow, road_info)
-
     # Interaction judge & Grouping
     interaction_info = judge_interaction(flow, road_info)
     flow_groups = grouping(flow, interaction_info)
+    # 不分组决策测试
+    # flow_groups = none_grouping(flow)
     # 随机分组测试
     # flow_groups = random_grouping(flow)
     print("Grouping Time: %f\n" % (time.time() - start_time))
@@ -186,13 +187,16 @@ def main():
         pickle.dump(flow, fd)
         pickle.dump(decision_info_ori, fd)
         pickle.dump(decision_state_for_planning, fd)
+        pickle.dump(TARGET_LANE, fd)
+        pickle.dump(group_idx, fd)
 
     # plot predictions
     frame_id = 0
     for t in range(int(prediction_time / DT)):
         ax.cla()
         plot_flow(ax, flow_plot[t], road_info, 0.5)
-        plt.savefig("../../output_video" + "/frame%02d.png" % frame_id)
+        if config["VIDEO"]:
+            plt.savefig("../../output_video" + "/frame%02d.png" % frame_id)
         frame_id += 1
 
 
@@ -276,14 +280,27 @@ def predict_flow(flow, road_info, t):
             ):
                 raise SystemExit('Collision detected. Failed!')
             if leading_car is None:
+                s = veh.current_state.s + veh.current_state.s_d * DT
+                d = veh.current_state.d
+                lane_id = veh.lane_id
+                if (
+                        "ramp" in road_info.road_type or "roundabout" in road_info.road_type
+                        and veh.lane_id == list(road_info.lanes.keys())[-1]
+                ):
+                    s, d, lane_id = check_lane_change(veh.id, s, d, -1, road_info)
+                if (
+                        "roundabout" in road_info.road_type
+                        and veh.lane_id == list(road_info.lanes.keys())[0]
+                ):
+                    s, d, lane_id = check_lane_change(veh.id, s, d, 0, road_info)
                 next_flow.append(
                     build_vehicle(
                         id=veh.id,
                         vtype="car",
-                        s0=veh.current_state.s + veh.current_state.s_d * DT,
+                        s0=s,
                         s0_d=veh.current_state.s_d,
-                        d0=veh.current_state.d,
-                        lane_id=veh.lane_id,
+                        d0=d,
+                        lane_id=lane_id if isinstance(lane_id, str) else list(road_info.lanes.keys())[lane_id],
                         target_speed=10.0,
                         behaviour=decision_info[veh.id][0],
                         lanes=road_info.lanes,
@@ -305,14 +322,27 @@ def predict_flow(flow, road_info, t):
                 )
                 acc = max(acc, veh.max_decel)
                 vel = max(0, veh.current_state.s_d + acc * DT)
+                s = veh.current_state.s + (vel + veh.current_state.s_d) / 2 * DT
+                d = veh.current_state.d
+                lane_id = veh.lane_id
+                if (
+                        "ramp" in road_info.road_type or "roundabout" in road_info.road_type
+                        and veh.lane_id == list(road_info.lanes.keys())[-1]
+                ):
+                    s, d, lane_id = check_lane_change(veh.id, s, d, -1, road_info)
+                if (
+                        "roundabout" in road_info.road_type
+                        and veh.lane_id == list(road_info.lanes.keys())[0]
+                ):
+                    s, d, lane_id = check_lane_change(veh.id, s, d, 0, road_info)
                 next_flow.append(
                     build_vehicle(
                         id=veh.id,
                         vtype="car",
-                        s0=veh.current_state.s + (vel + veh.current_state.s_d) / 2 * DT,
+                        s0=s,
                         s0_d=veh.current_state.s_d,
-                        d0=veh.current_state.d,
-                        lane_id=veh.lane_id,
+                        d0=d,
+                        lane_id=lane_id if isinstance(lane_id, str) else list(road_info.lanes.keys())[lane_id],
                         target_speed=10.0,
                         behaviour=decision_info[veh.id][0],
                         lanes=road_info.lanes,

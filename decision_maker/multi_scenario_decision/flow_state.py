@@ -57,7 +57,7 @@ class FlowState:
     TIME_LIMIT = prediction_time
     ACC = 0.6  # m/s^2
     STOP_DEC = -4.5  # maximum deceleration (m/s^2)
-    CHANGE_LANE_D = LANE_WIDTH / 3.0 * DT  # Que:这里为什么要*DT
+    CHANGE_LANE_D = LANE_WIDTH / 3.0 * DT
 
     """
     state:[{'time':t,'id1':(s,d,v),'id2':(s,d,v),...},{...},...]
@@ -451,11 +451,12 @@ class FlowState:
                         "ramp" in self.road_info.road_type or "roundabout" in self.road_info.road_type
                             and veh.lane_id == list(self.road_info.lanes.keys())[-1]
                     ):
-                        s, d, lane_id = check_lane_change(veh.id,
-                                                          veh.current_state.s + veh.current_state.s_d * DT,
-                                                          veh.current_state.d,
-                                                          0,
-                                                          self.road_info)
+                        s, d, lane_id = check_lane_change(veh.id, s, d, -1, self.road_info)
+                    if (
+                            "roundabout" in self.road_info.road_type
+                            and veh.lane_id == list(self.road_info.lanes.keys())[0]
+                    ):
+                        s, d, lane_id = check_lane_change(veh.id, s, d, 0, self.road_info)
                     predict_flow.append(
                         build_vehicle(
                             id=veh.id,
@@ -492,11 +493,12 @@ class FlowState:
                             "ramp" in self.road_info.road_type or "roundabout" in self.road_info.road_type
                             and veh.lane_id == list(self.road_info.lanes.keys())[-1]
                     ):
-                        s, d, lane_id = check_lane_change(veh.id,
-                                                          veh.current_state.s + veh.current_state.s_d * DT,
-                                                          veh.current_state.d,
-                                                          0,
-                                                          self.road_info)
+                        s, d, lane_id = check_lane_change(veh.id, s, d, -1, self.road_info)
+                    if (
+                            "roundabout" in self.road_info.road_type
+                            and veh.lane_id == list(self.road_info.lanes.keys())[0]
+                    ):
+                        s, d, lane_id = check_lane_change(veh.id, s, d, 0, self.road_info)
                     predict_flow.append(
                         build_vehicle(
                             id=veh.id,

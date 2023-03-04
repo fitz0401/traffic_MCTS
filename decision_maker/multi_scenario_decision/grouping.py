@@ -70,7 +70,7 @@ def random_flow(road_info, random_seed):
     # Freeway
     if "freeway" in road_info.road_type:
         while len(flow) < len_flow:
-            s = random.uniform(0, 80)
+            s = random.uniform(0, 60)
             lane_id = random.randint(0, road_info.lane_num - 1)
             d = random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)
@@ -340,6 +340,14 @@ def grouping(flow, interaction_info):
         if not is_existed:
             group_interaction_info.append([idx])
     print("group_interaction_info: ", group_interaction_info)
+    return group_info
+
+
+def none_grouping(flow):
+    group_info = {1: []}
+    for veh in flow:
+        group_idx[veh.id] = 1
+        group_info[1].append(veh)
     return group_info
 
 

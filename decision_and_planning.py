@@ -1,3 +1,4 @@
+import pickle
 from copy import deepcopy
 import copy
 import csv
@@ -175,21 +176,33 @@ def main():
     """
     Step 2. Init vehicles
     """
-    ''' Method1： 导入pickle文件 '''
-    # with open("decision_maker/multi_scenario_decision/decision_state.pickle", "rb") as f:
-    #     decision_flow = pickle.load(f)
-    #     decision_info = pickle.load(f)
-    #     decision_states = pickle.load(f)
-    ''' Method2： 决策-规划闭环 '''
     focus_car_id = 0
-    # 导入yaml格式车流
-    # decision_flow = grouping.yaml_flow(road_info)
-    # 导入随机车流
-    decision_flow = grouping.random_flow(road_info, 0)
-    # 如有超车指令，查找超车目标
-    # grouping.find_overtake_aim(decision_flow, road_info)
-    planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
-    decision_info_ori = copy.deepcopy(decision_info)
+    # 导入pickle文件或决策规划闭环
+    if config["D_P_COUPLED"]:
+        # 导入yaml格式车流
+        # decision_flow = grouping.yaml_flow(road_info)
+        # 导入随机车流
+        decision_flow = grouping.random_flow(road_info, 0)
+        # 如有超车指令，查找超车目标
+        grouping.find_overtake_aim(decision_flow, road_info)
+        planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
+        decision_info_ori = copy.deepcopy(decision_info)
+        planning_states = None
+    else:
+        # with open("decision_maker/multi_scenario_decision/decision_state.pickle", "rb") as f:
+        with open("experiment/1_Grouped_Decision/Code/decision_state.pickle", "rb") as f:
+            decision_flow = pickle.load(f)
+            decision_info_pickle = pickle.load(f)
+            decision_states = pickle.load(f)
+            target_lane = pickle.load(f)
+            group_idx_pickle = pickle.load(f)
+        for veh in decision_flow:
+            TARGET_LANE[veh.id] = target_lane[veh.id]
+            group_idx[veh.id] = group_idx_pickle[veh.id]
+        planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
+        decision_info_ori = copy.deepcopy(decision_info_pickle)
+        planning_states = decision_states_process(0, decision_states, planning_flow, decision_info_ori)
+
     # write current state & target decision to csv file
     if config["CSV"]:
         with open("flow_record.csv", "w") as fd1:
@@ -214,7 +227,6 @@ def main():
     planning_timestep = 3
     decision_timestep = 30
     predictions = {}
-    planning_states = None
     decision_T = 0
     is_finish_decision = False
     for i in range(SIM_LOOP):
@@ -270,7 +282,7 @@ def main():
         Step 3.3 : Decision(N * i * DT) & Planning(n * i * DT)
         """
         # 每隔N * 0.1s重新进行一次决策
-        if i % decision_timestep == 0 and not is_finish_decision:
+        if i % decision_timestep == 0 and not is_finish_decision and config["D_P_COUPLED"]:
             decision_T = T
             """
             Decider

@@ -43,9 +43,9 @@ video_folder = 'output_video'
 
 PLOT_ONCE = False
 fig_margin = 15
-track_id = -1
+track_id = 0
 decision_interval = 30
-plot_range = 2
+plot_range = 1
 
 
 def plot_roadgraph(edges, lanes):
@@ -171,7 +171,7 @@ def plot_headlights(c_x, c_y, yaw, light_type):
 
 
 config_file_path = "config.yaml"
-with open(config_file_path, "r") as f:
+with open(config_file_path, "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 road_path = config["ROAD_PATH"]
