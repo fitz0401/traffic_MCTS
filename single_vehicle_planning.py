@@ -534,7 +534,7 @@ def lanekeeping_trajectory_generator(
             )  # sample target longitude vel(Velocity keeping)
         elif is_dec == 1:
             sample_vel = np.linspace(
-                2,
+                4,
                 current_state.vel,
                 5,
             )  # sample target longitude vel(Velocity decrease)

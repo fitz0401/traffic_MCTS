@@ -15,7 +15,7 @@ scenario_num = len(vehicles_num.keys())
 
 # Decision Information
 ACTION_LIST = ['KS', 'AC', 'DC', 'LCR', 'LCL']
-len_flow = sum(vehicles_num.values()) if config["ROAD_PATH"] == "roadgraph_network.yaml" else 3
+len_flow = sum(vehicles_num.values()) if config["ROAD_PATH"] == "roadgraph_network.yaml" else 10
 # Global vars
 TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''
@@ -34,11 +34,11 @@ SQRT_AB = np.sqrt(aMax * bMax)
 PAR = 0.6
 
 # Decision param
-prediction_time = 10 if config["ROAD_PATH"] == "roadgraph_network.yaml" else 20 # seconds
+prediction_time = 10 if config["ROAD_PATH"] == "roadgraph_network.yaml" else 20  # seconds
 DT = 1.5  # decision interval (second)
-T_group = 3   # Update group interval (second)
-phi = {i: math.pi / 4 for i in range(len_flow)}
-gamma = {i: 1 for i in range(len_flow)}
+T_group = 3  # Update group interval (second)
+phi = {i: math.pi / 4 for i in range(100)}
+gamma = {i: 1 for i in range(100)}
 
 
 class RoadInfo:

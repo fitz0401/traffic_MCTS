@@ -386,7 +386,8 @@ def group_decision(flow, road_info, is_multi_processing=False):
                 (veh.current_state.s, veh.current_state.d, veh.current_state.s_d, veh_lane_id)
         if len(mcts_init_state) in {1, 1 + lane_keep_veh_num}:
             for veh in group:
-                decision_info[veh.id][0] = "cruise"
+                decision_info[veh.id][0] = "query"
+                decision_info[veh.id].append(0)
             continue
         current_node = mcts.Node(
             FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
@@ -414,7 +415,7 @@ def group_decision(flow, road_info, is_multi_processing=False):
     print("Decision Time: %f\n" % (time.time() - start_time))
 
     # 测试
-    success_info = {i: 1 for i in range(len_flow)}
+    success_info = {veh.id: 1 for veh in flow}
     for idx, final_node in final_nodes.items():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否完成超车

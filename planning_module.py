@@ -18,12 +18,12 @@ import yaml
 import single_vehicle_planning as single_vehicle_planner
 import utils.roadgraph as roadgraph
 from constant import (
-    LANE_WIDTH
+    LANE_WIDTH,
+    file_path
 )
 
-config_file_path = "config.yaml"
 plt_folder = "./output_video/"
-with open(config_file_path, "r", encoding='utf-8') as f:
+with open(file_path + "/config.yaml", "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
     SIM_LOOP = config["SIM_LOOP"]
     # ROAD_WIDTH = config["MAX_ROAD_WIDTH"]  # maximum road width [m]
@@ -89,7 +89,8 @@ def plot_init():
     )
 
 
-def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T, focus_car_id, decision_info_ori):
+def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T,
+                    focus_car_id, decision_info_ori, fig_range=None):
     global main_fig, vel_fig, acc_fig
     main_fig.cla()
     vel_fig.cla()
@@ -247,6 +248,14 @@ def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T,
             xmax=best_paths[focus_car_id].states[1].x + area * 2,
             ymin=best_paths[focus_car_id].states[1].y - area * 2,
             ymax=best_paths[focus_car_id].states[1].y + area * 2,
+        )
+    elif fig_range:
+        main_fig.axis("equal")
+        main_fig.axis(
+            xmin=fig_range[0],
+            xmax=fig_range[1],
+            ymin=fig_range[2],
+            ymax=fig_range[3],
         )
 
     if config["VIDEO"]:
@@ -469,9 +478,15 @@ def planner(
                     path = single_vehicle_planner.lanekeeping_trajectory_generator(
                         vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=2
                     )
+                    logging.debug(
+                        "Vehicle {} in ramp[merge_zone] can't find decision path. |STOP|".format(vehicle.id)
+                    )
                 else:
                     path = single_vehicle_planner.lanekeeping_trajectory_generator(
                         vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=1
+                    )
+                    logging.debug(
+                        "Vehicle {} in ramp can't find decision path. |SLOW DOWN|".format(vehicle.id)
                     )
             elif not path:
                 path = single_vehicle_planner.lanekeeping_trajectory_generator(
@@ -485,9 +500,15 @@ def planner(
                 path = single_vehicle_planner.lanekeeping_trajectory_generator(
                     vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=2
                 )
+                logging.debug(
+                    "Vehicle {} in ramp[merge_zone] decision fails. |STOP|".format(vehicle.id)
+                )
             else:
                 path = single_vehicle_planner.lanekeeping_trajectory_generator(
                     vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=1
+                )
+                logging.debug(
+                    "Vehicle {} in ramp decision fails. |SLOW DOWN|".format(vehicle.id)
                 )
         else:
             path = single_vehicle_planner.lanekeeping_trajectory_generator(

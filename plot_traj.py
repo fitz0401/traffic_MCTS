@@ -175,19 +175,21 @@ with open(config_file_path, "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 road_path = config["ROAD_PATH"]
-road_info = RoadInfo(road_path[road_path.find("_") + 1 : road_path.find(".yaml")])
+road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
 
 # load init_state.yaml
 # with open("init_state.yaml", "r") as f:
 #     init_state = yaml.load(f, Loader=yaml.FullLoader)
-vehicle_info = pd.read_csv('flow_record.csv')
+vehicle_info = pd.read_csv('experiment/3_Closed_Loop_Simulation/Code/flow_record.csv')
+# vehicle_info = pd.read_csv('flow_record.csv')
 
 
 # plt.show()
 # exit()
 
 # Load the trajectory.csv
-traj = pd.read_csv("trajectories.csv")
+traj = pd.read_csv("experiment/3_Closed_Loop_Simulation/Code/trajectories.csv")
+# traj = pd.read_csv("trajectories.csv")
 trajectories = traj.groupby('vehicle_id')
 # sort trajectories by 'x' decreasing
 trajectories = sorted(trajectories, key=lambda x: x[1]['x'].iloc[1], reverse=True)

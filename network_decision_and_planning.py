@@ -77,7 +77,6 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
                 next_lanes, gol_road.lanes[next_lanes].course_spline
             )
             decision_info_ori[vehicle.id] = ["decision"]
-            gol_flows[vehicle_id].target_speed = 10
             scenario_change[vehicle.id] = True
             logging.info("Vehicle {} finish merge in action, now drives in {}".format(vehicle_id, next_lanes))
         # Merge_out behaviour
@@ -342,18 +341,30 @@ def main():
             results = []
             for vehicle_id in network.gol_flows:
                 if network.gol_flows[vehicle_id].current_state.t <= T:
-                    results.append(
-                        planner(
-                            vehicle_id,
-                            network.gol_flows,
-                            predictions,
-                            network.gol_road.lanes,
-                            static_obs_list,
-                            T,
-                            gol_decision_states[vehicle_id],
-                            decision_info_ori[vehicle_id][0]
+                    if vehicle_id in gol_decision_states:
+                        results.append(
+                            planner(
+                                vehicle_id,
+                                network.gol_flows,
+                                predictions,
+                                network.gol_road.lanes,
+                                static_obs_list,
+                                T,
+                                gol_decision_states[vehicle_id],
+                                decision_info_ori[vehicle_id][0]
+                            )
                         )
-                    )
+                    else:
+                        results.append(
+                            planner(
+                                vehicle_id,
+                                network.gol_flows,
+                                predictions,
+                                network.gol_road.lanes,
+                                static_obs_list,
+                                T
+                            )
+                        )
             """
             Update prediction
             """
