@@ -2,16 +2,24 @@ import glob
 import math
 import os
 import subprocess
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
+
 import matplotlib.colors as clr
-from constant import RoadInfo
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import yaml
+from matplotlib.collections import LineCollection
 
-w = 2
-l = 4
+from constant import RoadInfo
+
+PLOT_ONCE = False
+fig_margin = 15
+TRACK_SPECIAL_VEH = False
+track_id = 2
+decision_interval = 30
+iter_frame = 1
+X_LIM = [-10, 100]
+
 # https://flatuicolors.com/palette/defo
 # colors = {
 #     'GREEN SEA': '#16a085',
@@ -41,10 +49,8 @@ colors_rgb = [
 colors = {name: color for name, color in zip(colors_rgb, colors_rgb)}
 video_folder = 'output_video'
 
-PLOT_ONCE = False
-fig_margin = 15
-track_id = 5
-decision_interval = 30
+w = 2
+l = 4
 
 
 def plot_roadgraph(edges, lanes):
@@ -177,19 +183,13 @@ road_path = config["ROAD_PATH"]
 road_info = RoadInfo(road_path[road_path.find("_") + 1 : road_path.find(".yaml")])
 
 # load init_state.yaml
-# with open("init_state.yaml", "r") as f:
-#     init_state = yaml.load(f, Loader=yaml.FullLoader)
 vehicle_info = pd.read_csv('flow_record.csv')
-
-
-# plt.show()
-# exit()
 
 # Load the trajectory.csv
 traj = pd.read_csv("trajectories.csv")
 trajectories = traj.groupby('vehicle_id')
 # sort trajectories by 'x' decreasing
-trajectories = sorted(trajectories, key=lambda x: x[1]['x'].iloc[1], reverse=True)
+trajectories = sorted(trajectories, key=lambda x: x[1]['t'].iloc[-1], reverse=True)
 trajectories = {k: v for k, v in trajectories}
 print(f"Loaded {len(trajectories)} trajectories")
 
@@ -199,51 +199,56 @@ gradient_color = [
     for c_name, c in colors.items()
 ]
 
-# get one of trajectory length
-trajectory_length = len(trajectories[0])
+if TRACK_SPECIAL_VEH:
+    traj = trajectories[track_id]
+    start_frame = int(traj['t'].iloc[1] * 10)
+    end_frame = int(traj['t'].iloc[-1] * 10)
+else:
+    # get the first item of trajectories
+    traj = trajectories[list(trajectories.keys())[0]]
+    # get last item in traj
+    last_item = traj.iloc[-1]
+    start_frame = 1
+    end_frame = int(last_item['t'] * 10)
+
 frame_id = 0
-for end_time in range(1, trajectory_length, 1):
+for end_time in range(start_frame, end_frame, iter_frame):
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
     plot_roadgraph(road_info.edges, road_info.lanes)
-    if end_time % 10 == 1:
+    if end_time % 10 == iter_frame - 1:
         print(f"Processing frame {end_time}")
 
     start_time = end_time - 30 if end_time > 30 else 0
-    # sort trajectories by 'x' decreasing
-    trajectories = {
-        k: v
-        for k, v in sorted(
-            trajectories.items(), key=lambda x: x[1]['x'].iloc[end_time], reverse=True
-        )
-    }
     pos_time = -1
     min_x = 1e10
     max_x = 0
-    for i, (vehicle_id, trajectory) in enumerate(trajectories.items()):
-        xp = trajectory[start_time:end_time]['x'].values
-        yp = trajectory[start_time:end_time]['y'].values
-        yawp = trajectory[start_time:end_time]['yaw'].values
-        timep = trajectory[start_time:end_time]['t'].values
-        group_id = trajectory['group_id'].iloc[end_time]
-        action = trajectory['action'].iloc[end_time]
 
-        if vehicle_id == track_id:
+    for i, (vehicle_id, trajectory) in enumerate(trajectories.items()):
+        # check if trajectory have 't' in [start_time, end_time]
+        traj_in_limit = trajectory[
+            (trajectory['t'] < end_time / 10) & (trajectory['t'] > start_time / 10)
+        ]
+        if traj_in_limit.empty or traj_in_limit['t'].iloc[-1] < (end_time - 1) / 10:
+            continue
+        xp = traj_in_limit['x'].values
+        yp = traj_in_limit['y'].values
+        yawp = traj_in_limit['yaw'].values
+        timep = traj_in_limit['t'].values
+        group_id = traj_in_limit['group_id'].iloc[-1]
+        action = traj_in_limit['action'].iloc[-1]
+
+        if TRACK_SPECIAL_VEH and vehicle_id == track_id:
             min_x = min(min_x, np.min(xp))
             max_x = max(max_x, np.max(xp))
             ax.set_xlim(min_x - fig_margin, max_x + fig_margin)
             ax.set_ylim(np.min(yp) - fig_margin, np.max(yp) + fig_margin)
-        # x = np.linspace(np.min(xp), np.max(xp), 100)
-        # y = np.interp(x, xp, yp)
-        # yaw = np.interp(x, xp, yawp)
-        # color = gradient_color[i % len(gradient_color)]
-        if (
-            vehicle_id < len(vehicle_info)
-            and vehicle_info[vehicle_info['vehicle_id'] == vehicle_id][
-                'target_decision'
-            ].item()
-            != 'cruise'
-        ):
-            color = gradient_color[group_id % len(gradient_color)]
+
+        veh_info = vehicle_info[
+            (vehicle_info['vehicle_id'] == vehicle_id)
+            & (vehicle_info['t'] <= end_time / 10)
+        ]
+        if veh_info.empty == False and veh_info.iloc[-1]['target_decision'] != 'cruise':
+            color = gradient_color[group_id % (len(gradient_color) - 1) + 1]
         else:
             color = gradient_color[0]
 
@@ -270,16 +275,16 @@ for end_time in range(1, trajectory_length, 1):
         )
 
         # plot_headlights
-        intention = vehicle_info[vehicle_info['vehicle_id'] == vehicle_id][
-            'target_decision'
-        ].item()
-        if action == 'LCR':
-            plot_headlights(c_x, c_y, yaw, 'right')
-        elif action == 'LCL':
-            plot_headlights(c_x, c_y, yaw, 'left')
-        elif action == 'DC':
-            plot_headlights(c_x, c_y, yaw, 'stop')
+        if veh_info.empty == False:
+            if action == 'LCR':
+                plot_headlights(c_x, c_y, yaw, 'right')
+            elif action == 'LCL':
+                plot_headlights(c_x, c_y, yaw, 'left')
+            elif action == 'DC':
+                plot_headlights(c_x, c_y, yaw, 'stop')
 
+    if not TRACK_SPECIAL_VEH:
+        ax.set_xlim(X_LIM[0], X_LIM[1])
     # plot timestamp
     ax.text(
         0.5,
@@ -307,10 +312,10 @@ for end_time in range(1, trajectory_length, 1):
 
     plt.savefig(video_folder + "/beauti_frame%02d.png" % frame_id)
     frame_id += 1
-    if end_time % decision_interval == 0:
-        for i in range(1, 5):
-            plt.savefig(video_folder + "/beauti_frame%02d.png" % frame_id)
-            frame_id += 1
+    # if end_time % decision_interval == 0:
+    #     for i in range(1, 5):
+    #         plt.savefig(video_folder + "/beauti_frame%02d.png" % frame_id)
+    #         frame_id += 1
     plt.cla()
     plt.close()
 
