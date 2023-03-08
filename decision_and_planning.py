@@ -37,9 +37,10 @@ def update_decision_behaviour(planning_flow, road_info, decision_info_ori):
             else:
                 target_lane_id = roadgraph.right_lane(road_info.lanes, vehicle.lane_id)
             if target_lane_id:
-                planning_flow[vehicle_id] = vehicle.change_to_next_lane(
+                vehicle = vehicle.change_to_next_lane(
                     target_lane_id, road_info.lanes[target_lane_id].course_spline
                 )
+                planning_flow[vehicle_id] = vehicle
         # Merge_in / Merge_out behaviour
         if (
             decision_info_ori[vehicle.id][0] in {"merge_in", "merge_out"} and
@@ -309,6 +310,7 @@ def main():
             logging.info("------------------------------")
         # 每隔n * 0.1s重新进行一次规划
         if i % planning_timestep == 0:
+            logging.info("Plan Time: %f\n" % T)
             """
             Update Behaviour & Decision_info
             """
@@ -345,7 +347,7 @@ def main():
                                 vehicle_id,
                                 planning_flow,
                                 predictions,
-                                road_info.lanes,
+                                road_info,
                                 static_obs_list,
                                 T,
                                 planning_states[vehicle_id],
@@ -358,7 +360,7 @@ def main():
                                 vehicle_id,
                                 planning_flow,
                                 predictions,
-                                road_info.lanes,
+                                road_info,
                                 static_obs_list,
                                 T
                             )

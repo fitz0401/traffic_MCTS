@@ -53,9 +53,9 @@ class Node:
 
 def uct_search(budget, root):
     for iteration in range(int(budget)):
-        if iteration % 100 == 0:
-            logging.debug("simulation: %d" % iteration)
-            logging.debug(root)
+        # if iteration % 100 == 0:
+        #     logging.debug("simulation: %d" % iteration)
+        #     logging.debug(root)
         front = tree_policy(root)
         reward = default_policy(front.state)  # can parallelize here
         backpropagation(front, reward)

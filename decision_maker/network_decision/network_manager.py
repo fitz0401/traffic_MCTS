@@ -16,11 +16,11 @@ def build_gol_map(road_info):
     road_info.lanes['E1_0'].next_s.append(280)
     # Roundabout_in
     road_info.lanes['E1_2'].go_straight_lane.append('E1_0')
-    road_info.lanes['E1_2'].next_s = [road_info.lanes['E1_2'].course_spline.s[-2]]
+    road_info.lanes['E1_2'].next_s = [road_info.lanes['E1_2'].course_spline.s[-3]]
     road_info.lanes['E1_3'].go_straight_lane.append('E1_0')
-    road_info.lanes['E1_3'].next_s = [road_info.lanes['E1_3'].course_spline.s[-2]]
+    road_info.lanes['E1_3'].next_s = [road_info.lanes['E1_3'].course_spline.s[-3]]
     road_info.lanes['E1_4'].go_straight_lane.append('E1_0')
-    road_info.lanes['E1_4'].next_s = [road_info.lanes['E1_4'].course_spline.s[-2]]
+    road_info.lanes['E1_4'].next_s = [road_info.lanes['E1_4'].course_spline.s[-3]]
     # Freeway_out
     road_info.lanes['E2_0'].go_straight_lane.append('E1_4')
     road_info.lanes['E2_0'].next_s = [70]
@@ -30,11 +30,11 @@ def build_gol_map(road_info):
     road_info.lanes['E4_0'].next_s = [70]
     # Freeway_in
     road_info.lanes['E2_3'].go_straight_lane.append('E2_0')
-    road_info.lanes['E2_3'].next_s = [road_info.lanes['E2_3'].course_spline.s[-2]]
+    road_info.lanes['E2_3'].next_s = [road_info.lanes['E2_3'].course_spline.s[-3]]
     road_info.lanes['E3_2'].go_straight_lane.append('E3_0')
-    road_info.lanes['E3_2'].next_s = [road_info.lanes['E3_2'].course_spline.s[-2]]
+    road_info.lanes['E3_2'].next_s = [road_info.lanes['E3_2'].course_spline.s[-3]]
     road_info.lanes['E4_4'].go_straight_lane.append('E4_0')
-    road_info.lanes['E4_4'].next_s = [road_info.lanes['E4_4'].course_spline.s[-2]]
+    road_info.lanes['E4_4'].next_s = [road_info.lanes['E4_4'].course_spline.s[-3]]
     # Freeway_connect
     # E1
     road_info.lanes['E1_0'].go_straight_lane.append('E1_0')
@@ -69,6 +69,18 @@ def build_gol_map(road_info):
     road_info.lanes['E5_2'].next_s = [road_info.lanes['E5_2'].course_spline.s[-1] - 5]
 
 
+def is_collide(ego_veh, other_veh) -> bool:
+    if ego_veh.lane_id != other_veh.lane_id:
+        return False
+    if ego_veh.current_state.s + ego_veh.length * 4 < other_veh.current_state.s \
+            or ego_veh.current_state.s - ego_veh.length * 4 > other_veh.current_state.s:
+        return False
+    if ego_veh.current_state.d + ego_veh.width * 1.5 < other_veh.current_state.d \
+            or ego_veh.current_state.d - ego_veh.width * 1.5 > other_veh.current_state.d:
+        return False
+    return True
+
+
 class NetworkManager:
     def __init__(self):
         # 全局规划地图
@@ -78,25 +90,36 @@ class NetworkManager:
         # 决策虚拟子地图
         self.roads = {
             "E1_1": RoadInfo("roundabout1", is_network=True, inter_s=[80, 120],
-                             ramp_length=self.gol_road.lanes['E1_2'].course_spline.s[-2]),
+                             ramp_length=self.gol_road.lanes['E1_2'].course_spline.s[-3]),
             "E1_2": RoadInfo("roundabout1", is_network=True, inter_s=[80, 120],
-                             ramp_length=self.gol_road.lanes['E1_3'].course_spline.s[-2]),
+                             ramp_length=self.gol_road.lanes['E1_3'].course_spline.s[-3]),
             "E1_3": RoadInfo("roundabout1", is_network=True, inter_s=[80, 120],
-                             ramp_length=self.gol_road.lanes['E1_4'].course_spline.s[-2]),
+                             ramp_length=self.gol_road.lanes['E1_4'].course_spline.s[-3]),
             "E2": RoadInfo("roundabout2", is_network=True, inter_s=[70, 110],
-                           ramp_length=self.gol_road.lanes['E2_3'].course_spline.s[-2]),
+                           ramp_length=self.gol_road.lanes['E2_3'].course_spline.s[-3]),
             "E3": RoadInfo("roundabout2", is_network=True, inter_s=[70, 110],
-                           ramp_length=self.gol_road.lanes['E3_2'].course_spline.s[-2]),
+                           ramp_length=self.gol_road.lanes['E3_2'].course_spline.s[-3]),
             "E4": RoadInfo("roundabout2", is_network=True, inter_s=[70, 110],
-                           ramp_length=self.gol_road.lanes['E4_4'].course_spline.s[-2]),
+                           ramp_length=self.gol_road.lanes['E4_4'].course_spline.s[-3]),
             "E5": RoadInfo("freeway", is_network=True)
         }
+        # Offset Record
         self.roads["E1_2"].longitude_offset = 100
         self.roads["E1_3"].longitude_offset = 200
 
         self.roads["E2"].lane_num = 3
         self.roads["E3"].lane_num = 2
         self.roads["E4"].lane_num = 4
+
+        self.gol_road.main_road_offset = [self.roads['E1_1'].main_road_offset,
+                                          self.roads['E1_2'].main_road_offset,
+                                          self.roads['E1_3'].main_road_offset,
+                                          self.roads['E2'].main_road_offset,
+                                          self.roads['E3'].main_road_offset,
+                                          self.roads['E4'].main_road_offset]
+        self.gol_road.longitude_offset = [self.roads['E1_1'].longitude_offset,
+                                          self.roads['E1_2'].longitude_offset,
+                                          self.roads['E1_3'].longitude_offset]
 
         self.gol_flows = {}
         self.scenario_flows = {edge: [] for edge in vehicles_num.keys()}
@@ -136,7 +159,7 @@ class NetworkManager:
                 )
                 is_valid_veh = True
                 for other_veh in flow:
-                    if other_veh.is_collide(veh):
+                    if is_collide(veh, other_veh):
                         is_valid_veh = False
                         break
                 if not is_valid_veh:

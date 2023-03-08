@@ -357,7 +357,7 @@ def group_decision(flow, road_info, is_multi_processing=False):
     # 分组
     interaction_info = judge_interaction(flow, road_info)
     flow_groups = grouping(flow, interaction_info)
-    print("flow_groups: \n", flow_groups)
+    # print("flow_groups: \n", flow_groups)
 
     # 决策
     final_nodes = {}

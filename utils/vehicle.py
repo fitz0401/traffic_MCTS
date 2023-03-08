@@ -66,8 +66,8 @@ class Vehicle:
     def is_collide(self, other: 'Vehicle') -> bool:
         if self.lane_id != other.lane_id:
             return False
-        if self.current_state.s + self.length * 4 < other.current_state.s \
-                or self.current_state.s - self.length * 4 > other.current_state.s:
+        if self.current_state.s + self.length * 2.5 < other.current_state.s \
+                or self.current_state.s - self.length * 2.5 > other.current_state.s:
             return False
         if self.current_state.d + self.width * 1.5 < other.current_state.d \
                 or self.current_state.d - self.width * 1.5 > other.current_state.d:

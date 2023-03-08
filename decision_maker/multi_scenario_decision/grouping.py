@@ -184,7 +184,7 @@ def judge_interaction(flow, road_info):
     for i, veh_i in enumerate(flow):
         veh_i_lane_id = get_lane_id(veh_i, road_info)
         # 记录车辆是否在merge_zone中
-        merge_zone_length = 30
+        merge_zone_length = 40
         if "ramp" in road_info.road_type:
             if (
                 (veh_i_lane_id == -1 or veh_i_lane_id == 0 or
@@ -339,7 +339,7 @@ def grouping(flow, interaction_info):
                 break
         if not is_existed:
             group_interaction_info.append([idx])
-    print("group_interaction_info: ", group_interaction_info)
+    # print("group_interaction_info: ", group_interaction_info)
     return group_info
 
 

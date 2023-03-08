@@ -23,9 +23,10 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             else:
                 target_lane_id = roadgraph.right_lane(gol_road.lanes, vehicle.lane_id)
             if target_lane_id:
-                gol_flows[vehicle_id] = vehicle.change_to_next_lane(
+                vehicle = vehicle.change_to_next_lane(
                     target_lane_id, gol_road.lanes[target_lane_id].course_spline
                 )
+                gol_flows[vehicle_id] = vehicle
             logging.info("Vehicle {} change lane via decision successfully".format(vehicle_id))
         # Check Scenario Change
         if(
@@ -331,6 +332,7 @@ def main():
             logging.info("Sim Time: %f, One decision loop time: %f" % (decision_T, end - start))
             logging.info("------------------------------")
         if i % planning_timestep == 0:
+            logging.info("Plan Time: %f\n" % T)
             """
             Update Behaviour & Decision_info
             """
@@ -347,7 +349,7 @@ def main():
                                 vehicle_id,
                                 network.gol_flows,
                                 predictions,
-                                network.gol_road.lanes,
+                                network.gol_road,
                                 static_obs_list,
                                 T,
                                 gol_decision_states[vehicle_id],
@@ -360,7 +362,7 @@ def main():
                                 vehicle_id,
                                 network.gol_flows,
                                 predictions,
-                                network.gol_road.lanes,
+                                network.gol_road,
                                 static_obs_list,
                                 T
                             )

@@ -22,30 +22,38 @@ def random_generate_vehicle(idx_record, road_info, decision_flow, decision_info_
     # 初始化全局决策信息
     decision_info[idx_record] = ["cruise"]
     group_idx[idx_record] = 0
-    flow_record[idx_record] = {}
     action_record[idx_record] = {}
     # 随机生成车辆信息
-    lane_id = random.randint(0, road_info.lane_num) - 1
-    veh = build_vehicle(
-        id=idx_record,
-        vtype="car",
-        s0=0,
-        s0_d=random.uniform(5, 7),
-        d0=random.uniform(-0.1, 0.1) if lane_id < 0
-        else random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width,
-        lane_id=list(road_info.lanes.keys())[-1] if lane_id < 0 else list(road_info.lanes.keys())[0],
-        target_speed=random.uniform(6, 9),
-        behaviour="Decision",
-        lanes=road_info.lanes,
-        config=config,
-    )
-    decision_flow.append(veh)
-    grouping.veh_routing(veh, lane_id, road_info,
-                         keep_lane_rate=0.8,
-                         turn_right_rate=0.2,
-                         human_veh_rate=0.0,
-                         overtake_rate=0.0)
-    decision_info_ori[veh.id] = copy.deepcopy(decision_info[veh.id])
+    is_valid_veh = False
+    while not is_valid_veh:
+        is_valid_veh = True
+        lane_id = random.randint(0, road_info.lane_num) - 1
+        veh = build_vehicle(
+            id=idx_record,
+            vtype="car",
+            s0=0,
+            s0_d=random.uniform(5, 7),
+            d0=random.uniform(-0.1, 0.1) if lane_id < 0
+            else random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width,
+            lane_id=list(road_info.lanes.keys())[-1] if lane_id < 0 else list(road_info.lanes.keys())[0],
+            target_speed=random.uniform(6, 9),
+            behaviour="Decision",
+            lanes=road_info.lanes,
+            config=config,
+        )
+        for other_veh in decision_flow:
+            if other_veh.is_collide(veh):
+                is_valid_veh = False
+                break
+        if not is_valid_veh:
+            continue
+        decision_flow.append(veh)
+        grouping.veh_routing(veh, lane_id, road_info,
+                             keep_lane_rate=0.8,
+                             turn_right_rate=0.2,
+                             human_veh_rate=0.0,
+                             overtake_rate=0.0)
+        decision_info_ori[veh.id] = copy.deepcopy(decision_info[veh.id])
     decision_flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
 
 
@@ -293,7 +301,6 @@ def main():
             success_info, decision_states = decision_by_grouping.group_decision(decision_flow, road_info)
             planning_states = decision_states_process(T, decision_states, planning_flow, decision_info_ori)
             # 打印决策结果
-            logging.info("------------------------------")
             for veh in decision_flow:
                 if success_info[veh.id] == 0:
                     logging.info("Vehicle: %d in group %d decision failure." % (veh.id, group_idx[veh.id]))
@@ -318,7 +325,7 @@ def main():
                                 vehicle_id,
                                 planning_flow,
                                 predictions,
-                                road_info.lanes,
+                                road_info,
                                 static_obs_list,
                                 T,
                                 planning_states[vehicle_id],
@@ -331,7 +338,7 @@ def main():
                                 vehicle_id,
                                 planning_flow,
                                 predictions,
-                                road_info.lanes,
+                                road_info,
                                 static_obs_list,
                                 T
                             )

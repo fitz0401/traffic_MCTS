@@ -19,7 +19,8 @@ track_id = 2
 decision_interval = 30
 iter_frame = 1
 X_LIM = [-10, 100]
-trajectory_path = "trajectories.csv"
+trajectory_path = "experiment/3_Closed_Loop_Simulation/Code/trajectories.csv"
+flow_record_path = "experiment/3_Closed_Loop_Simulation/Code/flow_record.csv"
 
 # https://flatuicolors.com/palette/defo
 # colors = {
@@ -184,7 +185,7 @@ road_path = config["ROAD_PATH"]
 road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
 
 # load init_state.yaml
-vehicle_info = pd.read_csv('flow_record.csv')
+vehicle_info = pd.read_csv(flow_record_path)
 
 # Load the trajectory.csv
 traj = pd.read_csv(trajectory_path)

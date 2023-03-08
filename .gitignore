@@ -75,4 +75,5 @@ matplotrecorder/*
 #video output
 /output_video
 /output_trajectories
+/experiment/3_Closed_Loop_Simulation/Code/output_video
 /backup/

@@ -538,8 +538,8 @@ class FlowState:
                         continue
                     is_collided, _ = check_collsion_new(
                         np.array([ego_veh.current_state.x, ego_veh.current_state.y]),
-                        ego_veh.length*3,
-                        ego_veh.width*1.1,
+                        ego_veh.length * 3,
+                        ego_veh.width * 1.1,
                         ego_veh.current_state.yaw,
                         np.array([obs_veh.current_state.x, obs_veh.current_state.y]),
                         obs_veh.length,

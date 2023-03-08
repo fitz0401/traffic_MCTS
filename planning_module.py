@@ -343,9 +343,10 @@ def update_behaviour(vehicle_id, vehicles, lanes):
 
 
 def planner(
-        vehicle_id, vehicles, predictions, lanes, static_obs_list, plan_T, decision_states=None, decision_info=None
+        vehicle_id, vehicles, predictions, road_info, static_obs_list, plan_T, decision_states=None, decision_info=None
 ):
     start = time.time()
+    lanes = road_info.lanes
     vehicle = vehicles[vehicle_id]
     """
     Convert prediction to dynamic obstacle
@@ -396,19 +397,18 @@ def planner(
     road_width = lanes[vehicle.lane_id].width
     if vehicle.behaviour == "KL":
         # Keep Lane
-        course_spline = lanes[vehicle.lane_id].course_spline
         if vehicle.current_state.s_d >= 10 / 3.6:
             path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                vehicle, course_spline, road_width, obs_list, config, plan_T,
+                vehicle, road_info, road_width, obs_list, config, plan_T,
             )
         else:
             path = single_vehicle_planner.stop_trajectory_generator(
-                vehicle, lanes, road_width, obs_list, config, plan_T,
+                vehicle, road_info, road_width, obs_list, config, plan_T,
             )
     elif vehicle.behaviour == "STOP":
         # Stopping
         path = single_vehicle_planner.stop_trajectory_generator(
-            vehicle, lanes, road_width, obs_list, config, plan_T,
+            vehicle, road_info, road_width, obs_list, config, plan_T,
         )
     elif vehicle.behaviour == "LC-L":
         # Turn Left
@@ -443,16 +443,19 @@ def planner(
     elif vehicle.behaviour == "JUNCTION":
         # in Junction. for now just stop trajectory
         path = single_vehicle_planner.stop_trajectory_generator(
-            vehicle, lanes, road_width, obs_list, config, plan_T,
+            vehicle, road_info, road_width, obs_list, config, plan_T,
         )
     elif vehicle.behaviour == "Decision" and decision_states:
         temp_decision_states = []
+        is_dec = True if (decision_info == "merge_in"
+                          and road_info.ramp_length - 30 < vehicle.current_state.s < road_info.ramp_length - 10
+                          and vehicle.current_state.s_d > 5.0) else False
         for decision_state in decision_states:
             t = decision_state[0]
             if t <= plan_T:
                 continue
             # 已完成换道动作，不再执行决策下发的换道指令点
-            if decision_info == "decision" and abs(decision_state[1][1]) > LANE_WIDTH / 8:
+            if decision_info == "decision" and abs(decision_state[1][1]) > LANE_WIDTH / 4:
                 continue
             temp_decision_states.append((t - plan_T, decision_state[1]))
             if t - plan_T >= config["MIN_T"]:
@@ -461,7 +464,7 @@ def planner(
         # 所有决策动作已经执行完毕
         if temp_decision_states == [] or t - plan_T < 0.5:
             path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                vehicle, course_spline, road_width, obs_list, config, plan_T,
+                vehicle, road_info, road_width, obs_list, config, plan_T
             )
         else:
             path = single_vehicle_planner.decision_trajectory_generator(
@@ -473,46 +476,26 @@ def planner(
                 plan_T,
                 temp_decision_states,
             )
-            if not path and decision_info and decision_info in {"merge_in"}:
-                if vehicle.current_state.s > lanes[vehicle.lane_id].course_spline.s[-2] - 10:
-                    path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                        vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=2
-                    )
-                    logging.debug(
-                        "Vehicle {} in ramp[merge_zone] can't find decision path. |STOP|".format(vehicle.id)
-                    )
-                else:
-                    path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                        vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=1
-                    )
-                    logging.debug(
-                        "Vehicle {} in ramp can't find decision path. |SLOW DOWN|".format(vehicle.id)
-                    )
-            elif not path:
+            # 决策轨迹规划失败
+            if not path:
                 path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                    vehicle, course_spline, road_width, obs_list, config, plan_T
+                    vehicle, road_info, road_width, obs_list, config, plan_T, is_dec=is_dec
                 )
+                if is_dec:
+                    logging.debug(
+                        "Vehicle {} in ramp can't find decision path.".format(vehicle.id)
+                    )
     # 决策失败或已完成决策目标
     elif vehicle.behaviour == "Decision" and not decision_states:
-        course_spline = lanes[vehicle.lane_id].course_spline
-        if decision_info and decision_info in {"merge_in"}:
-            if vehicle.current_state.s > lanes[vehicle.lane_id].course_spline.s[-2] - 10:
-                path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                    vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=2
-                )
-                logging.debug(
-                    "Vehicle {} in ramp[merge_zone] decision fails. |STOP|".format(vehicle.id)
-                )
-            else:
-                path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                    vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=1
-                )
-                logging.debug(
-                    "Vehicle {} in ramp decision fails. |SLOW DOWN|".format(vehicle.id)
-                )
-        else:
-            path = single_vehicle_planner.lanekeeping_trajectory_generator(
-                vehicle, course_spline, road_width, obs_list, config, plan_T
+        is_dec = True if (decision_info == "merge_in"
+                          and road_info.ramp_length - 30 < vehicle.current_state.s < road_info.ramp_length - 10
+                          and vehicle.current_state.s_d > 5.0) else False
+        path = single_vehicle_planner.lanekeeping_trajectory_generator(
+            vehicle, road_info, road_width, obs_list, config, plan_T, is_dec=is_dec
+        )
+        if is_dec:
+            logging.debug(
+                "Vehicle {} in ramp decision fails.".format(vehicle.id)
             )
     else:
         logging.error(
@@ -520,7 +503,7 @@ def planner(
         )
         raise ValueError("Unknown behaviour: {}".format(vehicle.behaviour))
 
-    logging.debug("Vehicle {} Planning time:{}".format(vehicle.id, time.time() - start))
+    # logging.debug("Vehicle {} Planning time:{}".format(vehicle.id, time.time() - start))
     return vehicle_id, path, vehicle.behaviour
 
 

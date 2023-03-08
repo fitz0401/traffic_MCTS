@@ -1,12 +1,12 @@
 ANIMATION: True
-VERBOSE: False # print detailed debug message
+VERBOSE: True # print detailed debug message
 VIDEO: False # save plotting as video
 VIDEO_NAME: "demo_dp"
 CSV: True # write trajectories in trajectories.csv
 D_P_COUPLED: True # decision and planning coupled or planning by pickle file
-ROAD_PATH: "roadgraph_ramp.yaml" # roadgraph yaml path
+ROAD_PATH: "roadgraph_network.yaml" # roadgraph yaml path
 
-SIM_LOOP: 500
+SIM_LOOP: 1000
 MAX_ROAD_WIDTH: 3.5 # [DEPRECATED]: maximum road width [m]
 D_ROAD_W: 0.75 # road width sampling length [m]
 MAX_T: 8.0 # max prediction time [m]
@@ -26,10 +26,10 @@ weights:
   W_T: 1.0 # time cost
   W_OBS: 1.0 # obstacle cost
   W_GUIDE: 5.0 # guidance cost
-  W_ACC: 1.0 # acceleration cost
-  W_JERK: 1.0 # jerk cost
+  W_ACC: 0.05 # acceleration cost
+  W_JERK: 0.5 # jerk cost
   W_COLLISION: 4.0 # collision cost
-  W_STOP: 100 # punishment for stop
+  W_STOP: 50 # punishment for stop
   W_CHANGELANE: 50 # punishment for lane change
 
 vehicle:
