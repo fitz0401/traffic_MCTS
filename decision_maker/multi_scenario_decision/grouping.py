@@ -70,7 +70,7 @@ def random_flow(road_info, random_seed):
     # Freeway
     if "freeway" in road_info.road_type:
         while len(flow) < len_flow:
-            s = random.uniform(0, 80)
+            s = random.uniform(0, 60)
             lane_id = random.randint(0, road_info.lane_num - 1)
             d = random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)
@@ -98,7 +98,7 @@ def random_flow(road_info, random_seed):
                         keep_lane_rate=0.4,
                         human_veh_rate=0.2,
                         overtake_rate=0.3,
-                        narrow_lane_rate=0.4)
+                        turn_right_rate=0.4)
     # Ramp
     elif "ramp" in road_info.road_type:
         while len(flow) < len_flow:
@@ -131,7 +131,7 @@ def random_flow(road_info, random_seed):
                         keep_lane_rate=0.4,
                         human_veh_rate=0.1,
                         overtake_rate=0.0,
-                        narrow_lane_rate=0.4)
+                        turn_right_rate=0.4)
     # Roundabout
     elif "roundabout" in road_info.road_type:
         while len(flow) < len_flow:
@@ -166,7 +166,7 @@ def random_flow(road_info, random_seed):
                         human_veh_rate=0.1,
                         overtake_rate=0.0,
                         merge_out_rate=0.5,
-                        narrow_lane_rate=0.4)
+                        turn_right_rate=0.4)
     # sort flow first by s decreasingly
     flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
     print('flow:', flow)
@@ -184,18 +184,19 @@ def judge_interaction(flow, road_info):
     for i, veh_i in enumerate(flow):
         veh_i_lane_id = get_lane_id(veh_i, road_info)
         # 记录车辆是否在merge_zone中
+        merge_zone_length = 30
         if "ramp" in road_info.road_type:
             if (
                 (veh_i_lane_id == -1 or veh_i_lane_id == 0 or
                  (veh_i_lane_id == 1 and decision_info[veh_i.id][0] == "change_lane_right"))
-                    and (road_info.ramp_length - 25 <= veh_i.current_state.s <= road_info.ramp_length)
+                    and (road_info.ramp_length - merge_zone_length <= veh_i.current_state.s <= road_info.ramp_length)
             ):
                 merge_zone_ids.append(i)
         elif "roundabout" in road_info.road_type:
             if (
                 (veh_i_lane_id == -1 or veh_i_lane_id == 0 or
                  (veh_i_lane_id == 1 and decision_info[veh_i.id][0] == "change_lane_right"))
-                    and road_info.inter_s[1] - 25 <= veh_i.current_state.s <= road_info.inter_s[1]):
+                    and road_info.inter_s[1] - merge_zone_length <= veh_i.current_state.s <= road_info.inter_s[1]):
                 merge_zone_ids.append(i)
         for veh_j in flow[i + 1:]:
             veh_j_lane_id = get_lane_id(veh_j, road_info)
@@ -342,6 +343,14 @@ def grouping(flow, interaction_info):
     return group_info
 
 
+def none_grouping(flow):
+    group_info = {1: []}
+    for veh in flow:
+        group_idx[veh.id] = 1
+        group_info[1].append(veh)
+    return group_info
+
+
 def random_grouping(flow):
     max_group_size = 3
     random_flow = copy.deepcopy(flow)
@@ -422,7 +431,7 @@ def plot_flow(ax, flow, road_info, pause_t, target_decision=None):
 def find_overtake_aim(flow, road_info):
     for i, veh_i in enumerate(flow):
         veh_i_lane_id = get_lane_id(veh_i, road_info)
-        if decision_info[veh_i.id][0] == "overtake":
+        if decision_info[veh_i.id][0] == "overtake" and len(decision_info[veh_i.id]) == 1:
             # 倒序查找同车道最近的直行车
             for j in range(i - 1, -1, -1):
                 veh_j = flow[j]
@@ -431,13 +440,14 @@ def find_overtake_aim(flow, road_info):
                 if veh_i_lane_id == veh_j_lane_id:
                     if (
                         decision_info[veh_j.id][0] in {"cruise", "decision"} and
-                        veh_j.current_state.s - veh_i.current_state.s <= 25
+                        veh_j.current_state.s - veh_i.current_state.s <= 20 and
+                        veh_j.target_speed < veh_i.target_speed
                     ):
                         decision_info[veh_i.id].append(veh_j.id)
                     break
             # 没有超车对象，无需超车
             if len(decision_info[veh_i.id]) == 1:
-                decision_info[veh_i.id][0] = "cruise"
+                decision_info[veh_i.id][0] = "decision"
 
 
 def get_lane_id(vehicle, road_info):
@@ -457,36 +467,38 @@ def veh_routing(vehicle, lane_id, road_info,
                 human_veh_rate=0.0,
                 overtake_rate=0.0,
                 merge_out_rate=0.5,
-                narrow_lane_rate=0.3):
+                turn_right_rate=0.4):
+    # keep_lane_rate + turn_right_rate + turn_left_rate = 1
+    # human_veh_rate + overtake_rate < keep_lane_rate
     if lane_id >= 0:
         if lane_id == 0:
             TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate else 1)
         elif lane_id == road_info.lane_num - 1:
-            TARGET_LANE[vehicle.id] = lane_id - (1 if random.uniform(0, 1) < narrow_lane_rate else 0)
+            TARGET_LANE[vehicle.id] = lane_id - (1 if random.uniform(0, 1) < turn_right_rate else 0)
         else:
             TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate
-                                                 else random.choice((-1, 1)))
+                                                 else (-1 if random.uniform(0, 1) < turn_right_rate else 1))
         if TARGET_LANE[vehicle.id] == lane_id:
-            decision_info[vehicle.id][0] = "cruise" if random.uniform(0, 1) < human_veh_rate \
-                else ("overtake" if random.uniform(0, 1) < overtake_rate else "decision")
+            decision_info[vehicle.id] = ["cruise"] if random.uniform(0, 1) < human_veh_rate \
+                else (["overtake"] if random.uniform(0, 1) < overtake_rate else ["decision"])
         elif TARGET_LANE[vehicle.id] > lane_id:
-            decision_info[vehicle.id][0] = "change_lane_left"
+            decision_info[vehicle.id] = ["change_lane_left"]
         else:
-            decision_info[vehicle.id][0] = "change_lane_right"
-        if decision_info[vehicle.id][0] == "cruise":
-            vehicle.behaviour = "KL"
+            decision_info[vehicle.id] = ["change_lane_right"]
     else:
         TARGET_LANE[vehicle.id] = 0
-        decision_info[vehicle.id][0] = "merge_in"
+        decision_info[vehicle.id] = ["merge_in"]
     # 构建驶出环岛的车辆
     if "roundabout" in road_info.road_type:
         if (
             lane_id == 0 and vehicle.current_state.s < road_info.inter_s[0] - 10
-            or lane_id == 1 and vehicle.current_state.s < road_info.inter_s[0] - 30
+            # or lane_id == 1 and vehicle.current_state.s < road_info.inter_s[0] - 40
         ):
             if random.uniform(0, 1) < merge_out_rate:
                 TARGET_LANE[vehicle.id] = -2
-                decision_info[vehicle.id][0] = "merge_out"
+                decision_info[vehicle.id] = ["merge_out"]
+    vehicle.behaviour = "KL" if decision_info[vehicle.id] == ["cruise"] else "Decision"
+    scenario_change[vehicle.id] = False
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ with open(file_path + "/config.yaml", "r", encoding='utf-8') as f:
 
 # Road network param
 LANE_WIDTH = 4
-vehicles_num = {"E1_1": 6, "E1_2": 6, "E1_3": 6, "E2": 10, "E3": 8, "E4": 10, "E5": 10}
+vehicles_num = {"E1_1": 6, "E1_2": 6, "E1_3": 6, "E2": 12, "E3": 8, "E4": 12, "E5": 12}
 scenario_num = len(vehicles_num.keys())
 
 # Decision Information
@@ -21,8 +21,9 @@ TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''
 decision_info = {i: ["cruise"] for i in range(len_flow)}
 group_idx = {i: 0 for i in range(len_flow)}
-flow_record = {i: {} for i in range(len_flow)}
+flow_record = {i + 1: {} for i in range(len_flow)}
 action_record = {i: {} for i in range(len_flow)}
+scenario_change = {i: True for i in range(len_flow)}
 
 # IDM param
 SAFE_DIST = 2  # least safe distance between two cars
@@ -33,11 +34,11 @@ SQRT_AB = np.sqrt(aMax * bMax)
 PAR = 0.6
 
 # Decision param
-prediction_time = 10  # seconds
+prediction_time = 10 if config["ROAD_PATH"] == "roadgraph_network.yaml" else 20  # seconds
 DT = 1.5  # decision interval (second)
-T_group = 3   # Update group interval (second)
-phi = {i: math.pi / 4 for i in range(len_flow)}
-gamma = {i: 1 for i in range(len_flow)}
+T_group = 3  # Update group interval (second)
+phi = {i: math.pi / 4 for i in range(100)}
+gamma = {i: 1 for i in range(100)}
 
 
 class RoadInfo:

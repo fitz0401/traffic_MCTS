@@ -18,12 +18,12 @@ import yaml
 import single_vehicle_planning as single_vehicle_planner
 import utils.roadgraph as roadgraph
 from constant import (
-    LANE_WIDTH
+    LANE_WIDTH,
+    file_path
 )
 
-config_file_path = "config.yaml"
 plt_folder = "./output_video/"
-with open(config_file_path, "r", encoding='utf-8') as f:
+with open(file_path + "/config.yaml", "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
     SIM_LOOP = config["SIM_LOOP"]
     # ROAD_WIDTH = config["MAX_ROAD_WIDTH"]  # maximum road width [m]
@@ -67,7 +67,8 @@ def exit_plot():
 
 def plot_init():
     plt.ion()
-    fig = plt.figure(figsize=(12, 6), constrained_layout=True)
+    fig = plt.figure(figsize=((20, 20) if config["ROAD_PATH"] == "roadgraph_network.yaml" else (12, 6)),
+                     constrained_layout=True)
     axs = fig.subplot_mosaic(
         [["Left", "TopRight"], ["Left", "BottomRight"]],
         gridspec_kw={"width_ratios": [3, 1]},
@@ -88,7 +89,8 @@ def plot_init():
     )
 
 
-def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T, focus_car_id, decision_info_ori):
+def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T,
+                    focus_car_id, decision_info_ori, fig_range=None):
     global main_fig, vel_fig, acc_fig
     main_fig.cla()
     vel_fig.cla()
@@ -247,6 +249,14 @@ def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T,
             ymin=best_paths[focus_car_id].states[1].y - area * 2,
             ymax=best_paths[focus_car_id].states[1].y + area * 2,
         )
+    elif fig_range:
+        main_fig.axis("equal")
+        main_fig.axis(
+            xmin=fig_range[0],
+            xmax=fig_range[1],
+            ymin=fig_range[2],
+            ymax=fig_range[3],
+        )
 
     if config["VIDEO"]:
         global frame_id
@@ -333,7 +343,7 @@ def update_behaviour(vehicle_id, vehicles, lanes):
 
 
 def planner(
-        vehicle_id, vehicles, predictions, lanes, static_obs_list, plan_T, decision_states=None,
+        vehicle_id, vehicles, predictions, lanes, static_obs_list, plan_T, decision_states=None, decision_info=None
 ):
     start = time.time()
     vehicle = vehicles[vehicle_id]
@@ -435,20 +445,16 @@ def planner(
         path = single_vehicle_planner.stop_trajectory_generator(
             vehicle, lanes, road_width, obs_list, config, plan_T,
         )
-    # 决策成功
     elif vehicle.behaviour == "Decision" and decision_states:
         temp_decision_states = []
-        for decision_state in decision_states[vehicle.id]:
+        for decision_state in decision_states:
             t = decision_state[0]
             if t <= plan_T:
                 continue
-            state = (
-                decision_state[1][0],
-                decision_state[1][1] - (int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:])) * LANE_WIDTH
-                if decision_state[1][3] >= 0 else decision_state[1][1],
-                decision_state[1][2],
-            )
-            temp_decision_states.append((t - plan_T, state))
+            # 已完成换道动作，不再执行决策下发的换道指令点
+            if decision_info == "decision" and abs(decision_state[1][1]) > LANE_WIDTH / 8:
+                continue
+            temp_decision_states.append((t - plan_T, decision_state[1]))
             if t - plan_T >= config["MIN_T"]:
                 break
         course_spline = lanes[vehicle.lane_id].course_spline
@@ -467,12 +473,47 @@ def planner(
                 plan_T,
                 temp_decision_states,
             )
-    # 决策失败
+            if not path and decision_info and decision_info in {"merge_in"}:
+                if vehicle.current_state.s > lanes[vehicle.lane_id].course_spline.s[-2] - 10:
+                    path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                        vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=2
+                    )
+                    logging.debug(
+                        "Vehicle {} in ramp[merge_zone] can't find decision path. |STOP|".format(vehicle.id)
+                    )
+                else:
+                    path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                        vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=1
+                    )
+                    logging.debug(
+                        "Vehicle {} in ramp can't find decision path. |SLOW DOWN|".format(vehicle.id)
+                    )
+            elif not path:
+                path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                    vehicle, course_spline, road_width, obs_list, config, plan_T
+                )
+    # 决策失败或已完成决策目标
     elif vehicle.behaviour == "Decision" and not decision_states:
         course_spline = lanes[vehicle.lane_id].course_spline
-        path = single_vehicle_planner.lanekeeping_trajectory_generator(
-            vehicle, course_spline, road_width, obs_list, config, plan_T,
-        )
+        if decision_info and decision_info in {"merge_in"}:
+            if vehicle.current_state.s > lanes[vehicle.lane_id].course_spline.s[-2] - 10:
+                path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                    vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=2
+                )
+                logging.debug(
+                    "Vehicle {} in ramp[merge_zone] decision fails. |STOP|".format(vehicle.id)
+                )
+            else:
+                path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                    vehicle, course_spline, road_width, obs_list, config, plan_T, is_dec=1
+                )
+                logging.debug(
+                    "Vehicle {} in ramp decision fails. |SLOW DOWN|".format(vehicle.id)
+                )
+        else:
+            path = single_vehicle_planner.lanekeeping_trajectory_generator(
+                vehicle, course_spline, road_width, obs_list, config, plan_T
+            )
     else:
         logging.error(
             "Vehicle {} Unknown behaviour: {}".format(vehicle.id, vehicle.behaviour)

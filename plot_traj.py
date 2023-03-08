@@ -19,6 +19,7 @@ track_id = 2
 decision_interval = 30
 iter_frame = 1
 X_LIM = [-10, 100]
+trajectory_path = "trajectories.csv"
 
 # https://flatuicolors.com/palette/defo
 # colors = {
@@ -80,7 +81,7 @@ def plot_roadgraph(edges, lanes):
                 *zip(*lane.left_bound[:]),
                 color='lightgrey',
                 linestyle=(3, (10, 10)),
-                linewidth=4,
+                linewidth=2,
             )
             if lane_index == edge.lane_num - 1:
                 ax.plot(*zip(*lane.left_bound), color='lightgrey', linewidth=5)
@@ -176,11 +177,11 @@ def plot_headlights(c_x, c_y, yaw, light_type):
 
 
 config_file_path = "config.yaml"
-with open(config_file_path, "r") as f:
+with open(config_file_path, "r", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 road_path = config["ROAD_PATH"]
-road_info = RoadInfo(road_path[road_path.find("_") + 1 : road_path.find(".yaml")])
+road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
 
 # load init_state.yaml
 vehicle_info = pd.read_csv('flow_record.csv')
@@ -267,7 +268,7 @@ for end_time in range(start_frame, end_frame, iter_frame):
             c_x - (l / 2) * math.cos(yaw) - (0.3 * math.sin(yaw)),
             c_y - (l / 2) * math.sin(yaw) - (0.2 * math.cos(yaw)),
             f"{vehicle_id}",
-            fontsize=24,
+            fontsize=8,
             weight='bold',
             color='black',
             zorder=100,

@@ -74,4 +74,5 @@ matplotrecorder/*
 
 #video output
 /output_video
+/output_trajectories
 /backup/
