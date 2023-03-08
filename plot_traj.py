@@ -187,7 +187,7 @@ road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")]
 vehicle_info = pd.read_csv('flow_record.csv')
 
 # Load the trajectory.csv
-traj = pd.read_csv("trajectories.csv")
+traj = pd.read_csv(trajectory_path)
 trajectories = traj.groupby('vehicle_id')
 # sort trajectories by 'x' decreasing
 trajectories = sorted(trajectories, key=lambda x: x[1]['t'].iloc[-1], reverse=True)
