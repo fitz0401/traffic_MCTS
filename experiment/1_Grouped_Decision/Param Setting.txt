@@ -1,0 +1,26 @@
+# Road Setting:
+    ROAD_PATH: "roadgraph_ramp.yaml"
+
+# Decision Param:
+    DT_decision(s): 1.5
+    DT_group(s): 3
+    prediction_time(s): 15
+    max_group_size： 3
+
+# Flow Setting:
+    Vehicle_num: 3 / 6 / 9
+    3: s = random.uniform(0, 60)
+    6: s = random.uniform(0, 70)
+    9: s = random.uniform(0, 80)
+
+    routing_info = {
+        "keep_lane_rate": 0.6,
+        "human_veh_rate": 0.0,
+        "overtake_rate": 0.0,
+        "turn_right_rate": 0.4,
+        "merge_out_rate": 0.0
+    }
+
+# Test Case:
+    vehicle_intervals = 3 * vehicle_length
+    random_seeds = [0 ~ 9]

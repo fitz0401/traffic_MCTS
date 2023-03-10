@@ -62,7 +62,7 @@ def yaml_flow(road_info):
     return flow
 
 
-def random_flow(road_info, random_seed):
+def random_flow(road_info, random_seed, routing_info=None):
     flow = []
     lanes = road_info.lanes
     # Randomly generate vehicles
@@ -70,7 +70,7 @@ def random_flow(road_info, random_seed):
     # Freeway
     if "freeway" in road_info.road_type:
         while len(flow) < len_flow:
-            s = random.uniform(0, 60)
+            s = random.uniform(0, 70)
             lane_id = random.randint(0, road_info.lane_num - 1)
             d = random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)
@@ -94,16 +94,24 @@ def random_flow(road_info, random_seed):
             if not is_valid_veh:
                 continue
             flow.append(veh)
-            veh_routing(veh, lane_id, road_info,
-                        keep_lane_rate=0.4,
-                        human_veh_rate=0.2,
-                        overtake_rate=0.3,
-                        turn_right_rate=0.4)
+            if not routing_info:
+                veh_routing(veh, lane_id, road_info,
+                            keep_lane_rate=0.4,
+                            human_veh_rate=0.2,
+                            overtake_rate=0.3,
+                            turn_right_rate=0.4)
+            else:
+                veh_routing(veh, lane_id, road_info,
+                            keep_lane_rate=routing_info["keep_lane_rate"],
+                            human_veh_rate=routing_info["human_veh_rate"],
+                            overtake_rate=routing_info["overtake_rate"],
+                            turn_right_rate=routing_info["turn_right_rate"],
+                            merge_out_rate=routing_info["merge_out_rate"])
     # Ramp
     elif "ramp" in road_info.road_type:
         while len(flow) < len_flow:
             lane_id = random.randint(0, road_info.lane_num) - 1
-            s = random.uniform(0, road_info.ramp_length) if lane_id < 0 else random.uniform(0, 60)
+            s = random.uniform(0, road_info.ramp_length) if lane_id < 0 else random.uniform(0, 80)
             d = random.uniform(-0.1, 0.1) if lane_id < 0 \
                 else random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)
@@ -121,17 +129,25 @@ def random_flow(road_info, random_seed):
             )
             is_valid_veh = True
             for other_veh in flow:
-                if other_veh.is_collide(veh):
+                if other_veh.is_collide(veh, is_ramp=True):
                     is_valid_veh = False
                     break
             if not is_valid_veh:
                 continue
             flow.append(veh)
-            veh_routing(veh, lane_id, road_info,
-                        keep_lane_rate=0.4,
-                        human_veh_rate=0.1,
-                        overtake_rate=0.0,
-                        turn_right_rate=0.4)
+            if not routing_info:
+                veh_routing(veh, lane_id, road_info,
+                            keep_lane_rate=0.4,
+                            human_veh_rate=0.1,
+                            overtake_rate=0.0,
+                            turn_right_rate=0.4)
+            else:
+                veh_routing(veh, lane_id, road_info,
+                            keep_lane_rate=routing_info["keep_lane_rate"],
+                            human_veh_rate=routing_info["human_veh_rate"],
+                            overtake_rate=routing_info["overtake_rate"],
+                            turn_right_rate=routing_info["turn_right_rate"],
+                            merge_out_rate=routing_info["merge_out_rate"])
     # Roundabout
     elif "roundabout" in road_info.road_type:
         while len(flow) < len_flow:
@@ -161,15 +177,22 @@ def random_flow(road_info, random_seed):
             if not is_valid_veh:
                 continue
             flow.append(veh)
-            veh_routing(veh, lane_id, road_info,
-                        keep_lane_rate=0.4,
-                        human_veh_rate=0.1,
-                        overtake_rate=0.0,
-                        merge_out_rate=0.5,
-                        turn_right_rate=0.4)
+            if not routing_info:
+                veh_routing(veh, lane_id, road_info,
+                            keep_lane_rate=0.4,
+                            human_veh_rate=0.1,
+                            overtake_rate=0.0,
+                            merge_out_rate=0.5,
+                            turn_right_rate=0.4)
+            else:
+                veh_routing(veh, lane_id, road_info,
+                            keep_lane_rate=routing_info["keep_lane_rate"],
+                            human_veh_rate=routing_info["human_veh_rate"],
+                            overtake_rate=routing_info["overtake_rate"],
+                            turn_right_rate=routing_info["turn_right_rate"],
+                            merge_out_rate=routing_info["merge_out_rate"])
     # sort flow first by s decreasingly
     flow.sort(key=lambda x: (-x.current_state.s, x.current_state.d))
-    print('flow:', flow)
     return flow
 
 

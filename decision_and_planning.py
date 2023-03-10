@@ -190,8 +190,7 @@ def main():
         decision_info_ori = copy.deepcopy(decision_info)
         planning_states = None
     else:
-        # with open("decision_maker/multi_scenario_decision/decision_state.pickle", "rb") as f:
-        with open("experiment/1_Grouped_Decision/Code/decision_state.pickle", "rb") as f:
+        with open("decision_maker/multi_scenario_decision/decision_state.pickle", "rb") as f:
             decision_flow = pickle.load(f)
             decision_info_pickle = pickle.load(f)
             decision_states = pickle.load(f)
@@ -298,7 +297,9 @@ def main():
                 action_record[veh.id] = {}
             decision_flow = planning_flow_to_decision_flow(planning_flow, road_info)
             # 获取并处理决策信息
-            success_info, decision_states = decision_by_grouping.group_decision(decision_flow, road_info)
+            success_info, decision_states = decision_by_grouping.group_decision(decision_flow,
+                                                                                road_info,
+                                                                                decision_info_ori)
             planning_states = decision_states_process(T, decision_states, planning_flow, decision_info_ori)
             # 打印决策结果
             logging.info("------------------------------")

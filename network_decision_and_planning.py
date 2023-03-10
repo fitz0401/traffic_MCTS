@@ -304,6 +304,7 @@ def main():
             for scenario_id, decision_flow in network.scenario_flows.items():
                 param_list.append((decision_flow,
                                    network.roads[scenario_id],
+                                   decision_info_ori,
                                    True))
             pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
             decision_results = pool.starmap(decision_by_grouping.group_decision, param_list)

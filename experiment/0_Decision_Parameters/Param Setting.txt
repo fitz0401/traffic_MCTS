@@ -1,0 +1,23 @@
+# Road Setting:
+    ROAD_PATH: "roadgraph_freeway.yaml"
+
+# Decision Param:
+    DT_decision(s): 1.5
+    DT_group(s): 3
+    prediction_time(s): 15
+    max_group_size： 1 / 2 / 3 / 4 / 5
+
+# Flow Setting:
+    Vehicle_num: 10
+    s = random.uniform(0, 70)
+    routing_info = {
+        "keep_lane_rate": 0.4,
+        "human_veh_rate": 0.0,
+        "overtake_rate": 0.0,
+        "turn_right_rate": 0.6,
+        "merge_out_rate": 0.0
+    }
+
+# Test Case:
+    vehicle_intervals = 2.5 * vehicle_length
+    random_seeds = [0, 7, 29, 38, 49, 60, 71, 83, 91, 99] or [0 ~ 99]

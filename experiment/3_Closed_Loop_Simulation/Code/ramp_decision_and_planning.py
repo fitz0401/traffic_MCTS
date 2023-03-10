@@ -298,7 +298,9 @@ def main():
                 action_record[veh.id] = {}
             decision_flow = planning_flow_to_decision_flow(planning_flow, road_info)
             # 获取并处理决策信息
-            success_info, decision_states = decision_by_grouping.group_decision(decision_flow, road_info)
+            success_info, decision_states = decision_by_grouping.group_decision(decision_flow,
+                                                                                road_info,
+                                                                                decision_info_ori)
             planning_states = decision_states_process(T, decision_states, planning_flow, decision_info_ori)
             # 打印决策结果
             for veh in decision_flow:

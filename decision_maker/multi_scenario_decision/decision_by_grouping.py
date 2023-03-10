@@ -9,7 +9,7 @@ def main():
     road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
 
     # flow = yaml_flow()
-    flow = random_flow(road_info, 0)
+    flow = random_flow(road_info, 5)
     # 找到超车对象
     find_overtake_aim(flow, road_info)
     decision_info_ori = copy.deepcopy(decision_info)
@@ -110,46 +110,43 @@ def main():
 
     # Experimental indicators
     print("expand node num:", mcts.EXPAND_NODE)
-    success = 1
+    success_info = {veh.id: 1 for veh in flow}
     for final_node in final_nodes.values():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否抵达目标车道
             if (
-                decision_info[veh_idx][0] in {"change_lane_left", "change_lane_right"} and
+                decision_info_ori[veh_idx][0] in {"change_lane_left", "change_lane_right"} and
                 abs(veh_state[1] - TARGET_LANE[veh_idx] * road_info.lane_width) > 0.5
             ):
-                success = 0
                 print("Vehicle doesn't at aimed lane! veh_id", veh_idx,
                       "group_idx", group_idx[veh_idx])
-                break
+                success_info[veh_idx] = 0
             # 是否完成超车
-            if decision_info[veh_idx][0] == "overtake":
+            elif decision_info_ori[veh_idx][0] == "overtake":
                 aim_veh = None
                 for veh in final_node.state.flow:
-                    if veh.id == decision_info[veh_idx][1]:
+                    if veh.id == decision_info_ori[veh_idx][1]:
                         aim_veh = veh
                         break
                 if veh_state[0] < aim_veh.current_state.s + aim_veh.length:
-                    success = 0
                     print("Vehicle doesn't finish overtaking! veh_id", veh_idx,
                           "group_idx", group_idx[veh_idx])
-                    break
+                    success_info[veh_idx] = 0
             # 是否完成汇入
-            if decision_info[veh_idx][0] == "merge_in":
+            elif decision_info_ori[veh_idx][0] == "merge_in":
                 if veh_state[3] != 0:
-                    success = 0
                     print("Vehicle doesn't merge in! veh_id", veh_idx,
                           "group_idx", group_idx[veh_idx])
-                    break
+                    success_info[veh_idx] = 0
             # 是否完成汇出
-            if decision_info[veh_idx][0] == "merge_out":
+            elif decision_info_ori[veh_idx][0] == "merge_out":
                 if veh_state[3] != -2:
-                    success = 0
                     print("Vehicle doesn't merge out! veh_id", veh_idx,
                           "group_idx", group_idx[veh_idx])
-                    break
-    print("success:", success)
-    if success:
+                    success_info[veh_idx] = 0
+    success_rate = sum(success_info.values()) / len(success_info)
+    print("success_rate:", success_rate)
+    if success_rate == 1:
         print("finish_time:", finish_time)
         print("average_finish_time:", sum(finish_times) / len(finish_times))
 
@@ -174,6 +171,8 @@ def main():
     decision_state_for_planning = {}
     for final_node in final_nodes.values():
         for veh_id in final_node.state.decision_vehicles.keys():
+            if success_info[veh_id] == 0:
+                continue
             decision_state = []
             for i in range(int(final_node.state.t / DT) - 1):
                 # 针对每个时刻，记录每辆车动作变化时的状态（即第i次动作引发的i+1状态）
@@ -182,6 +181,11 @@ def main():
                                            final_node.state.states[i + 1][veh_id]))
             decision_state.append((final_node.state.states[-1]["time"], final_node.state.states[-1][veh_id]))
             decision_state_for_planning[veh_id] = decision_state
+    # 为无需决策/决策失败的决策车添加结果
+    for veh in flow:
+        if veh.behaviour == "Decision" and not decision_state_for_planning.get(veh.id):
+            decision_state_for_planning[veh.id] = []
+
     ''' pickle file: flow | decision_info(initial value) | decision_state '''
     with open("decision_state.pickle", "wb") as fd:
         pickle.dump(flow, fd)
@@ -353,7 +357,7 @@ def predict_flow(flow, road_info, t):
     return next_flow
 
 
-def group_decision(flow, road_info, is_multi_processing=False):
+def group_decision(flow, road_info, decision_info_ori, is_multi_processing=False):
     # 分组
     interaction_info = judge_interaction(flow, road_info)
     flow_groups = grouping(flow, interaction_info)
@@ -419,16 +423,16 @@ def group_decision(flow, road_info, is_multi_processing=False):
     for idx, final_node in final_nodes.items():
         for veh_idx, veh_state in final_node.state.decision_vehicles.items():
             # 是否完成超车
-            if decision_info[veh_idx][0] == "overtake":
+            if decision_info_ori[veh_idx][0] == "overtake":
                 aim_veh = None
                 for veh in final_node.state.flow:
-                    if veh.id == decision_info[veh_idx][1]:
+                    if veh.id == decision_info_ori[veh_idx][1]:
                         aim_veh = veh
                         break
                 # 重规划下的超车动作：完成换道 / 完成纵坐标超越即视为成功
                 if (
-                        veh_state[0] > aim_veh.current_state.s + aim_veh.length or
-                        abs(veh_state[1] - aim_veh.current_state.d) > aim_veh.width
+                    veh_state[0] > aim_veh.current_state.s + aim_veh.length or
+                    abs(veh_state[1] - aim_veh.current_state.d) > aim_veh.width
                 ):
                     continue
                 success_info[veh_idx] = 0

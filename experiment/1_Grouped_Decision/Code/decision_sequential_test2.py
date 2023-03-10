@@ -20,188 +20,150 @@ from flow_state_sequential import (
 def main():
     road_path = config["ROAD_PATH"]
     road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
+    routing_info = {
+        "keep_lane_rate": 0.6,
+        "human_veh_rate": 0.0,
+        "overtake_rate": 0.0,
+        "turn_right_rate": 0.4,
+        "merge_out_rate": 0.0
+    }
+    avg_expend_node = []
+    # random_seeds = [0, 7, 29, 38, 49, 60, 71, 83, 91, 99]
+    random_seeds = [i for i in range(10)]
 
-    # flow = yaml_flow()
-    flow = random_flow(road_info, 0)
-    decision_info_ori = copy.deepcopy(decision_info)
-    decision_ids = []
-    for id, info in decision_info.items():
-        if info[0] != "cruise":
-            decision_ids.append(id)
+    for k in range(10):
+        print("———————————————Test: %d, Random Seed: %d———————————————" % (k, random_seeds[k]))
+        # 重置决策信息
+        mcts.EXPAND_NODE = 0
+        for veh_id in range(len_flow):
+            decision_info[veh_id] = ["cruise"]
+            group_idx[veh_id] = 0
+            flow_record[veh_id] = {}
+            action_record[veh_id] = {}
 
-    # use IDM to predict flow
-    results = [flow]
-    for i in range(int(prediction_time / DT)):
-        last_flow = copy.deepcopy(results[-1])
-        results.append(predict_flow(last_flow, road_info, i))
+        # flow = yaml_flow()
+        flow = random_flow(road_info, random_seeds[k], routing_info)
+        decision_info_ori = copy.deepcopy(decision_info)
+        decision_ids = []
+        for id, info in decision_info.items():
+            if info[0] != "cruise":
+                decision_ids.append(id)
 
-    # convert results to dynamic_obs: [{'id1':(s,d,v,lane_id),'id2':(s,d,v,lane_id),...},{...},...]
-    dynamic_obs = []
-    for i in range(len(results)):
-        dynamic_obs.append({})
-        for veh in results[i]:
-            if veh.id not in decision_ids:
-                dynamic_obs[i][veh.id] = (veh.current_state.s,
-                                          veh.current_state.d,
-                                          veh.current_state.s_d,
-                                          get_lane_id(veh, road_info))
-    start_time = time.time()
+        # use IDM to predict flow
+        results = [flow]
+        for i in range(int(prediction_time / DT)):
+            last_flow = copy.deepcopy(results[-1])
+            results.append(predict_flow(last_flow, road_info, i))
 
-    # Plot flow
-    fig, ax = plt.subplots()
-    if "freeway" in road_info.road_type:
-        fig.set_size_inches(16, 4)
-    elif "ramp" in road_info.road_type:
-        fig.set_size_inches(16, 4)
-    elif "roundabout" in road_info.road_type:
-        fig.set_size_inches(12, 9)
-    plot_flow(ax, flow, road_info, 2, decision_info_ori)
+        # convert results to dynamic_obs: [{'id1':(s,d,v,lane_id),'id2':(s,d,v,lane_id),...},{...},...]
+        dynamic_obs = []
+        for i in range(len(results)):
+            dynamic_obs.append({})
+            for veh in results[i]:
+                if veh.id not in decision_ids:
+                    dynamic_obs[i][veh.id] = (veh.current_state.s,
+                                              veh.current_state.d,
+                                              veh.current_state.s_d,
+                                              get_lane_id(veh, road_info))
+        start_time = time.time()
 
-    # 决策
-    mcts_init_state = {'time': 0}
-    for veh in flow:
-        if veh.id in decision_ids:
-            lane_id = get_lane_id(veh, road_info)
-            mcts_init_state[veh.id] = (
-                veh.current_state.s,
-                0 + lane_id * LANE_WIDTH if lane_id >= 0 else 0,
-                veh.current_state.s_d,
-                get_lane_id(veh, road_info),
-            )
+        # 决策
+        mcts_init_state = {'time': 0}
+        for veh in flow:
+            if veh.id in decision_ids:
+                lane_id = get_lane_id(veh, road_info)
+                mcts_init_state[veh.id] = (
+                    veh.current_state.s,
+                    0 + lane_id * LANE_WIDTH if lane_id >= 0 else 0,
+                    veh.current_state.s_d,
+                    get_lane_id(veh, road_info),
+                )
 
-    actions = {id: [mcts_init_state[id]] for id in decision_ids}
-    current_node = mcts.Node(
-        FlowState([mcts_init_state], road_info, actions=actions, dynamic_obs=dynamic_obs)
-    )
-    print("root_node:", current_node)
-    # MCTS
-    for t in range(int(prediction_time / DT)):
-        print("-------------t=%d----------------" % t)
-        old_node = current_node
-        current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
-        print("Num Children: %d\n--------" % len(old_node.children))
-        if current_node is None:
-            current_node = mcts.Node(
-                FlowState([mcts_init_state], road_info, actions=actions, dynamic_obs=dynamic_obs)
-            )
-            break
-        print("Best Child: ", current_node.visits / (200 / (t / 2 + 1)) * 100, "%")
-        temp_best = current_node
-        while temp_best.children:
-            temp_best = mcts.best_child(temp_best, 0)
-        print("Temp best reward", temp_best.state.reward())
-        if current_node.state.terminal():
-            break
-    print(current_node.state.actions)
-    print("Calculation Time: %f\n" % (time.time() - start_time))
-
-    # calculate finish time
-    finish_time = {}
-    for veh_id, action in current_node.state.actions.items():
-        for i in range(len(action)):
-            if action[i][3] == TARGET_LANE[veh_id]:
-                finish_time[veh_id] = i * DT
+        actions = {id: [mcts_init_state[id]] for id in decision_ids}
+        current_node = mcts.Node(
+            FlowState([mcts_init_state], road_info, actions=actions, dynamic_obs=dynamic_obs)
+        )
+        # MCTS
+        for t in range(int(prediction_time / DT)):
+            old_node = current_node
+            current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+            if current_node is None:
+                current_node = mcts.Node(
+                    FlowState([mcts_init_state], road_info, actions=actions, dynamic_obs=dynamic_obs)
+                )
                 break
-    print("finish_time: ", finish_time)
-    average_finish_time = []
-    for veh_id, f_time in finish_time.items():
-        if f_time != 0:
-            average_finish_time += [f_time]
-    average_finish_time = sum(average_finish_time) / len(average_finish_time)
-    print("average_finish_time:", average_finish_time)
-    print("expand node num:", mcts.EXPAND_NODE)
+            temp_best = current_node
+            while temp_best.children:
+                temp_best = mcts.best_child(temp_best, 0)
+            if current_node.state.terminal():
+                break
 
-    # calculate success
-    success_info = {veh.id: 1 for veh in flow}
-    for veh_id, action in current_node.state.actions.items():
-        d = action[-1][1]
-        lane_id = action[-1][3]
-        # 是否抵达目标车道
-        if (
-                decision_info_ori[veh_id][0] in {"change_lane_left", "change_lane_right"} and
-                abs(d - TARGET_LANE[veh_id] * LANE_WIDTH) > 0.5
-        ):
-            print("Vehicle doesn't at aimed lane! veh_id: ", veh_id)
-            success_info[veh_id] = 0
-        # 是否完成汇入
-        if decision_info_ori[veh_id][0] == "merge_in":
-            if lane_id != 0:
-                print("Vehicle doesn't merge in! veh_id: ", veh_id)
+        # calculate success
+        success_info = {veh.id: 1 for veh in flow}
+        for veh_id, action in current_node.state.actions.items():
+            d = action[-1][1]
+            lane_id = action[-1][3]
+            # 是否抵达目标车道
+            if (
+                    decision_info_ori[veh_id][0] in {"change_lane_left", "change_lane_right"} and
+                    abs(d - TARGET_LANE[veh_id] * LANE_WIDTH) > 0.5
+            ):
+                print("Vehicle doesn't at aimed lane! veh_id: ", veh_id)
                 success_info[veh_id] = 0
-        # 是否完成汇出
-        if decision_info_ori[veh_id][0] == "merge_out":
-            if lane_id != -2:
-                print("Vehicle doesn't merge out! veh_id: ", veh_id)
-                success_info[veh_id] = 0
-    print("success_rate：\n", sum(success_info.values()) / len(success_info))
+            # 是否完成汇入
+            if decision_info_ori[veh_id][0] == "merge_in":
+                if lane_id != 0:
+                    print("Vehicle doesn't merge in! veh_id: ", veh_id)
+                    success_info[veh_id] = 0
+            # 是否完成汇出
+            if decision_info_ori[veh_id][0] == "merge_out":
+                if lane_id != -2:
+                    print("Vehicle doesn't merge out! veh_id: ", veh_id)
+                    success_info[veh_id] = 0
 
-    # calculate minimum distance
-    min_distance = 100
-    for veh_id in decision_ids:
-        for veh_id2 in decision_ids:
-            if veh_id == veh_id2:
-                continue
-            for t in range(len(current_node.state.actions[veh_id])):
-                veh_state = current_node.state.actions[veh_id][t]
-                other_veh_state = current_node.state.actions[veh_id2][t]
-                if (
-                        abs(veh_state[1] - other_veh_state[1]) < 2.0
-                        and math.sqrt(
-                    (veh_state[0] - other_veh_state[0]) ** 2
-                    + (veh_state[1] - other_veh_state[1]) ** 2
-                )
-                        < min_distance
-                ):
-                    min_distance = math.sqrt(
-                        (veh_state[0] - other_veh_state[0]) ** 2
-                        + (veh_state[1] - other_veh_state[1]) ** 2
+        # calculate minimum distance
+        min_distance = 100
+        for veh_id in decision_ids:
+            for veh_id2 in decision_ids:
+                if veh_id == veh_id2:
+                    continue
+                for t in range(len(current_node.state.actions[veh_id])):
+                    veh_state = current_node.state.actions[veh_id][t]
+                    other_veh_state = current_node.state.actions[veh_id2][t]
+                    if (
+                            abs(veh_state[1] - other_veh_state[1]) < 2.0
+                            and math.sqrt(
+                            (veh_state[0] - other_veh_state[0]) ** 2
+                            + (veh_state[1] - other_veh_state[1]) ** 2
                     )
-    print("min_distance:", min_distance - 5)
+                            < min_distance
+                    ):
+                        min_distance = math.sqrt(
+                            (veh_state[0] - other_veh_state[0]) ** 2
+                            + (veh_state[1] - other_veh_state[1]) ** 2
+                        )
 
-    # 存储决策结果，用于规划、绘图
-    final_node = current_node
-    flow_plot = {t: [] for t in range(int(prediction_time / DT))}
-    flow_plot[0] = flow
-    decision_state_for_planning = {}
-    for decision_veh in final_node.state.decision_vehicles:
-        veh_id = decision_veh[0]
-        decision_state = []
-        for i in range(int(final_node.state.t / DT)):
-            decision_state.append((final_node.state.states[i + 1]["time"],
-                                   final_node.state.states[i + 1][veh_id]))
-            lane_id = final_node.state.states[i + 1][veh_id][3]
-            flow_plot[i + 1].append(
-                build_vehicle(
-                    id=veh_id,
-                    vtype="car",
-                    s0=final_node.state.states[i + 1][veh_id][0],
-                    s0_d=final_node.state.states[i + 1][veh_id][2],
-                    d0=final_node.state.states[i + 1][veh_id][1] - lane_id * LANE_WIDTH if lane_id > 0
-                    else final_node.state.states[i + 1][veh_id][1],
-                    lane_id=list(road_info.lanes.keys())[lane_id],
-                    target_speed=10.0,
-                    behaviour="KL" if decision_info_ori[veh_id] == "cruise" else "Decision",
-                    lanes=road_info.lanes,
-                    config=config
-                )
-            )
-        decision_state_for_planning[veh_id] = decision_state
-    ''' pickle file: flow | decision_info(initial value) | decision_state '''
-    with open("../Decision_State_Record/decision_state.pickle", "wb") as fd:
-        pickle.dump(flow, fd)
-        pickle.dump(decision_info_ori, fd)
-        pickle.dump(decision_state_for_planning, fd)
-        pickle.dump(TARGET_LANE, fd)
-        pickle.dump(group_idx, fd)
+        # 存储决策结果，用于规划
+        final_node = current_node
+        decision_state_for_planning = {}
+        for decision_veh in final_node.state.decision_vehicles:
+            veh_id = decision_veh[0]
+            decision_state = []
+            for i in range(int(final_node.state.t / DT)):
+                decision_state.append((final_node.state.states[i + 1]["time"],
+                                       final_node.state.states[i + 1][veh_id]))
+            decision_state_for_planning[veh_id] = decision_state
+        ''' pickle file: flow | decision_info(initial value) | decision_state '''
+        with open("../Decision_State_Record/decision_state_" + str(k) + ".pickle", "wb") as fd:
+            pickle.dump(flow, fd)
+            pickle.dump(decision_info_ori, fd)
+            pickle.dump(decision_state_for_planning, fd)
+            pickle.dump(TARGET_LANE, fd)
+            pickle.dump(group_idx, fd)
 
-    # plot predictions
-    frame_id = 0
-    for t in range(int(final_node.state.t / DT) + 1):
-        ax.cla()
-        plot_flow(ax, flow_plot[t], road_info, 0.5)
-        if config["VIDEO"]:
-            plt.savefig("../../output_video" + "/frame%02d.png" % frame_id)
-        frame_id += 1
+        print("success_rate：\n", sum(success_info.values()) / len(success_info))
+        avg_expend_node.append(mcts.EXPAND_NODE)
+    print("avg_expend_node：", sum(avg_expend_node) / len(avg_expend_node))
 
 
 def predict_flow(flow, road_info, t):
@@ -282,7 +244,7 @@ def predict_flow(flow, road_info, t):
                     and leading_car.current_state.s - veh.current_state.s <= veh.length
                     and abs(leading_car.current_state.d - veh.current_state.d) < veh.width * 0.5
             ):
-                raise SystemExit('Collision detected. Failed!')
+                continue
             if leading_car is None:
                 s = veh.current_state.s + veh.current_state.s_d * DT
                 d = veh.current_state.d

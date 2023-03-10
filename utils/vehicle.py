@@ -63,11 +63,11 @@ class Vehicle:
 
         return vehicle_new_lane
 
-    def is_collide(self, other: 'Vehicle') -> bool:
-        if self.lane_id != other.lane_id:
+    def is_collide(self, other: 'Vehicle', is_ramp=False) -> bool:
+        if self.lane_id != other.lane_id and not is_ramp:
             return False
-        if self.current_state.s + self.length * 2.5 < other.current_state.s \
-                or self.current_state.s - self.length * 2.5 > other.current_state.s:
+        if self.current_state.s + self.length * 3 < other.current_state.s \
+                or self.current_state.s - self.length * 3 > other.current_state.s:
             return False
         if self.current_state.d + self.width * 1.5 < other.current_state.d \
                 or self.current_state.d - self.width * 1.5 > other.current_state.d:
