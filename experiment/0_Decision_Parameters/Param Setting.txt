@@ -6,6 +6,8 @@
     DT_group(s): 3
     prediction_time(s): 15
     max_group_size： 1 / 2 / 3 / 4 / 5
+    mcts.uct_search(200 / (t / 2 + 1), current_node)
+    check_collision: 3 * vehicle_length
 
 # Flow Setting:
     Vehicle_num: 10

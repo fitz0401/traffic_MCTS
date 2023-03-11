@@ -146,13 +146,22 @@ def main():
         # 存储决策结果，用于规划
         final_node = current_node
         decision_state_for_planning = {}
-        for decision_veh in final_node.state.decision_vehicles:
-            veh_id = decision_veh[0]
-            decision_state = []
-            for i in range(int(final_node.state.t / DT)):
-                decision_state.append((final_node.state.states[i + 1]["time"],
-                                       final_node.state.states[i + 1][veh_id]))
-            decision_state_for_planning[veh_id] = decision_state
+        if isinstance(final_node.state.decision_vehicles, list):
+            for decision_veh in final_node.state.decision_vehicles:
+                veh_id = decision_veh[0]
+                decision_state = []
+                for i in range(int(final_node.state.t / DT)):
+                    decision_state.append((final_node.state.states[i + 1]["time"],
+                                           final_node.state.states[i + 1][veh_id]))
+                decision_state_for_planning[veh_id] = decision_state
+        elif isinstance(final_node.state.decision_vehicles, dict):
+            for decision_veh in final_node.state.decision_vehicles:
+                veh_id = decision_veh[0]
+                decision_state = []
+                for i in range(int(final_node.state.t / DT)):
+                    decision_state.append((final_node.state.states[i + 1]["time"],
+                                           final_node.state.states[i + 1][veh_id]))
+                decision_state_for_planning[veh_id] = decision_state
         ''' pickle file: flow | decision_info(initial value) | decision_state '''
         with open("../Decision_State_Record/decision_state_" + str(k) + ".pickle", "wb") as fd:
             pickle.dump(flow, fd)

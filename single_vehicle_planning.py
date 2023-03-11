@@ -650,9 +650,24 @@ def lanekeeping_trajectory_generator(
             vehicle.id
         )
     )
-    return stop_trajectory_generator(
-        vehicle, road_info, road_width, obs_list, config, T
-    )
+
+    if config["D_P_COUPLED"]:
+        return stop_trajectory_generator(
+            vehicle, road_info, road_width, obs_list, config, T
+        )
+    else:
+        stop_path = frenet_optimal_planner.calc_stop_path(
+            current_state, vehicle.max_decel, sample_t[0], dt, config
+        )
+        stop_path.frenet_to_cartesian(course_spline)
+        stop_path.cost = (
+                cost.smoothness(stop_path, course_spline, config["weights"]) * dt
+                + cost.guidance(stop_path, config["weights"]) * dt
+                + cost.acc(stop_path, config["weights"]) * dt
+                + cost.jerk(stop_path, config["weights"]) * dt
+                + cost.stop(config["weights"])
+        )
+        return stop_path
 
 
 def main():

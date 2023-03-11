@@ -163,8 +163,7 @@ def main():
     flow_plot = {t: [] for t in range(int(prediction_time / DT))}
     flow_plot[0] = flow
     decision_state_for_planning = {}
-    for decision_veh in final_node.state.decision_vehicles:
-        veh_id = decision_veh[0]
+    for veh_id in final_node.state.decision_vehicles.keys():
         decision_state = []
         for i in range(int(final_node.state.t / DT)):
             decision_state.append((final_node.state.states[i + 1]["time"],

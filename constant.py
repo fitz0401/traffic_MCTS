@@ -16,7 +16,7 @@ scenario_num = len(vehicles_num.keys())
 # Decision Information
 ACTION_LIST = ['KS', 'AC', 'DC', 'LCR', 'LCL']
 len_flow = sum(vehicles_num.values()) \
-    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 9
+    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 6
 # Global vars
 TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''

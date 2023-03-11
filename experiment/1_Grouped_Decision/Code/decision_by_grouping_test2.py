@@ -92,7 +92,7 @@ def main():
             )
             # MCTS
             for t in range(int(prediction_time / DT)):
-                current_node = mcts.uct_search(500 / (t / 2 + 1), current_node)
+                current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
                 if current_node is None:
                     current_node = mcts.Node(
                         FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)

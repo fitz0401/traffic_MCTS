@@ -219,8 +219,8 @@ def main():
             for j, ego_veh in enumerate(planning_flow.values()):
                 for other_veh in list(planning_flow.values())[j + 1:]:
                     if ego_veh.lane_id == other_veh.lane_id:
-                        min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s - 5) \
-                            if abs(ego_veh.current_state.s - other_veh.current_state.s - 5) < min_dist else min_dist
+                        min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s) - 5 \
+                            if abs(ego_veh.current_state.s - other_veh.current_state.s) - 5 < min_dist else min_dist
 
             """
             Step 3.2 : Check Arrival & Record Trajectories

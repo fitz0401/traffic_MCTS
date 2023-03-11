@@ -6,6 +6,7 @@
     DT_group(s): 3
     prediction_time(s): 15
     max_group_size： 3
+    check_collision: 3 * vehicle_length
 
 # Flow Setting:
     Vehicle_num: 3 / 6 / 9
