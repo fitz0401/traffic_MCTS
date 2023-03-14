@@ -31,7 +31,7 @@ def main():
     # random_seeds = [0, 7, 29, 38, 49, 60, 71, 83, 91, 99]
     random_seeds = [i for i in range(10)]
 
-    for k in range(10):
+    for k in range(9):
         print("———————————————Test: %d, Random Seed: %d———————————————" % (k, random_seeds[k]))
         # 重置决策信息
         mcts.EXPAND_NODE = 0
@@ -155,8 +155,7 @@ def main():
                                            final_node.state.states[i + 1][veh_id]))
                 decision_state_for_planning[veh_id] = decision_state
         elif isinstance(final_node.state.decision_vehicles, dict):
-            for decision_veh in final_node.state.decision_vehicles:
-                veh_id = decision_veh[0]
+            for veh_id in final_node.state.decision_vehicles.keys():
                 decision_state = []
                 for i in range(int(final_node.state.t / DT)):
                     decision_state.append((final_node.state.states[i + 1]["time"],

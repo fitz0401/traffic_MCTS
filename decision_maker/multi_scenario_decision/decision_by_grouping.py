@@ -397,7 +397,7 @@ def group_decision(flow, road_info, decision_info_ori, is_multi_processing=False
             FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
         )
         for t in range(int(prediction_time / DT)):
-            current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+            current_node = mcts.uct_search(500 / (t / 2 + 1), current_node)
             if current_node is None:
                 current_node = mcts.Node(
                     FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)

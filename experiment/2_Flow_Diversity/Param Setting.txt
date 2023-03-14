@@ -1,5 +1,5 @@
 # Road Setting:
-    ROAD_PATH: "roadgraph_ramp.yaml"
+    ROAD_PATH: "roadgraph_freeway.yaml" / "roadgraph_roundabout.yaml"
 
 # Decision Param:
     DT_decision(s): 1.5
@@ -9,11 +9,10 @@
     check_collision: 3 * vehicle_length
 
 # Flow Setting:
-    Vehicle_num: 3 / 6 / 9
-    3: s = random.uniform(0, 60)
-    6: s = random.uniform(0, 70)
-    9: s = random.uniform(0, 80)
+    Vehicle_num: 5 / 10
 
+    [freeway]: yaml
+    [roundabout]:
     routing_info = {
         "keep_lane_rate": 0.6,
         "human_veh_rate": 0.0,
@@ -23,8 +22,11 @@
     }
 
 # Planning Setting:
-    check_collision: 1.5 * vehicle_length
+    random.seed(1)
+    check_collision: 2 * vehicle_length
+
+# Reward & SVO Setting:
+
+
 
 # Test Case:
-    vehicle_intervals = 3 * vehicle_length
-    random_seeds = [0 ~ 9]

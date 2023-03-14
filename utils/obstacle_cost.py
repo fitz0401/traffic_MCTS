@@ -194,7 +194,7 @@ def calculate_car(vehicle, obs, path, config):
             car_width,
             path.states[i].yaw,
             np.array([obs["path"][i]["x"], obs["path"][i]["y"]]),
-            obs["length"] * 1.5,
+            obs["length"] * 2,
             obs["width"],
             obs["path"][i]["yaw"],
         )

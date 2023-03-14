@@ -7,10 +7,10 @@ from utils.vehicle import build_vehicle
 
 
 def main():
-    road_info = RoadInfo("roundabout")
+    road_info = RoadInfo("freeway")
 
-    # flow = yaml_flow(road_info)
-    flow = random_flow(road_info, 24)
+    flow = yaml_flow(road_info)
+    # flow = random_flow(road_info, 24)
 
     find_overtake_aim(flow, road_info)
     start_time = time.time()
@@ -48,7 +48,7 @@ def yaml_flow(road_info):
                 s0_d=vehicle["vel"],
                 d0=vehicle["d"] if vehicle["lane_id"] < 0 else vehicle["d"] + vehicle["lane_id"] * road_info.lane_width,
                 lane_id=list(lanes.keys())[-1] if vehicle["lane_id"] < 0 else list(lanes.keys())[0],
-                target_speed=random.uniform(6, 8) if vehicle["vehicle_type"] in {"decision", "cruise"} else 8,
+                target_speed=vehicle["vel"],
                 behaviour="KL" if vehicle["vehicle_type"] == "cruise" else "Decision",
                 lanes=lanes,
                 config=config,
@@ -111,7 +111,7 @@ def random_flow(road_info, random_seed, routing_info=None):
     elif "ramp" in road_info.road_type:
         while len(flow) < len_flow:
             lane_id = random.randint(0, road_info.lane_num) - 1
-            s = random.uniform(0, road_info.ramp_length) if lane_id < 0 else random.uniform(0, 70)
+            s = random.uniform(0, road_info.ramp_length) if lane_id < 0 else random.uniform(0, 80)
             d = random.uniform(-0.1, 0.1) if lane_id < 0 \
                 else random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)
@@ -463,7 +463,7 @@ def find_overtake_aim(flow, road_info):
                 if veh_i_lane_id == veh_j_lane_id:
                     if (
                         decision_info[veh_j.id][0] in {"cruise", "decision"} and
-                        veh_j.current_state.s - veh_i.current_state.s <= 20 and
+                        veh_j.current_state.s - veh_i.current_state.s <= 30 and
                         veh_j.target_speed < veh_i.target_speed
                     ):
                         decision_info[veh_i.id].append(veh_j.id)

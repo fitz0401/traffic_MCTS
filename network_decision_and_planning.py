@@ -74,9 +74,10 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             vehicle.current_state.s >= gol_road.lanes[vehicle.lane_id].next_s[0]
         ):
             next_lanes = gol_road.lanes[vehicle.lane_id].go_straight_lane[0]
-            gol_flows[vehicle_id] = vehicle.change_to_next_lane(
+            vehicle = vehicle.change_to_next_lane(
                 next_lanes, gol_road.lanes[next_lanes].course_spline
             )
+            gol_flows[vehicle_id] = vehicle
             decision_info_ori[vehicle.id] = ["decision"]
             scenario_change[vehicle.id] = True
             logging.info("Vehicle {} finish merge in action, now drives in {}".format(vehicle_id, next_lanes))
@@ -95,9 +96,10 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
                     next_s_idx = 2
             if next_s_idx >= 0:
                 next_lanes = gol_road.lanes[vehicle.lane_id].go_straight_lane[next_s_idx]
-                gol_flows[vehicle_id] = vehicle.change_to_next_lane(
+                vehicle = vehicle.change_to_next_lane(
                     next_lanes, gol_road.lanes[next_lanes].course_spline
                 )
+                gol_flows[vehicle_id] = vehicle
                 # merge_out 后立即切换为 merge_in
                 decision_info_ori[vehicle.id] = ["merge_in"]
                 logging.info("Vehicle {} finish merge out action, now drives in {}".format(vehicle_id, next_lanes))

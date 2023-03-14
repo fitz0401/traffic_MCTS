@@ -237,6 +237,8 @@ class FlowState:
                         aim_veh = veh
                 if ego_veh.current_state.s <= aim_veh.current_state.s + 2 * ego_veh.length:
                     return False
+                elif abs(veh_state[1] - TARGET_LANE[veh_id] * self.road_info.lane_width) > 0.2:
+                    return False
             # 匝道车辆还未完成汇入
             elif decision_info[veh_id][0] == "merge_in" and veh_state[3] != 0:
                 return False
@@ -297,12 +299,12 @@ class FlowState:
                 if decision_info[veh_id][0] == "overtake":
                     # 保持横向车距
                     if (
-                        self.states[i][veh_id][0] < aim_veh.current_state.s + 1.5 * aim_veh.length and
+                        self.states[i][veh_id][0] < aim_veh.current_state.s + 2 * aim_veh.length and
                         abs(self.states[i][veh_id][1] - aim_veh.current_state.d) >= 0.9 * self.road_info.lane_width
                     ):
                         self_reward += 0.2 / total_action_num
                     elif (
-                        self.states[i][veh_id][0] > aim_veh.current_state.s + 1.5 * aim_veh.length and
+                        self.states[i][veh_id][0] > aim_veh.current_state.s + 2 * aim_veh.length and
                         abs(self.states[i][veh_id][1] - TARGET_LANE[veh_id] * self.road_info.lane_width) < 0.5
                     ):
                         self_reward += 0.2 / total_action_num
@@ -337,8 +339,11 @@ class FlowState:
             # 惩罚：同车道后方有车的情况下，迫使后车减速
             if back_veh and decision_info[veh_id][0] in {"change_lane_left", "change_lane_right", "overtake"}:
                 for i in range(len(self.actions[back_veh.id])):
-                    if self.actions[back_veh.id][i] in {'DC', 'KL_DC'} and self.actions[veh_id][i] in {'LCL', 'LCR'}:
-                        other_reward -= 0.2
+                    if (
+                        abs(self.states[i][veh_id][0] - back_veh.current_state.s) <= 20 and
+                        self.actions[back_veh.id][i] in {'DC', 'KL_DC'}
+                    ):
+                        other_reward -= 0.4
             # 惩罚：抢道汇入
             if (front_veh or back_veh) and decision_info[veh_id][0] == "merge_in":
                 for i in range(len(self.actions[veh_id])):
