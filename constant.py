@@ -15,8 +15,12 @@ scenario_num = len(vehicles_num.keys())
 
 # Decision Information
 ACTION_LIST = ['KS', 'AC', 'DC', 'LCR', 'LCL']
+KL_ACTION_LIST = ['KS', 'AC', 'DC']
+LCR_ACTION_LIST = ['KS', 'AC', 'DC', 'LCR']
+LCL_ACTION_LIST = ['KS', 'AC', 'DC', 'LCL']
 len_flow = sum(vehicles_num.values()) \
-    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 5
+    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 10
+
 # Global vars
 TARGET_LANE = {}
 '''decision_info : [id: vehicle_type, decision_interval]'''
@@ -39,6 +43,11 @@ prediction_time = 10 if config["D_P_COUPLED"] else 15  # seconds
 DT = 1.5  # decision interval (second)
 T_group = 3  # Update group interval (second)
 phi = {i: math.pi / 4 for i in range(100)}
+
+# Test 1
+retry_cnt = 0   # sequential MCTS retry count when expending
+available_actions_num = []    # number of available actions for each node
+
 # test 3.1
 # phi[1] = math.pi / 2
 # phi[2] = math.pi / 2

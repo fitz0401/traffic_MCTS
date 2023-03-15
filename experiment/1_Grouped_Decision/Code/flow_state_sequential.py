@@ -1,6 +1,8 @@
+import itertools
 from copy import deepcopy
 import hashlib
 import random
+import constant
 from constant import *
 
 
@@ -24,7 +26,7 @@ def check_lane_change(veh_id, s, d, lane_id, road_info):
         ):
             return s, 0, -2
         else:
-            return s, d, int((d + road_info.lane_width/2) / road_info.lane_width)
+            return s, d, max(0, min(int((d + road_info.lane_width/2) / road_info.lane_width), road_info.lane_num - 1))
     elif lane_id == -1:
         if (
             ("ramp" in road_info.road_type and s > road_info.ramp_length)
@@ -37,7 +39,9 @@ def check_lane_change(veh_id, s, d, lane_id, road_info):
         return s, d, lane_id
 
 
-def is_collide(self_s, self_d, other_s, other_d, length=5, width=2) -> bool:
+def is_collide(self_s, self_d, self_lane_id, other_s, other_d, other_lane_id, length=5, width=2) -> bool:
+    if self_lane_id != other_lane_id:
+        return False
     if self_s + length * 3 < other_s or self_s - length * 3 > other_s:
         return False
     if self_d + width * 1.1 < other_d or self_d - width * 1.1 > other_d:
@@ -59,49 +63,6 @@ class FlowState:
     
     dynamic_obs: [{'id1':(s,d,v),'id2':(s,d,v),...},{...},...]
     """
-    def explore_next_action(self, decision_index, obs, actions):
-        if decision_index == len(self.decision_vehicles):
-            self.next_action.append(deepcopy(actions))
-            return
-        id, state = self.decision_vehicles[decision_index]
-        for acc in ACC_LIST:
-            for lateral_vel in LATERAL_VEL:
-                if (
-                    abs(state[1] - TARGET_LANE[id] * LANE_WIDTH) < LANE_WIDTH / 4
-                    and lateral_vel != 0
-                ):
-                    continue
-                lane_id = state[3]
-                v = min(10, max(state[2] + acc * DT, 0))
-                s = state[0] + v * DT + 0.5 * acc * DT * DT
-                # 匝道车辆和驶出车辆不用换道
-                if TARGET_LANE[id] < 0 or lane_id < 0:
-                    d = state[1]
-                else:
-                    d = state[1] + lateral_vel * DT
-                s, d, lane_id = check_lane_change(id, s, d, lane_id, self.road_info)
-                # 越界检查
-                if (
-                    lane_id >= 0 and
-                    (d <= 0 - self.road_info.lane_width / 2 or
-                     d >= self.road_info.lane_width * self.road_info.lane_num - self.road_info.lane_width / 2)
-                ):
-                    continue
-                collision = False
-                for obs_id, obs_state in obs.items():
-                    if is_collide(s, d, obs_state[0], obs_state[1]):
-                        collision = True
-                        break
-                if collision:
-                    continue
-
-                actions.append((id, (s, d, v, lane_id)))
-                obs[id] = (s, d, v, lane_id)
-                self.explore_next_action(decision_index + 1, obs, actions)
-                actions.pop()
-                obs.pop(id)
-        return
-
     def __init__(self, states, road_info, actions=None, dynamic_obs=None) -> None:
         if actions is None:
             actions = {}
@@ -112,36 +73,99 @@ class FlowState:
         self.decision_vehicles = deepcopy(self.states[-1])
         self.decision_vehicles.pop('time')
         self.dynamic_obs = dynamic_obs
-        self.num_moves = 0
         self.actions = actions
         self.road_info = road_info
 
-        t = self.t + DT
-        if t >= self.TIME_LIMIT:
+        if self.t >= self.TIME_LIMIT:
+            self.num_moves = 0
             return
-        self.decision_vehicles = sorted(
+
+        # check actions
+        if not self.actions_check():
+            self.num_moves = 0
+            return
+
+        self.decision_vehicles = dict(sorted(
             self.decision_vehicles.items(), key=lambda x: x[1][0], reverse=True
-        )
-        obs = deepcopy(dynamic_obs[int(t / DT)])
-        self.next_action = []
-        self.explore_next_action(0, obs, [])
-        self.num_moves = len(self.next_action)
+        ))
+
+        self.num_moves = 1
+        self.actions_range = []
+        for veh_id, veh_state in self.decision_vehicles.items():
+            if (
+                veh_state[3] >= 0
+                and (abs(veh_state[1] - TARGET_LANE[veh_id] * LANE_WIDTH) > LANE_WIDTH / 4
+                     or decision_info[veh_id][0] == "overtake")
+            ):
+                self.num_moves *= len(ACC_LIST) * len(LATERAL_VEL)
+                self.actions_range.append(9)
+            else:
+                self.num_moves *= len(ACC_LIST)
+                self.actions_range.append(-3)
+        constant.available_actions_num.append(self.num_moves)
         return
 
-    def next_state(self, tried_children_node=None):
-        next_action = random.choice(self.next_action)
-        if tried_children_node is not None:
-            tried_action_set = set([
-                tuple(action[-1] for action in child.state.actions.values())
-                for child in tried_children_node
-            ])
-            while tuple(next_action) in tried_action_set:
-                next_action = random.choice(self.next_action)
+    def next_state(self, check_tried=False):
         next_state = {'time': self.t + DT}
         actions_copy = deepcopy(self.actions)
-        for (id, action) in next_action:
-            actions_copy[id].append(action)
-            next_state[id] = action
+
+        is_valid_action = False
+        collision_cnt = 0
+
+        while not is_valid_action and self.num_moves > 0:
+            is_valid_action = True
+            # 重置决策结果
+            next_state = {'time': self.t + DT}
+            actions_copy = deepcopy(self.actions)
+            obs = deepcopy(self.dynamic_obs[int((self.t + DT) / DT)])
+
+            # 按照优先级选取动作
+            for idx, (veh_id, veh_state) in enumerate(self.decision_vehicles.items()):
+                next_action_range = self.actions_range[idx]
+                if next_action_range < 0:
+                    next_action_idx = random.choice(range(-next_action_range))
+                    acc = ACC_LIST[next_action_idx]
+                    lateral_vel = 0
+                else:
+                    next_action_idx = random.choice(range(next_action_range))
+                    acc = ACC_LIST[next_action_idx % len(ACC_LIST)]
+                    lateral_vel = LATERAL_VEL[(next_action_idx // len(ACC_LIST)) % len(LATERAL_VEL)]
+                lane_id = veh_state[3]
+                v = min(10, max(veh_state[2] + acc * DT, 0))
+                s = veh_state[0] + v * DT + 0.5 * acc * DT * DT
+                d = veh_state[1] + lateral_vel * DT
+                s, d, lane_id = check_lane_change(veh_id, s, d, lane_id, self.road_info)
+                # 碰撞检测
+                for obs_id, obs_state in obs.items():
+                    if is_collide(s, d, lane_id, obs_state[0], obs_state[1], obs_state[3]):
+                        is_valid_action = False
+                        # 若失败则不会扩展该节点
+                        if check_tried:
+                            constant.retry_cnt += 1
+                            self.num_moves -= 1
+                        collision_cnt += 1
+                        break
+                if not is_valid_action:
+                    # Rollout时不必要选取非碰撞动作
+                    if not check_tried or collision_cnt > 5000:
+                        rollout_fail_state = FlowState(
+                            self.states + [next_state],
+                            self.road_info,
+                            actions_copy,
+                            self.dynamic_obs,
+                        )
+                        rollout_fail_state.num_moves = 0
+                        return rollout_fail_state
+                    # Expend时必须选取非碰撞动作
+                    else:
+                        break
+                # 记录当前车辆所选动作
+                new_veh_state = (s, d, v, lane_id)
+                actions_copy[veh_id].append(new_veh_state)
+                next_state[veh_id] = new_veh_state
+                # 更新预测结果，指导下一辆车的运动
+                obs[veh_id] = new_veh_state
+
         return FlowState(
             self.states + [next_state],
             self.road_info,
@@ -152,7 +176,7 @@ class FlowState:
     def terminal(self):
         if self.num_moves == 0 or self.t >= self.TIME_LIMIT:
             return True
-        for veh_id, veh_state in self.decision_vehicles:
+        for veh_id, veh_state in self.decision_vehicles.items():
             # 换道决策车还未行驶到目标车道
             if decision_info[veh_id][0] in {"change_lane_left", "change_lane_right"}:
                 if abs(veh_state[1] - TARGET_LANE[veh_id] * LANE_WIDTH) > 0.2:
@@ -169,7 +193,7 @@ class FlowState:
         if self.num_moves == 0:
             return 0.0
         rewards = []
-        for veh_id, veh_state in self.decision_vehicles:
+        for veh_id, veh_state in self.decision_vehicles.items():
             self_reward = 0.0
             s, d = veh_state[0], veh_state[1]
             # 换道终止状态奖励：距离目标车道线横向距离，<0.5表示换道成功：reward += 0.8
@@ -220,6 +244,16 @@ class FlowState:
         if len(rewards) > 0:
             flow_reward = sum(rewards) / len(rewards)
         return max(0.0, min(1.0, flow_reward))
+
+    def actions_check(self):
+        for veh_id, veh_state in self.decision_vehicles.items():
+            if (
+                veh_state[3] >= 0 and
+                (veh_state[1] <= 0 - self.road_info.lane_width / 2 or
+                 veh_state[1] >= self.road_info.lane_width * self.road_info.lane_num - self.road_info.lane_width / 2)
+            ):
+                return False
+        return True
 
     def __hash__(self):
         return int(hashlib.md5(str(self.actions).encode('utf-8')).hexdigest(), 16)

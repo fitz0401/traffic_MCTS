@@ -9,7 +9,7 @@ def main():
     road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
 
     # flow = yaml_flow()
-    flow = random_flow(road_info, 5)
+    flow = random_flow(road_info, 0)
     # 找到超车对象
     find_overtake_aim(flow, road_info)
     decision_info_ori = copy.deepcopy(decision_info)
@@ -78,13 +78,15 @@ def main():
         # MCTS
         for t in range(int(prediction_time / DT)):
             print("-------------t=%d----------------" % t)
-            current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+            old_node = current_node
+            current_node = mcts.uct_search(5000 / (t / 2 + 1) / len(flow_groups), current_node)
+            print("Num Children: %d\n--------" % len(old_node.children))
             if current_node is None:
                 current_node = mcts.Node(
                     FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
                 )
                 break
-            print("Best Child: ", current_node.visits / (200 / (t / 2 + 1)) * 100, "%")
+            print("Best Child: ", current_node.visits / (5000 / (t / 2 + 1)) / len(flow_groups) * 100, "%")
             temp_best = current_node
             while temp_best.children:
                 temp_best = mcts.best_child(temp_best, 0)
@@ -107,6 +109,8 @@ def main():
         while current_node is not None:
             flow_record[idx][current_node.state.t/DT] = current_node.state.flow
             current_node = current_node.parent
+        print("group_idx:", idx)
+        print("expand node num:", mcts.EXPAND_NODE)
 
     # Experimental indicators
     print("expand node num:", mcts.EXPAND_NODE)
@@ -166,6 +170,7 @@ def main():
                     min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s) \
                         if abs(ego_veh.current_state.s - other_veh.current_state.s) < min_dist else min_dist
     print("min_distance:", min_dist - 5)
+    print("avg_available_actions_num", sum(available_actions_num) / len(available_actions_num))
 
     # 存储决策结果，用于规划
     decision_state_for_planning = {}

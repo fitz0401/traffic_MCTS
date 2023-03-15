@@ -3,7 +3,7 @@ VERBOSE: False # print detailed debug message
 VIDEO: False # save plotting as video
 VIDEO_NAME: "demo_dp"
 CSV: True # write trajectories in trajectories.csv
-D_P_COUPLED: True # decision and planning coupled or planning by pickle file
+D_P_COUPLED: False # decision and planning coupled or planning by pickle file
 ROAD_PATH: "roadgraph_freeway.yaml" # roadgraph yaml path
 
 SIM_LOOP: 500

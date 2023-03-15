@@ -25,9 +25,9 @@ def main():
     flow = random_flow(road_info, 0)
     decision_info_ori = copy.deepcopy(decision_info)
     decision_ids = []
-    for id, info in decision_info.items():
+    for idx, info in decision_info.items():
         if info[0] != "cruise":
-            decision_ids.append(id)
+            decision_ids.append(idx)
 
     # use IDM to predict flow
     results = [flow]
@@ -69,7 +69,7 @@ def main():
                 get_lane_id(veh, road_info),
             )
 
-    actions = {id: [mcts_init_state[id]] for id in decision_ids}
+    actions = {idx: [mcts_init_state[idx]] for idx in decision_ids}
     current_node = mcts.Node(
         FlowState([mcts_init_state], road_info, actions=actions, dynamic_obs=dynamic_obs)
     )
@@ -78,14 +78,14 @@ def main():
     for t in range(int(prediction_time / DT)):
         print("-------------t=%d----------------" % t)
         old_node = current_node
-        current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+        current_node = mcts.uct_search(5000 / (t / 2 + 1), current_node)
         print("Num Children: %d\n--------" % len(old_node.children))
         if current_node is None:
             current_node = mcts.Node(
                 FlowState([mcts_init_state], road_info, actions=actions, dynamic_obs=dynamic_obs)
             )
             break
-        print("Best Child: ", current_node.visits / (200 / (t / 2 + 1)) * 100, "%")
+        print("Best Child: ", current_node.visits / (5000 / (t / 2 + 1)) * 100, "%")
         temp_best = current_node
         while temp_best.children:
             temp_best = mcts.best_child(temp_best, 0)
@@ -147,9 +147,9 @@ def main():
                 if (
                         abs(veh_state[1] - other_veh_state[1]) < 2.0
                         and math.sqrt(
-                    (veh_state[0] - other_veh_state[0]) ** 2
-                    + (veh_state[1] - other_veh_state[1]) ** 2
-                )
+                            (veh_state[0] - other_veh_state[0]) ** 2
+                            + (veh_state[1] - other_veh_state[1]) ** 2
+                        )
                         < min_distance
                 ):
                     min_distance = math.sqrt(
@@ -193,6 +193,9 @@ def main():
         pickle.dump(TARGET_LANE, fd)
         pickle.dump(group_idx, fd)
 
+    print("expend_retry_cnt", retry_cnt)
+    print("avg_available_actions_num", sum(available_actions_num) / len(available_actions_num))
+
     # plot predictions
     frame_id = 0
     for t in range(int(final_node.state.t / DT) + 1):
@@ -221,12 +224,12 @@ def predict_flow(flow, road_info, t):
             elif veh_i_lane_id - veh_j_lane_id == 1:
                 if veh_i_lane_id == 0 and veh_j_lane_id == -1:
                     if (
-                        ("ramp" in road_info.road_type and
-                         veh_i.current_state.s < road_info.ramp_length - 20 or
-                         veh_j.current_state.s < road_info.ramp_length - 20) or
-                        ("roundabout" in road_info.road_type and
-                         veh_i.current_state.s < road_info.inter_s[1] - 20 or
-                         veh_j.current_state.s < road_info.inter_s[1] - 20)
+                            ("ramp" in road_info.road_type and
+                             veh_i.current_state.s < road_info.ramp_length - 20 or
+                             veh_j.current_state.s < road_info.ramp_length - 20) or
+                            ("roundabout" in road_info.road_type and
+                             veh_i.current_state.s < road_info.inter_s[1] - 20 or
+                             veh_j.current_state.s < road_info.inter_s[1] - 20)
                     ):
                         continue
                 if 'back' not in surround_cars[veh_i.id]['right_lane']:
@@ -235,12 +238,12 @@ def predict_flow(flow, road_info, t):
             elif veh_i_lane_id - veh_j_lane_id == -1:
                 if veh_i_lane_id == -1 and veh_j_lane_id == 0:
                     if (
-                        ("ramp" in road_info.road_type and
-                         veh_i.current_state.s < road_info.ramp_length - 20 or
-                         veh_j.current_state.s < road_info.ramp_length - 20) or
-                        ("roundabout" in road_info.road_type and
-                         veh_i.current_state.s < road_info.inter_s[1] - 20 or
-                         veh_j.current_state.s < road_info.inter_s[1] - 20)
+                            ("ramp" in road_info.road_type and
+                             veh_i.current_state.s < road_info.ramp_length - 20 or
+                             veh_j.current_state.s < road_info.ramp_length - 20) or
+                            ("roundabout" in road_info.road_type and
+                             veh_i.current_state.s < road_info.inter_s[1] - 20 or
+                             veh_j.current_state.s < road_info.inter_s[1] - 20)
                     ):
                         continue
                 if 'back' not in surround_cars[veh_i.id]['left_lane']:

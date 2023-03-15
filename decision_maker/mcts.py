@@ -53,12 +53,14 @@ class Node:
 
 def uct_search(budget, root):
     for iteration in range(int(budget)):
-        # if iteration % 100 == 0:
-        #     logging.debug("simulation: %d" % iteration)
-        #     logging.debug(root)
+        if iteration % 100 == 0:
+            print("simulation: %d" % iteration)
+            logging.info(root)
         front = tree_policy(root)
         reward = default_policy(front.state)  # can parallelize here
         backpropagation(front, reward)
+        if best_child(root, 0).visits / budget > 0.5:
+            break
     return best_child(root, 0)
 
 
@@ -85,8 +87,7 @@ def tree_policy(node):
 
 
 def expand(node):
-    # 扩展节点时，可传入已扩展的子节点，加快去重
-    new_state = node.state.next_state(node.children)
+    new_state = node.state.next_state(check_tried=True)
     node.add_child(new_state)
     global EXPAND_NODE
     EXPAND_NODE += 1

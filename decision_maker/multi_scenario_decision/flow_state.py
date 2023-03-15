@@ -82,6 +82,10 @@ class FlowState:
         self.decision_vehicles.pop('time')
         self.road_info = road_info
 
+        if self.t >= self.TIME_LIMIT:
+            self.num_moves = 0
+            return
+
         # update flow
         self.predicted_flow, surround_cars = self.predict_flow()
         self.surround_cars = surround_cars
@@ -94,123 +98,103 @@ class FlowState:
             self.num_moves = 0
             return
 
-        # available actions
-        self.action_for_each = {}
-        next_t = self.t + DT
-        for veh in self.flow:
-            if next_t >= self.TIME_LIMIT:
-                break
-            if veh.id in self.decision_vehicles:
-                veh_state = self.decision_vehicles[veh.id]
-                self.action_for_each[veh.id] = {}
-                for action in ACTION_LIST:
-                    s, d, vel, lane_id = (
-                        veh_state[0],
-                        veh_state[1],
-                        veh_state[2],
-                        veh_state[3],
-                    )
-                    if action == 'KS':
-                        s += vel * DT
-                    elif action == 'AC':
-                        vel += self.ACC * DT
-                        vel = min(vel, 12)
-                        s += vel * DT + 0.5 * self.ACC * DT * DT
-                    elif action == 'DC':
-                        vel -= self.ACC * DT
-                        vel = max(vel, 0)
-                        s += max(vel * DT - 0.5 * self.ACC * DT * DT, 0)
-                    # 可以换道的情况：主路上换道未完成的车 / 主路上超车车
-                    elif (
-                            lane_id >= 0 and
-                            (abs(d - TARGET_LANE[veh.id] * self.road_info.lane_width) > self.road_info.lane_width / 4
-                             or decision_info[veh.id][0] == "overtake")
-                    ):
-                        if action == 'LCL':
-                            d += self.CHANGE_LANE_D
-                            s += vel * DT
-                        elif action == 'LCR':
-                            d -= self.CHANGE_LANE_D
-                            s += vel * DT
-                    else:
-                        continue
-
-                    # 越界检查
-                    if (
-                        lane_id >= 0 and
-                            (d <= 0 - self.road_info.lane_width/2 or
-                             d >= self.road_info.lane_width * self.road_info.lane_num - self.road_info.lane_width/2)
-                    ):
-                        continue
-
-                    # 车道更新
-                    s, d, lane_id = check_lane_change(veh.id, s, d, lane_id, self.road_info)
-                    self.action_for_each[veh.id][action] = (s, d, vel, lane_id)
+        # available actions for vehicles
+        actions_list = []
+        for veh_id, veh_state in self.decision_vehicles.items():
+            d, lane_id = (veh_state[1], veh_state[3])
+            # 可以换道的情况：主路上换道未完成的车 / 主路上超车车
+            if (
+                lane_id >= 0 and
+                (abs(d - TARGET_LANE[veh_id] * self.road_info.lane_width) > self.road_info.lane_width / 4
+                 or decision_info[veh_id][0] == "overtake")
+            ):
+                # 越界检查
+                if(
+                    lane_id == 0 and d - self.CHANGE_LANE_D <= 0 - self.road_info.lane_width / 2
+                ):
+                    actions_list.append(LCL_ACTION_LIST)
+                elif(
+                    lane_id == self.road_info.lane_num - 1
+                    and d + self.CHANGE_LANE_D >=
+                    self.road_info.lane_width * self.road_info.lane_num - self.road_info.lane_width/2
+                ):
+                    actions_list.append(LCR_ACTION_LIST)
+                else:
+                    actions_list.append(ACTION_LIST)
             else:
-                for predict_veh in self.predicted_flow:
-                    if predict_veh.id == veh.id:
-                        if decision_info[veh.id][0] == "query" and next_t <= decision_info[veh.id][-1]:
-                            self.action_for_each[veh.id] = {
-                                action_record[veh.id][int(next_t/DT) - 1]:
-                                    (predict_veh.current_state.s,
-                                     predict_veh.current_state.d,
-                                     predict_veh.current_state.s_d,
-                                     predict_veh.lane_id)
-                            }
-                        else:
-                            if predict_veh.current_state.s_d >= veh.current_state.s_d:
-                                self.action_for_each[veh.id] = {
-                                    'KL_AC': (predict_veh.current_state.s,
-                                              predict_veh.current_state.d,
-                                              predict_veh.current_state.s_d,
-                                              predict_veh.lane_id)
-                                }
-                            else:
-                                self.action_for_each[veh.id] = {
-                                    'KL_DC': (predict_veh.current_state.s,
-                                              predict_veh.current_state.d,
-                                              predict_veh.current_state.s_d,
-                                              predict_veh.lane_id)
-                                }
-                        break
-        actions_list = [list(value.keys()) for value in self.action_for_each.values()]
-        self.next_action = list(itertools.product(*actions_list))
-        self.num_moves = len(self.next_action)
+                actions_list.append(KL_ACTION_LIST)
+        self.next_actions = list(itertools.product(*actions_list))
+        self.num_moves = len(self.next_actions)
+        available_actions_num.append(self.num_moves)
         return
 
-    def next_state(self, tried_children_node=None):
-        next_action = random.choice(self.next_action)
-        if tried_children_node is not None:
-            tried_action_set = set([
-                tuple(action[-1] for action in child.state.actions.values())
-                for child in tried_children_node
-            ])
-            while tuple(next_action) in tried_action_set:
-                next_action = random.choice(self.next_action)
+    def next_state(self, check_tried=False):
+        next_action = random.choice(self.next_actions)
+        if check_tried:
+            self.next_actions.remove(next_action)
         next_state = {'time': self.t + DT}
         predicted_decision_vehicles = []
         actions_copy = deepcopy(self.actions)
-        for i, veh_id in enumerate(self.action_for_each.keys()):
-            if veh_id in self.decision_vehicles:
-                next_state[veh_id] = self.action_for_each[veh_id][next_action[i]]
-                predicted_decision_vehicles.append(
-                    build_vehicle(
-                        id=veh_id,
-                        vtype="car",
-                        s0=next_state[veh_id][0] - self.road_info.inter_s[0]
-                        if next_state[veh_id][3] == -2
-                        else next_state[veh_id][0],
-                        s0_d=next_state[veh_id][2],
-                        d0=next_state[veh_id][1],
-                        lane_id=list(self.road_info.lanes.keys())[next_state[veh_id][3]] if next_state[veh_id][3] < 0
-                        else list(self.road_info.lanes.keys())[0],
-                        target_speed=10.0,
-                        behaviour=decision_info[veh_id][0],
-                        lanes=self.road_info.lanes,
-                        config=config,
-                    )
+
+        for idx, veh_id in enumerate(self.decision_vehicles.keys()):
+            veh_state = self.decision_vehicles[veh_id]
+            action = next_action[idx]
+            s, d, vel, lane_id = (
+                veh_state[0],
+                veh_state[1],
+                veh_state[2],
+                veh_state[3],
+            )
+            if action == 'KS':
+                s += vel * DT
+            elif action == 'AC':
+                vel += self.ACC * DT
+                vel = min(vel, 12)
+                s += vel * DT + 0.5 * self.ACC * DT * DT
+            elif action == 'DC':
+                vel -= self.ACC * DT
+                vel = max(vel, 0)
+                s += max(vel * DT - 0.5 * self.ACC * DT * DT, 0)
+            elif action == 'LCL':
+                d += self.CHANGE_LANE_D
+                s += vel * DT
+            elif action == 'LCR':
+                d -= self.CHANGE_LANE_D
+                s += vel * DT
+
+            # 车道更新
+            s, d, lane_id = check_lane_change(veh_id, s, d, lane_id, self.road_info)
+            next_state[veh_id] = (s, d, vel, lane_id)
+            predicted_decision_vehicles.append(
+                build_vehicle(
+                    id=veh_id,
+                    vtype="car",
+                    s0=s - self.road_info.inter_s[0] if lane_id == -2 else s,
+                    s0_d=vel,
+                    d0=d,
+                    lane_id=list(self.road_info.lanes.keys())[lane_id] if lane_id < 0
+                    else list(self.road_info.lanes.keys())[0],
+                    target_speed=10.0,
+                    behaviour=decision_info[veh_id][0],
+                    lanes=self.road_info.lanes,
+                    config=config,
                 )
-            actions_copy[veh_id].append(next_action[i])
+            )
+            actions_copy[veh_id].append(action)
+
+        # 非决策车辆动作记录
+        for veh in self.flow:
+            for predict_veh in self.predicted_flow:
+                if predict_veh.id == veh.id:
+                    if (decision_info[predict_veh.id][0] == "query"
+                            and self.t + DT <= decision_info[predict_veh.id][-1]):
+                        actions_copy[predict_veh.id].append(action_record[predict_veh.id][int(self.t/DT)])
+                else:
+                    if predict_veh.current_state.s_d >= veh.current_state.s_d:
+                        actions_copy[predict_veh.id].append('KL_AC')
+                    else:
+                        actions_copy[predict_veh.id].append('KL_DC')
+
         return FlowState(
             self.states + [next_state],
             self.road_info,
