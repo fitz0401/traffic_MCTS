@@ -41,9 +41,10 @@ def update_decision_behaviour(planning_flow, road_info, decision_info_ori, T, su
             vehicle.current_state.s >= road_info.lanes[vehicle.lane_id].next_s
         ):
             next_lanes = road_info.lanes[vehicle.lane_id].go_straight_lane[0]
-            planning_flow[vehicle_id] = vehicle.change_to_next_lane(
+            vehicle = vehicle.change_to_next_lane(
                 next_lanes, road_info.lanes[next_lanes].course_spline
             )
+            planning_flow[vehicle_id] = vehicle
             decision_info_ori[vehicle.id][0] = "decision"
             logging.info("Vehicle {} finish merge in/ out action, now drives in {}".format(vehicle_id, next_lanes))
             success_info[vehicle.id] = 1
@@ -199,7 +200,6 @@ def main():
                 finish_time[veh.id] = prediction_time
         success_info = {veh.id: 1 if decision_info_ori[veh.id][0] == "decision" else 0 for veh in decision_flow}
         min_dist = 100
-        is_normal_finish = False
         for i in range(int(prediction_time / config["DT"])):
             start = time.time()
             """
@@ -251,7 +251,6 @@ def main():
                                                                success_info,
                                                                finish_time)
                 if is_finish_decision:
-                    is_normal_finish = True
                     break
                 """
                 Planner
@@ -300,9 +299,8 @@ def main():
 
         avg_success_rate.append(sum(success_info.values()) / len(success_info))
         avg_min_distance.append(min_dist)
-        if is_normal_finish:
-            avg_finish_times.append(sum(finish_time.values()) / len(finish_time) if len(finish_time) > 0 else 0)
-            avg_max_finish_time.append(max(finish_time.values()) if len(finish_time) > 0 else 0)
+        avg_finish_times.append(sum(finish_time.values()) / len(finish_time) if len(finish_time) > 0 else 0)
+        avg_max_finish_time.append(max(finish_time.values()) if len(finish_time) > 0 else 0)
 
     print("avg_success_rates：", sum(avg_success_rate) / len(avg_success_rate))
     print("avg_min_distances：", sum(avg_min_distance) / len(avg_min_distance))

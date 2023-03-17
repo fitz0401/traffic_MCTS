@@ -6,25 +6,28 @@
     DT_group(s): 3
     prediction_time(s): 15
     max_group_size： 3
-    check_collision: 3 * vehicle_length
+    check_collision: 2 * vehicle_length; 1.1 * vehicle_width
+    uct_search_budget:
+        our: (2000 /4000 / 6000) / (t / 2 + 1) / len(flow_groups)
+        sequential MCTS: (4000/ 6000/ 20000) / (t / 2 + 1)
 
 # Flow Setting:
     Vehicle_num: 3 / 6 / 9
-    3: s = random.uniform(0, 60)
-    6: s = random.uniform(0, 70)
+    3: s = random.uniform(0, 40)
+    6: s = random.uniform(0, 60)
     9: s = random.uniform(0, 80)
 
     routing_info = {
-        "keep_lane_rate": 0.6,
+        "keep_lane_rate": 0.0,
         "human_veh_rate": 0.0,
         "overtake_rate": 0.0,
-        "turn_right_rate": 0.4,
+        "turn_right_rate": 0.5,
         "merge_out_rate": 0.0
     }
 
 # Planning Setting:
-    check_collision: 1.5 * vehicle_length
+    check_collision: 1 * vehicle_length; 1 * vehicle_width
 
 # Test Case:
     vehicle_intervals = 3 * vehicle_length
-    random_seeds = [0 ~ 9]
+    random_seeds = [0 ~ 9/ 18 ~ 27 / 0 ~ 9]

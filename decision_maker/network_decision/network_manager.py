@@ -330,7 +330,7 @@ class NetworkManager:
                         continue
                     lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                     grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
-                                         keep_lane_rate=0.6, overtake_rate=0.8, turn_right_rate=1)
+                                         keep_lane_rate=0.6, overtake_rate=0.8, is_shrink_road=True)
             else:
                 for veh in local_flows:
                     if not scenario_change[veh.id]:
@@ -344,11 +344,11 @@ class NetworkManager:
                     if scenario_id in {"E1_1", "E1_2", "E1_3"}:
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                              keep_lane_rate=0.5, overtake_rate=0,
-                                             turn_right_rate=0.5, merge_out_rate=0.5)
+                                             turn_right_rate=0.6, merge_out_rate=0.5)
                     elif scenario_id == "E2":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                              keep_lane_rate=1, overtake_rate=0,
-                                             turn_right_rate=1, merge_out_rate=0.3)
+                                             merge_out_rate=0.3, is_shrink_road=True)
                     elif scenario_id == "E3":
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                              keep_lane_rate=1, overtake_rate=0,

@@ -2,6 +2,7 @@ import pickle
 import copy
 import time
 import math
+import constant
 from decision_maker import mcts
 import matplotlib.pyplot as plt
 from constant import *
@@ -21,20 +22,25 @@ def main():
     road_path = config["ROAD_PATH"]
     road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
     routing_info = {
-        "keep_lane_rate": 0.6,
+        "keep_lane_rate": 0.0,
         "human_veh_rate": 0.0,
         "overtake_rate": 0.0,
-        "turn_right_rate": 0.4,
+        "turn_right_rate": 0.5,
         "merge_out_rate": 0.0
     }
     avg_expend_node = []
-    # random_seeds = [0, 7, 29, 38, 49, 60, 71, 83, 91, 99]
+    avg_retry_cnt = []
+    avg_avg_available_actions_num = []
+    # 6 ： i + 18
     random_seeds = [i for i in range(10)]
 
-    for k in range(9):
+    for k in range(10):
         print("———————————————Test: %d, Random Seed: %d———————————————" % (k, random_seeds[k]))
         # 重置决策信息
         mcts.EXPAND_NODE = 0
+        constant.retry_cnt = 0
+        constant.available_actions_num.clear()
+
         for veh_id in range(len_flow):
             decision_info[veh_id] = ["cruise"]
             group_idx[veh_id] = 0
@@ -65,7 +71,6 @@ def main():
                                               veh.current_state.d,
                                               veh.current_state.s_d,
                                               get_lane_id(veh, road_info))
-        start_time = time.time()
 
         # 决策
         mcts_init_state = {'time': 0}
@@ -79,14 +84,13 @@ def main():
                     get_lane_id(veh, road_info),
                 )
 
-        actions = {id: [mcts_init_state[id]] for id in decision_ids}
+        actions = {idx: [mcts_init_state[idx]] for idx in decision_ids}
         current_node = mcts.Node(
             FlowState([mcts_init_state], road_info, actions=actions, dynamic_obs=dynamic_obs)
         )
         # MCTS
         for t in range(int(prediction_time / DT)):
-            old_node = current_node
-            current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+            current_node = mcts.uct_search(20000 / (t / 2 + 1), current_node)
             if current_node is None:
                 current_node = mcts.Node(
                     FlowState([mcts_init_state], road_info, actions=actions, dynamic_obs=dynamic_obs)
@@ -133,9 +137,9 @@ def main():
                     if (
                             abs(veh_state[1] - other_veh_state[1]) < 2.0
                             and math.sqrt(
-                            (veh_state[0] - other_veh_state[0]) ** 2
-                            + (veh_state[1] - other_veh_state[1]) ** 2
-                    )
+                                (veh_state[0] - other_veh_state[0]) ** 2
+                                + (veh_state[1] - other_veh_state[1]) ** 2
+                            )
                             < min_distance
                     ):
                         min_distance = math.sqrt(
@@ -162,7 +166,12 @@ def main():
 
         print("success_rate：\n", sum(success_info.values()) / len(success_info))
         avg_expend_node.append(mcts.EXPAND_NODE)
+        avg_retry_cnt.append(constant.retry_cnt)
+        avg_avg_available_actions_num.append(sum(available_actions_num) / len(available_actions_num))
+
     print("avg_expend_node：", sum(avg_expend_node) / len(avg_expend_node))
+    print("avg_retry_cnt：", sum(avg_retry_cnt) / len(avg_retry_cnt))
+    print("avg_avg_available_actions_num：", sum(avg_avg_available_actions_num) / len(avg_avg_available_actions_num))
 
 
 def predict_flow(flow, road_info, t):

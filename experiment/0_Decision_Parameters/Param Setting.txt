@@ -6,20 +6,24 @@
     DT_group(s): 3
     prediction_time(s): 15
     max_group_size： 1 / 2 / 3 / 4 / 5
-    mcts.uct_search(200 / (t / 2 + 1), current_node)
-    check_collision: 3 * vehicle_length
+    mcts.uct_search([500 / 520 / 500* / 500 / 500] / (t / 2 + 1), current_node)
+    check_collision: 3 * vehicle_length; 1.1 * vehicle_width
 
 # Flow Setting:
     Vehicle_num: 10
     s = random.uniform(0, 70)
+    d = random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
+    vel = random.uniform(5, 7)
     routing_info = {
         "keep_lane_rate": 0.4,
         "human_veh_rate": 0.0,
         "overtake_rate": 0.0,
-        "turn_right_rate": 0.6,
+        "turn_right_rate": 0.5,
         "merge_out_rate": 0.0
     }
+    routing_method:
+        TARGET_LANE[vehicle.id] = lane_id - (1 if random.uniform(0, 1) < turn_right_rate else 0)
 
 # Test Case:
-    vehicle_intervals = 2.5 * vehicle_length
-    random_seeds = [0, 7, 29, 38, 49, 60, 71, 83, 91, 99] or [0 ~ 99]
+    vehicle_intervals = 3 * vehicle_length
+    random_seeds = [0 ~ 99]

@@ -183,17 +183,16 @@ class FlowState:
             actions_copy[veh_id].append(action)
 
         # 非决策车辆动作记录
-        for veh in self.flow:
-            for predict_veh in self.predicted_flow:
-                if predict_veh.id == veh.id:
-                    if (decision_info[predict_veh.id][0] == "query"
-                            and self.t + DT <= decision_info[predict_veh.id][-1]):
-                        actions_copy[predict_veh.id].append(action_record[predict_veh.id][int(self.t/DT)])
+        cur_flow_s_d = {veh.id: veh.current_state.s_d for veh in self.flow}
+        for predict_veh in self.predicted_flow:
+            if (decision_info[predict_veh.id][0] == "query"
+                    and self.t + DT <= decision_info[predict_veh.id][-1]):
+                actions_copy[predict_veh.id].append(action_record[predict_veh.id][int(self.t/DT)])
+            else:
+                if predict_veh.current_state.s_d >= cur_flow_s_d[predict_veh.id]:
+                    actions_copy[predict_veh.id].append('KL_AC')
                 else:
-                    if predict_veh.current_state.s_d >= veh.current_state.s_d:
-                        actions_copy[predict_veh.id].append('KL_AC')
-                    else:
-                        actions_copy[predict_veh.id].append('KL_DC')
+                    actions_copy[predict_veh.id].append('KL_DC')
 
         return FlowState(
             self.states + [next_state],

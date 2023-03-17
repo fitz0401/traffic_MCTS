@@ -129,7 +129,7 @@ def random_flow(road_info, random_seed, routing_info=None):
             )
             is_valid_veh = True
             for other_veh in flow:
-                if other_veh.is_collide(veh, is_ramp=True):
+                if is_collide_veh(veh, lane_id, other_veh, get_lane_id(other_veh, road_info)):
                     is_valid_veh = False
                     break
             if not is_valid_veh:
@@ -379,8 +379,9 @@ def random_grouping(flow):
     random_flow = copy.deepcopy(flow)
     random.shuffle(random_flow)
     veh_num = len(flow)
-    group_num = random.choice((math.ceil(veh_num / max_group_size),
-                               math.ceil(veh_num / max_group_size + 1)))
+    # group_num = random.choice((math.ceil(veh_num / max_group_size),
+    #                            math.ceil(veh_num / max_group_size + 1)))
+    group_num = random.choice(range(math.ceil(veh_num / max_group_size), veh_num, 1))
     group_info = {i + 1: [] for i in range(group_num)}
     for i, veh in enumerate(random_flow):
         group_idx[veh.id] = i % group_num + 1
@@ -485,22 +486,38 @@ def get_lane_id(vehicle, road_info):
     return vehicle_lane_id
 
 
+def is_collide_veh(ego_veh, ego_lane_id, other_veh, other_lane_id):
+    if abs(ego_lane_id - other_lane_id) > 1:
+        return False
+    elif abs(ego_veh.current_state.s - other_veh.current_state.s) > ego_veh.length * 2:
+        return False
+    return True
+
+
 def veh_routing(vehicle, lane_id, road_info,
                 keep_lane_rate=0.4,
                 human_veh_rate=0.0,
                 overtake_rate=0.0,
                 merge_out_rate=0.5,
-                turn_right_rate=0.4):
+                turn_right_rate=0.5,
+                is_shrink_road=False):
     # keep_lane_rate + turn_right_rate + turn_left_rate = 1
     # human_veh_rate + overtake_rate < keep_lane_rate
+    # shrink_road: 最外侧车道车辆必须右转，次外侧车道车辆不得左转
     if lane_id >= 0:
         if lane_id == 0:
             TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate else 1)
         elif lane_id == road_info.lane_num - 1:
-            TARGET_LANE[vehicle.id] = lane_id - (1 if random.uniform(0, 1) < turn_right_rate else 0)
+            if is_shrink_road:
+                TARGET_LANE[vehicle.id] = lane_id - 1
+            else:
+                TARGET_LANE[vehicle.id] = lane_id - (0 if random.uniform(0, 1) < keep_lane_rate else 1)
         else:
-            TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate
-                                                 else (-1 if random.uniform(0, 1) < turn_right_rate else 1))
+            if is_shrink_road and lane_id == road_info.lane_num - 2:
+                TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate else -1)
+            else:
+                TARGET_LANE[vehicle.id] = lane_id + (0 if random.uniform(0, 1) < keep_lane_rate
+                                                     else (-1 if random.uniform(0, 1) < turn_right_rate else 1))
         if TARGET_LANE[vehicle.id] == lane_id:
             decision_info[vehicle.id] = ["cruise"] if random.uniform(0, 1) < human_veh_rate \
                 else (["overtake"] if random.uniform(0, 1) < overtake_rate else ["decision"])

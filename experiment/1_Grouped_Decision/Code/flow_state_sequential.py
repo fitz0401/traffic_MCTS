@@ -42,7 +42,7 @@ def check_lane_change(veh_id, s, d, lane_id, road_info):
 def is_collide(self_s, self_d, self_lane_id, other_s, other_d, other_lane_id, length=5, width=2) -> bool:
     if self_lane_id != other_lane_id:
         return False
-    if self_s + length * 3 < other_s or self_s - length * 3 > other_s:
+    if self_s + length * 2 < other_s or self_s - length * 2 > other_s:
         return False
     if self_d + width * 1.1 < other_d or self_d - width * 1.1 > other_d:
         return False

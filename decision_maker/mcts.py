@@ -13,7 +13,6 @@ import random
 import math
 import logging
 
-
 # MCTS scalar.  Larger scalar will increase exploitation, smaller will increase exploration.
 SCALAR = 2 / (2 * math.sqrt(2.0))
 EXPAND_NODE = 0
@@ -54,13 +53,16 @@ class Node:
 def uct_search(budget, root):
     for iteration in range(int(budget)):
         if iteration % 100 == 0:
-            print("simulation: %d" % iteration)
-            logging.info(root)
+            logging.debug("simulation: %d" % iteration)
+            logging.debug(root)
         front = tree_policy(root)
         reward = default_policy(front.state)  # can parallelize here
         backpropagation(front, reward)
-        if best_child(root, 0).visits / budget > 0.5:
-            break
+        try:
+            if best_child(root, 0).visits / budget > 0.5:
+                break
+        except:
+            logging.debug("No best child in iteration: %d" % iteration)
     return best_child(root, 0)
 
 

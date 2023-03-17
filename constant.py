@@ -19,7 +19,7 @@ KL_ACTION_LIST = ['KS', 'AC', 'DC']
 LCR_ACTION_LIST = ['KS', 'AC', 'DC', 'LCR']
 LCL_ACTION_LIST = ['KS', 'AC', 'DC', 'LCL']
 len_flow = sum(vehicles_num.values()) \
-    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 10
+    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 9
 
 # Global vars
 TARGET_LANE = {}

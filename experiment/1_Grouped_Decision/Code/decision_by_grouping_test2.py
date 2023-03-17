@@ -1,4 +1,5 @@
 import pickle
+import constant
 from decision_maker import mcts
 from decision_maker.multi_scenario_decision.grouping import *
 from decision_maker.multi_scenario_decision.flow_state import FlowState, check_lane_change
@@ -8,20 +9,22 @@ def main():
     road_path = config["ROAD_PATH"]
     road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
     routing_info = {
-        "keep_lane_rate": 0.6,
+        "keep_lane_rate": 0.0,
         "human_veh_rate": 0.0,
         "overtake_rate": 0.0,
-        "turn_right_rate": 0.4,
+        "turn_right_rate": 0.5,
         "merge_out_rate": 0.0
     }
+    avg_success_rate = []
     avg_expend_node = []
-    # random_seeds = [0, 7, 29, 38, 49, 60, 71, 83, 91, 99]
-    random_seeds = [i for i in range(10)]
+    avg_avg_available_actions_num = []
+    random_seeds = [i + 18 for i in range(10)]
 
     for k in range(10):
         print("———————————————Test: %d, Random Seed: %d———————————————" % (k, random_seeds[k]))
         # 重置决策信息
         mcts.EXPAND_NODE = 0
+        constant.available_actions_num.clear()
         for veh_id in range(len_flow):
             decision_info[veh_id] = ["cruise"]
             group_idx[veh_id] = 0
@@ -36,12 +39,12 @@ def main():
 
         start_time = time.time()
         # Interaction judge & Grouping
-        interaction_info = judge_interaction(flow, road_info)
-        flow_groups = grouping(flow, interaction_info)
+        # interaction_info = judge_interaction(flow, road_info)
+        # flow_groups = grouping(flow, interaction_info)
         # 不分组决策测试
         # flow_groups = none_grouping(flow)
         # 随机分组测试
-        # flow_groups = random_grouping(flow)
+        flow_groups = random_grouping(flow)
 
         # fig, ax = plt.subplots()
         # if "freeway" in road_info.road_type:
@@ -92,7 +95,7 @@ def main():
             )
             # MCTS
             for t in range(int(prediction_time / DT)):
-                current_node = mcts.uct_search(200 / (t / 2 + 1), current_node)
+                current_node = mcts.uct_search(4000 / (t / 2 + 1) / len(flow_groups), current_node)
                 if current_node is None:
                     current_node = mcts.Node(
                         FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
@@ -180,8 +183,13 @@ def main():
             pickle.dump(group_idx, fd)
 
         print("success_rate：\n", sum(success_info.values()) / len(success_info))
+        avg_success_rate.append(sum(success_info.values()) / len(success_info))
         avg_expend_node.append(mcts.EXPAND_NODE)
+        avg_avg_available_actions_num.append(sum(available_actions_num) / len(available_actions_num))
+
+    print("avg_success_rate：", sum(avg_success_rate) / len(avg_success_rate))
     print("avg_expend_node：", sum(avg_expend_node) / len(avg_expend_node))
+    print("avg_avg_available_actions_num：", sum(avg_avg_available_actions_num) / len(avg_avg_available_actions_num))
 
 
 if __name__ == "__main__":
