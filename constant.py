@@ -19,7 +19,7 @@ KL_ACTION_LIST = ['KS', 'AC', 'DC']
 LCR_ACTION_LIST = ['KS', 'AC', 'DC', 'LCR']
 LCL_ACTION_LIST = ['KS', 'AC', 'DC', 'LCL']
 len_flow = sum(vehicles_num.values()) \
-    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 9
+    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 5
 
 # Global vars
 TARGET_LANE = {}
@@ -43,15 +43,15 @@ prediction_time = 10 if config["D_P_COUPLED"] else 15  # seconds
 DT = 1.5  # decision interval (second)
 T_group = 3  # Update group interval (second)
 phi = {i: math.pi / 4 for i in range(100)}
+gamma = {i: 1 for i in range(100)}
 
+'''Experiment Parameter Setting'''
 # Test 1
 retry_cnt = 0   # sequential MCTS retry count when expending
 available_actions_num = []    # number of available actions for each node
-
-# test 3.1
-# phi[1] = math.pi / 2
-# phi[2] = math.pi / 2
-gamma = {i: 1 for i in range(100)}
+# Test 3.1
+# phi[1] = 0
+# phi[2] = 0
 
 
 class RoadInfo:

@@ -106,7 +106,7 @@ vehicles:
     target_lane: 2
     vehicle_type: overtake
   - id: 2
-    s: 32.0
+    s: 27
     vel: 8
     d: 0
     lane_id: 0

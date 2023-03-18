@@ -8,8 +8,8 @@ def main():
     road_path = config["ROAD_PATH"]
     road_info = RoadInfo(road_path[road_path.find("_") + 1: road_path.find(".yaml")])
 
-    # flow = yaml_flow()
-    flow = random_flow(road_info, 0)
+    flow = yaml_flow(road_info)
+    # flow = random_flow(road_info, 0)
     # 找到超车对象
     find_overtake_aim(flow, road_info)
     decision_info_ori = copy.deepcopy(decision_info)

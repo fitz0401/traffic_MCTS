@@ -11,18 +11,21 @@
 # Flow Setting:
     Vehicle_num: 5 / 10
 
-    [freeway]: yaml
+    [freeway]:
+        yaml
     [roundabout]:
-    routing_info = {
-        "keep_lane_rate": 0.6,
-        "human_veh_rate": 0.0,
-        "overtake_rate": 0.0,
-        "turn_right_rate": 0.4,
-        "merge_out_rate": 0.0
-    }
+        random.seed()
+        routing_info = {
+            "keep_lane_rate": 0.6,
+            "human_veh_rate": 0.0,
+            "overtake_rate": 0.0,
+            "turn_right_rate": 0.4,
+            "merge_out_rate": 0.0
+        }
 
 # Planning Setting:
-    random.seed(1)
+    [freeway]:
+        random.seed(2) / random.seed(8)
     check_collision: 2 * vehicle_length
 
 # Reward & SVO Setting:

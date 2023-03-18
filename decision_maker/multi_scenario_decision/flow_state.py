@@ -340,8 +340,8 @@ class FlowState:
                 for i in range(len(self.actions[veh_id])):
                     if self.actions[veh_id][i] in {'AC', 'KL_AC'}:
                         other_reward -= 0.2
-            cur_reward = max(0.0, min(1.0, (math.sin(phi[veh_id]) * self_reward
-                                            + math.cos(phi[veh_id]) * other_reward)))
+            cur_reward = max(0.0, min(1.0, (math.cos(phi[veh_id]) * self_reward
+                                            + math.sin(phi[veh_id]) * other_reward)))
             # cur_reward = max(0.0, min(1.0, self_reward + gamma[veh_id] * other_reward))
             rewards.append(cur_reward)
         # 决策车的reward取均值

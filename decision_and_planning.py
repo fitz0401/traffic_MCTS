@@ -19,7 +19,7 @@ from decision_maker.multi_scenario_decision import (
 )
 
 
-def update_decision_behaviour(planning_flow, road_info, decision_info_ori):
+def update_decision_behaviour(planning_flow, road_info, decision_info_ori, T, finish_time):
     is_finish_decision = True
     for vehicle_id, vehicle in planning_flow.items():
         # Check Lane Change
@@ -54,6 +54,7 @@ def update_decision_behaviour(planning_flow, road_info, decision_info_ori):
             )
             planning_flow[vehicle_id] = vehicle
             decision_info_ori[vehicle.id][0] = "decision"
+            finish_time[vehicle.id] = T
             logging.info("Vehicle {} finish merge in/ out action, now drives in {}".format(vehicle_id, next_lanes))
         # Lane Change behaviour
         elif (
@@ -61,6 +62,7 @@ def update_decision_behaviour(planning_flow, road_info, decision_info_ori):
             int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
             decision_info_ori[vehicle.id][0] = "decision"
+            finish_time[vehicle.id] = T
             logging.info("Vehicle {} finish lane change action".format(vehicle_id))
         # Overtake behaviour
         elif (
@@ -70,6 +72,7 @@ def update_decision_behaviour(planning_flow, road_info, decision_info_ori):
                 int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
             decision_info_ori[vehicle.id][0] = "decision"
+            finish_time[vehicle.id] = T
             logging.info("Vehicle {} finish overtake action".format(vehicle_id))
         # When all vehicles finish decision, turn into KL mode.
         if (
@@ -155,7 +158,7 @@ def decision_states_process(sim_T, decision_states, planning_flow, decision_info
 
 
 def main():
-    random.seed(1)
+    random.seed(2)
     if config["VERBOSE"]:
         log_level = logging.DEBUG
         logging.debug = print
@@ -232,7 +235,16 @@ def main():
     predictions = {}
     decision_T = 0
     is_finish_decision = False
+    min_dist = 100
+    finish_time = {}
+    avg_flow_vel = []
+    vehicle_vel_record = {}
+
     for i in range(SIM_LOOP):
+        if is_finish_decision:
+            if i / 10 > max(finish_time.values()) + 5:
+                break
+
         start = time.time()
         """
         Step 3.1 : Update States
@@ -247,6 +259,16 @@ def main():
                 vehicle.current_state.t = T
             else:
                 logging.warning("Vehicle {} not in predictions".format(vehicle_id))
+        # Experiment Indicator: min_dist, avg_flow_vel
+        flow_vel = []
+        for j, ego_veh in enumerate(planning_flow.values()):
+            flow_vel.append(ego_veh.current_state.s_d)
+            for other_veh in list(planning_flow.values())[j + 1:]:
+                if ego_veh.lane_id == other_veh.lane_id:
+                    min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s) - 5 \
+                        if abs(ego_veh.current_state.s - other_veh.current_state.s) - 5 < min_dist else min_dist
+        avg_flow_vel.append(sum(flow_vel) / len(flow_vel))
+        vehicle_vel_record[T] = planning_flow[focus_car_id].current_state.s_d
 
         """
         Step 3.2 : Check Arrival & Record Trajectories
@@ -319,7 +341,11 @@ def main():
             Update Behaviour & Decision_info
             """
             if not is_finish_decision:
-                is_finish_decision = update_decision_behaviour(planning_flow, road_info, decision_info_ori)
+                is_finish_decision = update_decision_behaviour(planning_flow,
+                                                               road_info,
+                                                               decision_info_ori,
+                                                               T,
+                                                               finish_time)
             """
             Planner
             """
@@ -383,6 +409,13 @@ def main():
         if ANIMATION:
             plot_trajectory(planning_flow, static_obs_list, predictions,
                             road_info.lanes, road_info.edges, T, focus_car_id, decision_info_ori)
+
+    print("min_dist:", min_dist)
+    print("avg_finish_time:", sum(finish_time.values()) / len(finish_time) if len(finish_time) > 0 else 0)
+    print("max_finish_time：", max(finish_time.values()) if len(finish_time) > 0 else 0)
+    print("avg_flow_vel：", sum(avg_flow_vel) / len(avg_flow_vel))
+    plt.plot(vehicle_vel_record.keys(), vehicle_vel_record.values())
+    plt.show()
     exit_plot()
 
 
