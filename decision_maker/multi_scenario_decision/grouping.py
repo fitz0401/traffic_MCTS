@@ -153,7 +153,7 @@ def random_flow(road_info, random_seed, routing_info=None):
         while len(flow) < len_flow:
             lane_id = random.randint(0, road_info.lane_num) - 1
             s = random.uniform(0, road_info.inter_s[1] - 10) if lane_id < 0 \
-                else random.uniform(0, road_info.inter_s[-1])
+                else random.uniform(0, road_info.inter_s[-1] + 10)
             d = random.uniform(-0.1, 0.1) if lane_id < 0 \
                 else random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width
             vel = random.uniform(5, 7)

@@ -158,7 +158,7 @@ def decision_states_process(sim_T, decision_states, planning_flow, decision_info
 
 
 def main():
-    random.seed(2)
+    random.seed(1)
     if config["VERBOSE"]:
         log_level = logging.DEBUG
         logging.debug = print

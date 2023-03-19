@@ -315,9 +315,6 @@ class FlowState:
                     # 速度奖励
                     if 0 < self.states[i][veh_id][2] <= 10:
                         self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
-                    # 保持车道中心线行驶
-                    if self.states[i][veh_id][1] % self.road_info.lane_width < 0.5:
-                        self_reward += 0.2 / total_action_num
 
             # 惩罚：同车道后方有车的情况下，迫使后车减速
             if back_veh and decision_info[veh_id][0] in {"change_lane_left", "change_lane_right", "overtake"}:
@@ -328,14 +325,21 @@ class FlowState:
                     ):
                         other_reward -= 0.4
             # 惩罚：抢道汇入
-            if (front_veh or back_veh) and decision_info[veh_id][0] == "merge_in":
+            if (
+                (self.surround_cars[veh_id]['left_lane'].get('front', None)
+                 or self.surround_cars[veh_id]['left_lane'].get('back', None))
+                and decision_info[veh_id][0] == "merge_in"
+            ):
                 for i in range(len(self.actions[veh_id])):
                     if self.actions[veh_id][i] in {'AC', 'KL_AC'} and self.states[i][veh_id][3] < 0:
                         other_reward -= 0.2
             # 惩罚：拒绝汇入
             if (
-                ((front_veh and decision_info[front_veh.id][0] == "merge_in")
-                 or (back_veh and decision_info[back_veh.id][0] == "merge_in"))
+                ((self.surround_cars[veh_id]['right_lane'].get('front', None)
+                  and decision_info[self.surround_cars[veh_id]['right_lane'].get('front', None).id][0] == "merge_in")
+                 or
+                 (self.surround_cars[veh_id]['right_lane'].get('back', None)
+                 and decision_info[self.surround_cars[veh_id]['right_lane'].get('back', None).id][0] == "merge_in"))
             ):
                 for i in range(len(self.actions[veh_id])):
                     if self.actions[veh_id][i] in {'AC', 'KL_AC'}:
@@ -353,6 +357,7 @@ class FlowState:
     def predict_flow(self):
         surround_cars = {veh.id: {'cur_lane': {}, 'left_lane': {}, 'right_lane': {}}
                          for veh in self.flow}
+        merge_zone_length = 30
         # flow 已按照s降序排列
         for i, veh_i in enumerate(self.flow):
             veh_i_lane_id = get_lane_id(veh_i, self.road_info)
@@ -367,11 +372,11 @@ class FlowState:
                     if veh_i_lane_id == 0 and veh_j_lane_id == -1:
                         if (
                             ("ramp" in self.road_info.road_type and
-                             veh_i.current_state.s < self.road_info.ramp_length - 20 or
-                             veh_j.current_state.s < self.road_info.ramp_length - 20) or
+                             veh_i.current_state.s < self.road_info.ramp_length - merge_zone_length or
+                             veh_j.current_state.s < self.road_info.ramp_length - merge_zone_length) or
                             ("roundabout" in self.road_info.road_type and
-                             veh_i.current_state.s < self.road_info.inter_s[1] - 20 or
-                             veh_j.current_state.s < self.road_info.inter_s[1] - 20)
+                             veh_i.current_state.s < self.road_info.inter_s[1] - merge_zone_length or
+                             veh_j.current_state.s < self.road_info.inter_s[1] - merge_zone_length)
                         ):
                             continue
                     if 'back' not in surround_cars[veh_i.id]['right_lane']:
@@ -381,11 +386,11 @@ class FlowState:
                     if veh_i_lane_id == -1 and veh_j_lane_id == 0:
                         if (
                             ("ramp" in self.road_info.road_type and
-                             veh_i.current_state.s < self.road_info.ramp_length - 20 or
-                             veh_j.current_state.s < self.road_info.ramp_length - 20) or
+                             veh_i.current_state.s < self.road_info.ramp_length - merge_zone_length or
+                             veh_j.current_state.s < self.road_info.ramp_length - merge_zone_length) or
                             ("roundabout" in self.road_info.road_type and
-                             veh_i.current_state.s < self.road_info.inter_s[1] - 20 or
-                             veh_j.current_state.s < self.road_info.inter_s[1] - 20)
+                             veh_i.current_state.s < self.road_info.inter_s[1] - merge_zone_length or
+                             veh_j.current_state.s < self.road_info.inter_s[1] - merge_zone_length)
                         ):
                             continue
                     if 'back' not in surround_cars[veh_i.id]['left_lane']:
@@ -436,15 +441,10 @@ class FlowState:
                     lane_id = veh.lane_id
                     # 防止匝道上的车辆越界
                     if (
-                        "ramp" in self.road_info.road_type or "roundabout" in self.road_info.road_type
+                            ("ramp" in self.road_info.road_type or "roundabout" in self.road_info.road_type)
                             and veh.lane_id == list(self.road_info.lanes.keys())[-1]
                     ):
                         s, d, lane_id = check_lane_change(veh.id, s, d, -1, self.road_info)
-                    if (
-                            "roundabout" in self.road_info.road_type
-                            and veh.lane_id == list(self.road_info.lanes.keys())[0]
-                    ):
-                        s, d, lane_id = check_lane_change(veh.id, s, d, 0, self.road_info)
                     predict_flow.append(
                         build_vehicle(
                             id=veh.id,
@@ -478,15 +478,10 @@ class FlowState:
                     d = veh.current_state.d
                     lane_id = veh.lane_id
                     if (
-                            "ramp" in self.road_info.road_type or "roundabout" in self.road_info.road_type
+                            ("ramp" in self.road_info.road_type or "roundabout" in self.road_info.road_type)
                             and veh.lane_id == list(self.road_info.lanes.keys())[-1]
                     ):
                         s, d, lane_id = check_lane_change(veh.id, s, d, -1, self.road_info)
-                    if (
-                            "roundabout" in self.road_info.road_type
-                            and veh.lane_id == list(self.road_info.lanes.keys())[0]
-                    ):
-                        s, d, lane_id = check_lane_change(veh.id, s, d, 0, self.road_info)
                     predict_flow.append(
                         build_vehicle(
                             id=veh.id,

@@ -19,7 +19,7 @@ KL_ACTION_LIST = ['KS', 'AC', 'DC']
 LCR_ACTION_LIST = ['KS', 'AC', 'DC', 'LCR']
 LCL_ACTION_LIST = ['KS', 'AC', 'DC', 'LCL']
 len_flow = sum(vehicles_num.values()) \
-    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 5
+    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 10
 
 # Global vars
 TARGET_LANE = {}
@@ -52,6 +52,9 @@ available_actions_num = []    # number of available actions for each node
 # Test 3.1
 # phi[1] = 0
 # phi[2] = 0
+# Test 3.2
+# phi[4] = 0
+# phi[5] = 0
 
 
 class RoadInfo:

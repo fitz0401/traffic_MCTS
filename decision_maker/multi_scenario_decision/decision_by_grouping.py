@@ -33,7 +33,7 @@ def main():
         fig.set_size_inches(16, 4)
     elif "roundabout" in road_info.road_type:
         fig.set_size_inches(12, 9)
-    plot_flow(ax, flow, road_info, 2, decision_info_ori)
+    plot_flow(ax, flow, road_info, 0, decision_info_ori)
 
     # 分组决策
     final_nodes = {}
@@ -79,14 +79,14 @@ def main():
         for t in range(int(prediction_time / DT)):
             print("-------------t=%d----------------" % t)
             old_node = current_node
-            current_node = mcts.uct_search(5000 / (t / 2 + 1) / len(flow_groups), current_node)
+            current_node = mcts.uct_search(500 / (t / 2 + 1), current_node)
             print("Num Children: %d\n--------" % len(old_node.children))
             if current_node is None:
                 current_node = mcts.Node(
                     FlowState([mcts_init_state], road_info, actions=actions, flow=local_flow)
                 )
                 break
-            print("Best Child: ", current_node.visits / (5000 / (t / 2 + 1)) / len(flow_groups) * 100, "%")
+            print("Best Child: ", current_node.visits / (500 / (t / 2 + 1)) * 100, "%")
             temp_best = current_node
             while temp_best.children:
                 temp_best = mcts.best_child(temp_best, 0)
@@ -293,15 +293,10 @@ def predict_flow(flow, road_info, t):
                 d = veh.current_state.d
                 lane_id = veh.lane_id
                 if (
-                        "ramp" in road_info.road_type or "roundabout" in road_info.road_type
+                        ("ramp" in road_info.road_type or "roundabout" in road_info.road_type)
                         and veh.lane_id == list(road_info.lanes.keys())[-1]
                 ):
                     s, d, lane_id = check_lane_change(veh.id, s, d, -1, road_info)
-                if (
-                        "roundabout" in road_info.road_type
-                        and veh.lane_id == list(road_info.lanes.keys())[0]
-                ):
-                    s, d, lane_id = check_lane_change(veh.id, s, d, 0, road_info)
                 next_flow.append(
                     build_vehicle(
                         id=veh.id,
@@ -335,15 +330,10 @@ def predict_flow(flow, road_info, t):
                 d = veh.current_state.d
                 lane_id = veh.lane_id
                 if (
-                        "ramp" in road_info.road_type or "roundabout" in road_info.road_type
+                        ("ramp" in road_info.road_type or "roundabout" in road_info.road_type)
                         and veh.lane_id == list(road_info.lanes.keys())[-1]
                 ):
                     s, d, lane_id = check_lane_change(veh.id, s, d, -1, road_info)
-                if (
-                        "roundabout" in road_info.road_type
-                        and veh.lane_id == list(road_info.lanes.keys())[0]
-                ):
-                    s, d, lane_id = check_lane_change(veh.id, s, d, 0, road_info)
                 next_flow.append(
                     build_vehicle(
                         id=veh.id,
