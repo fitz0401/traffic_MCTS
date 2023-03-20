@@ -350,7 +350,7 @@ def process_obs(vehicle, road_info, obs):
 
 
 def stop_trajectory_generator(
-    vehicle, road_info, road_width, obs_list, config, T
+    vehicle, road_info, road_width, obs_list, config, T, is_force=False
 ) -> Trajectory:
     lanes = road_info.lanes
     course_spline = lanes[vehicle.lane_id].course_spline
@@ -447,6 +447,10 @@ def stop_trajectory_generator(
                     if obs_near_d < road_width / 2:
                         min_s = min(min_s, obs_s - obs["length"] / 2 - car_length / 1.5)
 
+    # Force to stop
+    if is_force:
+        min_s = current_state.s
+
     """
     Step 2: 
     """
@@ -466,7 +470,7 @@ def stop_trajectory_generator(
         )
         return path
     if (
-        min_s == s[-1] or (min_s - current_state.s) > current_state.s_d * course_t / 1.5
+        (min_s == s[-1] or (min_s - current_state.s) > current_state.s_d * course_t / 1.5) and not is_force
     ):  # no need to stop
         logging.debug("Vehicle {} No need to stop".format(vehicle.id))
         if (min_s - current_state.s) < 5.0 / 3.6 * course_t:

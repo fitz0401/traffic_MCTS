@@ -410,6 +410,11 @@ def planner(
         path = single_vehicle_planner.stop_trajectory_generator(
             vehicle, road_info, road_width, obs_list, config, plan_T,
         )
+    elif vehicle.behaviour == "STOP_FORCE":
+        # Stopping
+        path = single_vehicle_planner.stop_trajectory_generator(
+            vehicle, road_info, road_width, obs_list, config, plan_T, is_force=True
+        )
     elif vehicle.behaviour == "LC-L":
         # Turn Left
         current_course_spline = lanes[vehicle.lane_id].course_spline

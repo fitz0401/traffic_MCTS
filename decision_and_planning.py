@@ -214,7 +214,7 @@ def main():
         with open("flow_record.csv", "w") as fd1:
             writer = csv.writer(fd1)
             writer.writerow(
-                ["t", "vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init(m/s)"]
+                ["t", "vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init"]
             )
             for veh in decision_flow:
                 writer.writerow(
@@ -224,7 +224,7 @@ def main():
         with open("trajectories.csv", "w") as fd2:
             writer = csv.writer(fd2)
             writer.writerow(
-                ["t", "vehicle_id", "group_id", "action", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
+                ["t", "vehicle_id", "group_id", "action", "x", "y", "yaw", "vel", "acc"]
             )
 
     """
@@ -238,12 +238,19 @@ def main():
     min_dist = 100
     finish_time = {}
     avg_flow_vel = []
-    vehicle_vel_record = {}
 
+    is_experiment = False
+    # Experiment 2.2
+    if is_experiment:
+        planning_flow[6].behaviour = "STOP_FORCE"
     for i in range(SIM_LOOP):
         if is_finish_decision:
             if i / 10 > max(finish_time.values()) + 5:
                 break
+
+        # Experiment 2.2
+        if is_experiment and i == 5:
+            planning_flow[0].behaviour = "LC-L"
 
         start = time.time()
         """
@@ -268,7 +275,6 @@ def main():
                     min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s) - 5 \
                         if abs(ego_veh.current_state.s - other_veh.current_state.s) - 5 < min_dist else min_dist
         avg_flow_vel.append(sum(flow_vel) / len(flow_vel))
-        vehicle_vel_record[T] = planning_flow[focus_car_id].current_state.s_d
 
         """
         Step 3.2 : Check Arrival & Record Trajectories
@@ -414,8 +420,7 @@ def main():
     print("avg_finish_time:", sum(finish_time.values()) / len(finish_time) if len(finish_time) > 0 else 0)
     print("max_finish_time：", max(finish_time.values()) if len(finish_time) > 0 else 0)
     print("avg_flow_vel：", sum(avg_flow_vel) / len(avg_flow_vel))
-    plt.plot(vehicle_vel_record.keys(), vehicle_vel_record.values())
-    plt.show()
+
     exit_plot()
 
 

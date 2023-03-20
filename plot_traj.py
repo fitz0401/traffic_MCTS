@@ -12,17 +12,26 @@ from matplotlib.collections import LineCollection
 
 from constant import RoadInfo
 
-PLOT_ONCE = False
+PLOT_ONCE = True
 fig_margin = 15
 TRACK_SPECIAL_VEH = False
 track_id = 2
 decision_interval = 30
 iter_frame = 1
-X_LIM = [-10, 150]
+X_LIM = [-0, 100]
+Y_LIM = [-40, 40]
 # trajectory_path = "experiment/3_Closed_Loop_Simulation/Code/trajectories.csv"
 # flow_record_path = "experiment/3_Closed_Loop_Simulation/Code/flow_record.csv"
-trajectory_path = "trajectories.csv"
-flow_record_path = "flow_record.csv"
+# trajectory_path = "experiment/2_Flow_Diversity/Decision_State_Record/freeway_egoistic/trajectories.csv"
+# flow_record_path = "experiment/2_Flow_Diversity/Decision_State_Record/freeway_egoistic/flow_record.csv"
+# trajectory_path = "experiment/2_Flow_Diversity/Decision_State_Record/freeway_prosocial/trajectories.csv"
+# flow_record_path = "experiment/2_Flow_Diversity/Decision_State_Record/freeway_prosocial/flow_record.csv"
+# trajectory_path = "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_egoistic/trajectories.csv"
+# flow_record_path = "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_egoistic/flow_record.csv"
+trajectory_path = "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_prosocial/trajectories.csv"
+flow_record_path = "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_prosocial/flow_record.csv"
+# trajectory_path = "trajectories.csv"
+# flow_record_path = "flow_record.csv"
 
 # https://flatuicolors.com/palette/defo
 # colors = {
@@ -289,6 +298,7 @@ for end_time in range(start_frame, end_frame, iter_frame):
 
     if not TRACK_SPECIAL_VEH:
         ax.set_xlim(X_LIM[0], X_LIM[1])
+        ax.set_ylim(Y_LIM[0], Y_LIM[1])
     # plot timestamp
     ax.text(
         0.5,
@@ -305,13 +315,13 @@ for end_time in range(start_frame, end_frame, iter_frame):
     plt.xticks([])
     plt.yticks([])
     if PLOT_ONCE:
-        plt.show()
         plt.savefig(
             video_folder + '/fig_plot.png',
             bbox_inches='tight',
             dpi=600,
             pad_inches=0.05,
         )
+        plt.show()
         exit()
 
     plt.savefig(video_folder + "/beauti_frame%02d.png" % frame_id)
