@@ -12,26 +12,46 @@ from matplotlib.collections import LineCollection
 
 from constant import RoadInfo
 
-PLOT_ONCE = True
+PLOT_ONCE = False
 fig_margin = 15
 TRACK_SPECIAL_VEH = False
 track_id = 2
 decision_interval = 30
 iter_frame = 1
-X_LIM = [-0, 100]
-Y_LIM = [-40, 40]
-# trajectory_path = "experiment/3_Closed_Loop_Simulation/Code/trajectories.csv"
-# flow_record_path = "experiment/3_Closed_Loop_Simulation/Code/flow_record.csv"
-# trajectory_path = "experiment/2_Flow_Diversity/Decision_State_Record/freeway_egoistic/trajectories.csv"
-# flow_record_path = "experiment/2_Flow_Diversity/Decision_State_Record/freeway_egoistic/flow_record.csv"
-# trajectory_path = "experiment/2_Flow_Diversity/Decision_State_Record/freeway_prosocial/trajectories.csv"
-# flow_record_path = "experiment/2_Flow_Diversity/Decision_State_Record/freeway_prosocial/flow_record.csv"
-# trajectory_path = "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_egoistic/trajectories.csv"
-# flow_record_path = "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_egoistic/flow_record.csv"
-trajectory_path = "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_prosocial/trajectories.csv"
-flow_record_path = "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_prosocial/flow_record.csv"
-# trajectory_path = "trajectories.csv"
-# flow_record_path = "flow_record.csv"
+
+experiment_index = 5
+X_LIMs = (
+    [-150, 170],
+    [0, 120], [0, 120],
+    [0, 80], [0, 80],
+    [0, 200]
+)
+Y_LIMs = (
+    [-150, 150],
+    [-5, 20], [-5, 20],
+    [-40, 40], [-40, 40],
+    [-20, 15]
+)
+trajectory_paths = (
+    "trajectories.csv",
+    "experiment/2_Flow_Diversity/Decision_State_Record/freeway_egoistic/trajectories.csv",
+    "experiment/2_Flow_Diversity/Decision_State_Record/freeway_prosocial/trajectories.csv",
+    "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_egoistic/trajectories.csv",
+    "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_prosocial/trajectories.csv",
+    "experiment/3_Closed_Loop_Simulation/Code/trajectories.csv",
+)
+flow_record_paths = (
+    "flow_record.csv",
+    "experiment/2_Flow_Diversity/Decision_State_Record/freeway_egoistic/flow_record.csv",
+    "experiment/2_Flow_Diversity/Decision_State_Record/freeway_prosocial/flow_record.csv",
+    "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_egoistic/flow_record.csv",
+    "experiment/2_Flow_Diversity/Decision_State_Record/roundabout_prosocial/flow_record.csv",
+    "experiment/3_Closed_Loop_Simulation/Code/flow_record.csv",
+)
+trajectory_path = trajectory_paths[experiment_index]
+flow_record_path = flow_record_paths[experiment_index]
+X_LIM = X_LIMs[experiment_index]
+Y_LIM = Y_LIMs[experiment_index]
 
 # https://flatuicolors.com/palette/defo
 # colors = {

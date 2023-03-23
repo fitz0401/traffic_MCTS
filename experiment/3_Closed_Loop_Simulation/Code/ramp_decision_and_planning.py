@@ -36,7 +36,7 @@ def random_generate_vehicle(idx_record, road_info, decision_flow, decision_info_
             d0=random.uniform(-0.1, 0.1) if lane_id < 0
             else random.uniform(-0.1, 0.1) + lane_id * road_info.lane_width,
             lane_id=list(road_info.lanes.keys())[-1] if lane_id < 0 else list(road_info.lanes.keys())[0],
-            target_speed=random.uniform(6, 9),
+            target_speed=9,
             behaviour="Decision",
             lanes=road_info.lanes,
             config=config,
@@ -162,6 +162,14 @@ def decision_states_process(sim_T, decision_states, planning_flow, decision_info
 
 
 def main():
+    random.seed(1)
+    flow_volume = 20
+    # Experiment Indicators
+    travel_duration = []
+    generate_time_record = {}
+    avg_flow_vel = []
+    avg_space_headway = []
+
     if config["VERBOSE"]:
         log_level = logging.DEBUG
         logging.debug = print
@@ -181,7 +189,6 @@ def main():
     """
     road_info = RoadInfo("ramp")
     static_obs_list = []
-    random.seed(1)
 
     """
     Step 2. Init records
@@ -198,12 +205,12 @@ def main():
         with open("flow_record.csv", "w") as fd1:
             writer = csv.writer(fd1)
             writer.writerow(
-                ["t", "vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init(m/s)"]
+                ["t", "vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init"]
             )
         with open("trajectories.csv", "w") as fd2:
             writer = csv.writer(fd2)
             writer.writerow(
-                ["t", "vehicle_id", "group_id", "action", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
+                ["t", "vehicle_id", "group_id", "action", "x", "y", "yaw", "vel", "acc"]
             )
 
     """
@@ -211,7 +218,6 @@ def main():
     """
     planning_timestep = 3
     decision_timestep = 30
-    flow_rate = 15
     predictions = {}
     decision_T = 0
     for i in range(SIM_LOOP):
@@ -234,11 +240,29 @@ def main():
         """
         Step 3.2 : Build vehicles
         """
-        if i % flow_rate == 0:
+        if i % flow_volume == 0:
             idx_record += 1
             decision_flow = planning_flow_to_decision_flow(planning_flow, road_info)
             random_generate_vehicle(idx_record, road_info, decision_flow, decision_info_ori)
             planning_flow = decision_flow_to_planning_flow(decision_flow, road_info)
+            generate_time_record[idx_record] = T
+
+        flow_vel = []
+        # 最小车头距，只判断前车与自车的距离
+        space_headway = []
+        for ego_veh in planning_flow.values():
+            flow_vel.append(ego_veh.current_state.s_d)
+            min_space_headway = 100
+            for other_veh in planning_flow.values():
+                if ego_veh.id == other_veh.id or ego_veh.lane_id != other_veh.lane_id:
+                    continue
+                if other_veh.current_state.s > ego_veh.current_state.s:
+                    min_space_headway = min(min_space_headway, other_veh.current_state.s - ego_veh.current_state.s)
+            if min_space_headway < 100:
+                space_headway.append(min_space_headway)
+        if len(space_headway) > 0:
+            avg_space_headway.append(sum(space_headway) / len(space_headway))
+        avg_flow_vel.append(sum(flow_vel) / len(flow_vel))
 
         """
         Step 3.3 : Check Arrival & Record Trajectories
@@ -271,10 +295,11 @@ def main():
                         ]
                     )
             if (
-                120 - vehicle.current_state.s <= 1.0
+                200 - vehicle.current_state.s <= 1.0
             ):
-                logging.info("Vehicle {} reached goal".format(vehicle_id))
+                travel_duration.append(T - generate_time_record[vehicle.id])
                 planning_flow.pop(vehicle_id)
+                logging.info("Vehicle {} reached goal".format(vehicle_id))
         if len(planning_flow) == 0:
             logging.info("All vehicles reached goal")
             break
@@ -357,7 +382,12 @@ def main():
 
         if ANIMATION:
             plot_trajectory(planning_flow, static_obs_list, predictions, road_info.lanes, road_info.edges, T,
-                            focus_car_id, decision_info_ori, [-10, 120, -30, 20])
+                            focus_car_id, decision_info_ori, [-10, 200, -30, 20])
+
+    print("——————————————————Experiment Indicators——————————————————\n")
+    print("avg_travel_duration: ", sum(travel_duration) / len(travel_duration))
+    print("avg_flow_vel: ", sum(avg_flow_vel) / len(avg_flow_vel))
+    print("avg_space_headway: ", sum(avg_space_headway) / len(avg_space_headway))
     exit_plot()
 
 

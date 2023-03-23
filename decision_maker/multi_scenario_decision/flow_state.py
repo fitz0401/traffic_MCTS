@@ -218,7 +218,7 @@ class FlowState:
                         ego_veh = veh
                     elif veh.id == decision_info[veh_id][1]:
                         aim_veh = veh
-                if ego_veh.current_state.s <= aim_veh.current_state.s + 2 * ego_veh.length:
+                if aim_veh and ego_veh.current_state.s <= aim_veh.current_state.s + 2 * ego_veh.length:
                     return False
                 elif abs(veh_state[1] - TARGET_LANE[veh_id] * self.road_info.lane_width) > 0.2:
                     return False
@@ -251,7 +251,7 @@ class FlowState:
                         aim_veh = veh
                         break
                 # 成功超车
-                if s > aim_veh.current_state.s + 2 * aim_veh.length \
+                if aim_veh and s > aim_veh.current_state.s + 2 * aim_veh.length \
                         and abs(d - TARGET_LANE[veh_id] * self.road_info.lane_width) < 0.5:
                     self_reward += 0.8
             # 换道终止状态奖励：距离目标车道线横向距离，<0.5表示换道成功：reward += 0.8
@@ -279,7 +279,7 @@ class FlowState:
             # 决策过程奖励
             total_action_num = len(self.actions[veh_id])
             for i in range(len(self.actions[veh_id])):
-                if decision_info[veh_id][0] == "overtake":
+                if decision_info[veh_id][0] == "overtake" and aim_veh:
                     # 保持横向车距
                     if (
                         self.states[i][veh_id][0] < aim_veh.current_state.s + 2 * aim_veh.length and

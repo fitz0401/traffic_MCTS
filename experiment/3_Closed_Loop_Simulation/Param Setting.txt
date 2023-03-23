@@ -1,0 +1,25 @@
+# Road Setting:
+    ROAD_PATH: "roadgraph_ramp.yaml" / "roadgraph_network.yaml"
+
+# Decision Param:
+    DT_decision(s): 1.5
+    DT_group(s): 3
+    prediction_time(s): 10
+    max_group_size： 3
+
+# Flow Setting:
+    [Ramp]:
+        routing_info = {
+            keep_lane_rate=0.8,
+            turn_right_rate=0.2,
+            human_veh_rate=0.0,
+            overtake_rate=0.0
+        }
+        Volume: 1 veh every 1.0 / 1.5 / 2.0 second
+        check_collision: 3 * vehicle_length
+        target speed: 9 m/s
+
+    [Network]:
+        Nums: 20 / 40 / 60 / 80
+        random.seed(4 / 1 / 2 / 2) for experiment indicators
+        random.seed( /  /  / 4) for videos

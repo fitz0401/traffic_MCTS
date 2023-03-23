@@ -4,7 +4,7 @@
 # Decision Param:
     DT_decision(s): 1.5
     DT_group(s): 3
-    prediction_time(s): 15
+    prediction_time(s): 10
     max_group_size： 3
     check_collision: 3 * vehicle_length
 
@@ -14,7 +14,7 @@
 
 # Planning Setting:
     [freeway]:
-        random.seed(2) / random.seed(8)
+        random.seed(2) for egoistic / random.seed(8) for prosocial
     [roundabout]:
         random.seed(1)
     check_collision: 2 * vehicle_length

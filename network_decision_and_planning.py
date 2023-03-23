@@ -11,7 +11,8 @@ from decision_maker.network_decision.network_manager import NetworkManager
 from utils.vehicle import build_vehicle
 
 
-def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
+def update_decision_behaviour(gol_flows, gol_road, decision_info_ori,
+                              T, routing_time_record, finish_decision_duration):
     for vehicle_id, vehicle in gol_flows.items():
         # Check Lane Change
         if (
@@ -28,6 +29,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
                 )
                 gol_flows[vehicle_id] = vehicle
             logging.info("Vehicle {} change lane via decision successfully".format(vehicle_id))
+
         # Check Scenario Change
         if(
             vehicle.lane_id in {"E2_0", "E2_1",
@@ -68,6 +70,8 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             random.uniform(0, 1) < 0.5
         ):
             decision_info_ori[vehicle.id] = ["merge_out"]
+            routing_time_record[vehicle_id] = T
+
         # Merge_in behaviour
         if (
             decision_info_ori[vehicle.id][0] == "merge_in" and
@@ -80,7 +84,9 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
             gol_flows[vehicle_id] = vehicle
             decision_info_ori[vehicle.id] = ["decision"]
             scenario_change[vehicle.id] = True
+            finish_decision_duration.append(T - routing_time_record[vehicle_id])
             logging.info("Vehicle {} finish merge in action, now drives in {}".format(vehicle_id, next_lanes))
+
         # Merge_out behaviour
         elif decision_info_ori[vehicle.id][0] == "merge_out":
             next_s_idx = -1
@@ -102,14 +108,19 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
                 gol_flows[vehicle_id] = vehicle
                 # merge_out 后立即切换为 merge_in
                 decision_info_ori[vehicle.id] = ["merge_in"]
+                finish_decision_duration.append(T - routing_time_record[vehicle_id])
+                routing_time_record[vehicle_id] = T
                 logging.info("Vehicle {} finish merge out action, now drives in {}".format(vehicle_id, next_lanes))
+
         # Lane Change behaviour
         elif (
                 decision_info_ori[vehicle.id][0] in {"change_lane_left", "change_lane_right"} and
                 int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
             decision_info_ori[vehicle.id] = ["decision"]
+            finish_decision_duration.append(T - routing_time_record[vehicle_id])
             logging.info("Vehicle {} finish lane change action".format(vehicle_id))
+
         # Overtake behaviour
         elif (
             decision_info_ori[vehicle.id][0] == "overtake" and
@@ -118,6 +129,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori):
         ):
             decision_info_ori[vehicle.id] = ["decision"]
             gol_flows[vehicle_id].target_speed = 10
+            finish_decision_duration.append(T - routing_time_record[vehicle_id])
             logging.info("Vehicle {} finish overtake action".format(vehicle_id))
 
 
@@ -162,6 +174,12 @@ def decision_states_process(sim_T, scenario_decision_states, scenario_roads, gol
 
 
 def main():
+    # Experiment Indicators
+    calculation_time = []
+    finish_decision_duration = []
+    routing_time_record = {}
+    avg_flow_vel = []
+
     if config["VERBOSE"]:
         log_level = logging.DEBUG
         logging.debug = print
@@ -190,7 +208,7 @@ def main():
     network.init_flows(4)
     # 分场景下发路由信息
     network.gol_flows_to_decision_flows()
-    network.routing()
+    network.routing(0, routing_time_record)
     decision_info_ori = copy.deepcopy(decision_info)
 
     # network_group_info = network.network_grouping()
@@ -205,12 +223,12 @@ def main():
         with open("flow_record.csv", "w") as fd1:
             writer = csv.writer(fd1)
             writer.writerow(
-                ["t", "vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init(m/s)"]
+                ["t", "vehicle_id", "target_decision", "target_lane", "s_init", "d_init", "vel_init"]
             )
         with open("trajectories.csv", "w") as fd2:
             writer = csv.writer(fd2)
             writer.writerow(
-                ["t", "vehicle_id", "group_id", "action", "x", "y", "yaw", "vel(m/s)", "acc(m/s^2)"]
+                ["t", "vehicle_id", "group_id", "action", "x", "y", "yaw", "vel", "acc"]
             )
 
     """
@@ -226,7 +244,7 @@ def main():
     gol_decision_states = None
     decision_T = 0
     for i in range(SIM_LOOP):
-        start = time.time()
+        loop_start = time.time()
         """
         Step 3.1 : Update States
         """
@@ -244,8 +262,10 @@ def main():
         """
         Step 3.2 : Record Trajectories
         """
+        flow_vel = []
         action_idx = int((T - decision_T) / DT)
         for vehicle_id, vehicle in network.gol_flows.items():
+            flow_vel.append(vehicle.current_state.s_d)
             cur_action = action_record[vehicle_id][action_idx] if action_idx < len(action_record[vehicle_id]) else "KS"
             if config["CSV"]:
                 with open("trajectories.csv", "a") as fd:
@@ -263,6 +283,8 @@ def main():
                             vehicle.current_state.acc,
                         ]
                     )
+        avg_flow_vel.append(sum(flow_vel) / len(flow_vel))
+
         """
         Step 3.3 : Decision(N * i * DT) & Planning(n * i * DT)
         """
@@ -281,7 +303,7 @@ def main():
             """
             Routing
             """
-            network.routing()
+            network.routing(T, routing_time_record)
             decision_info_ori = copy.deepcopy(decision_info)
             for vehicle_id, vehicle in network.gol_flows.items():
                 if config["CSV"]:
@@ -292,6 +314,7 @@ def main():
                              vehicle.current_state.s, vehicle.current_state.d, vehicle.current_state.s_d]
                         )
             logging.info("------------------------------")
+            calculation_start = time.time()
             '''
             单线程
             '''
@@ -318,6 +341,7 @@ def main():
             for veh_id in network.gol_flows.keys():
                 group_idx[veh_id] = param_record[veh_id][0]
                 action_record[veh_id] = param_record[veh_id][1]
+            end = time.time()
             '''
             决策结果处理
             '''
@@ -331,15 +355,16 @@ def main():
                                                           network.roads,
                                                           network.gol_flows,
                                                           decision_info_ori)
-            end = time.time()
-            logging.info("Sim Time: %f, One decision loop time: %f" % (decision_T, end - start))
+            calculation_time.append(end - calculation_start)
+            logging.info("Sim Time: %f, One decision loop time: %f" % (decision_T, end - loop_start))
             logging.info("------------------------------")
         if i % planning_timestep == 0:
             logging.info("Plan Time: %f\n" % T)
             """
             Update Behaviour & Decision_info
             """
-            update_decision_behaviour(network.gol_flows, network.gol_road, decision_info_ori)
+            update_decision_behaviour(network.gol_flows, network.gol_road, decision_info_ori,
+                                      T, routing_time_record, finish_decision_duration)
             """
             Planner
             """
@@ -382,6 +407,13 @@ def main():
         if ANIMATION:
             plot_trajectory(network.gol_flows, static_obs_list, predictions,
                             network.gol_road.lanes, network.gol_road.edges, T, -1, decision_info_ori)
+
+    print("——————————————————Experiment Indicators——————————————————\n")
+    print("total_calculation_time: ", sum(calculation_time))
+    print("calculation_simulation_ratio: ", SIM_LOOP * config["DT"] / sum(calculation_time))
+    print("avg_flow_vel: ", sum(avg_flow_vel) / len(avg_flow_vel))
+    print("avg_finish_decision_duration: ", sum(finish_decision_duration) / len(finish_decision_duration))
+    exit_plot()
 
 
 if __name__ == "__main__":

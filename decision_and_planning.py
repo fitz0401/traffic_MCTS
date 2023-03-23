@@ -159,6 +159,10 @@ def decision_states_process(sim_T, decision_states, planning_flow, decision_info
 
 def main():
     random.seed(1)
+    focus_car_id = 0
+    is_experiment_1 = False
+    is_experiment_2 = False
+
     if config["VERBOSE"]:
         log_level = logging.DEBUG
         logging.debug = print
@@ -183,7 +187,6 @@ def main():
     """
     Step 2. Init vehicles
     """
-    focus_car_id = 0
     # 导入pickle文件或决策规划闭环
     if config["D_P_COUPLED"]:
         # 导入yaml格式车流
@@ -226,6 +229,12 @@ def main():
             writer.writerow(
                 ["t", "vehicle_id", "group_id", "action", "x", "y", "yaw", "vel", "acc"]
             )
+        if is_experiment_1:
+            with open("min_head_dis.csv", "w") as fd3:
+                writer = csv.writer(fd3)
+                writer.writerow(
+                    ["t", "min_head_dist_0", "min_head_dist_3"]
+                )
 
     """
     Step 3. Main Loop
@@ -239,9 +248,8 @@ def main():
     finish_time = {}
     avg_flow_vel = []
 
-    is_experiment = False
     # Experiment 2.2
-    if is_experiment:
+    if is_experiment_2:
         planning_flow[6].behaviour = "STOP_FORCE"
     for i in range(SIM_LOOP):
         if is_finish_decision:
@@ -249,7 +257,7 @@ def main():
                 break
 
         # Experiment 2.2
-        if is_experiment and i == 5:
+        if is_experiment_2 and i == 5:
             planning_flow[0].behaviour = "LC-L"
 
         start = time.time()
@@ -268,12 +276,25 @@ def main():
                 logging.warning("Vehicle {} not in predictions".format(vehicle_id))
         # Experiment Indicator: min_dist, avg_flow_vel
         flow_vel = []
+        min_head_dist_0 = 100
+        min_head_dist_3 = 100
+
         for j, ego_veh in enumerate(planning_flow.values()):
             flow_vel.append(ego_veh.current_state.s_d)
-            for other_veh in list(planning_flow.values())[j + 1:]:
+            for other_veh in planning_flow.values():
+                if other_veh.id == ego_veh.id:
+                    continue
                 if ego_veh.lane_id == other_veh.lane_id:
                     min_dist = abs(ego_veh.current_state.s - other_veh.current_state.s) - 5 \
                         if abs(ego_veh.current_state.s - other_veh.current_state.s) - 5 < min_dist else min_dist
+                    if is_experiment_1 and ego_veh.id == 0:
+                        min_head_dist_0 = abs(ego_veh.current_state.s - other_veh.current_state.s) \
+                            if abs(ego_veh.current_state.s - other_veh.current_state.s) < min_head_dist_0 \
+                            else min_head_dist_0
+                    if is_experiment_1 and ego_veh.id == 3:
+                        min_head_dist_3 = abs(ego_veh.current_state.s - other_veh.current_state.s) \
+                            if abs(ego_veh.current_state.s - other_veh.current_state.s) < min_head_dist_3 \
+                            else min_head_dist_3
         avg_flow_vel.append(sum(flow_vel) / len(flow_vel))
 
         """
@@ -285,8 +306,8 @@ def main():
             cur_action = action_record[vehicle_id][action_idx] if action_idx < len(action_record[vehicle_id]) else "KS"
             # write current state to csv file
             if config["CSV"]:
-                with open("trajectories.csv", "a") as fd:
-                    writer = csv.writer(fd)
+                with open("trajectories.csv", "a") as fd1:
+                    writer = csv.writer(fd1)
                     writer.writerow(
                         [
                             T,
@@ -300,6 +321,16 @@ def main():
                             vehicle.current_state.acc,
                         ]
                     )
+                if is_experiment_1:
+                    with open("min_head_dis.csv", "a") as fd2:
+                        writer = csv.writer(fd2)
+                        writer.writerow(
+                            [
+                                T,
+                                min_head_dist_0,
+                                min_head_dist_3,
+                            ]
+                        )
             if (
                 road_info.lanes[vehicle.lane_id].course_spline.s[-1] - vehicle.current_state.s <= 1.0
             ):

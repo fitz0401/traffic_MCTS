@@ -297,7 +297,8 @@ def grouping(flow, interaction_info):
             for other_veh in flow:
                 if other_veh.id == decision_info[ego_veh.id][1]:
                     aim_veh = other_veh
-            overtake_pairs.append((ego_veh, aim_veh))
+            if aim_veh:
+                overtake_pairs.append((ego_veh, aim_veh))
     for overtake_pair in overtake_pairs:
         group_idx[overtake_pair[0].id] = len(group_info) + 1
         group_info[group_idx[overtake_pair[0].id]] = [overtake_pair[0]]

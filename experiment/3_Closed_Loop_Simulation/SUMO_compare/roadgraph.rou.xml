@@ -1,0 +1,152 @@
+<routes>
+    <vehicle id="0" depart="0.0" departSpeed="5" departLane="2" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="1" depart="2.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="2" depart="4.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="3" depart="6.0" departSpeed="5" departLane="1" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="4" depart="8.0" departSpeed="5" departLane="1" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="5" depart="10.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="6" depart="12.0" departSpeed="5" departLane="1" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="7" depart="14.0" departSpeed="5" departLane="1" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="8" depart="16.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="9" depart="18.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="10" depart="20.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="11" depart="22.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="12" depart="24.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="13" depart="26.0" departSpeed="5" departLane="2" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="14" depart="28.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="15" depart="30.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="16" depart="32.0" departSpeed="5" departLane="1" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="17" depart="34.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="18" depart="36.0" departSpeed="5" departLane="0" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="19" depart="38.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="20" depart="40.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="21" depart="42.0" departSpeed="5" departLane="1" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="22" depart="44.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="23" depart="46.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="24" depart="48.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="25" depart="50.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="26" depart="52.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="27" depart="54.0" departSpeed="5" departLane="2" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="28" depart="56.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="29" depart="58.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="30" depart="60.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="31" depart="62.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="32" depart="64.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="33" depart="66.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="34" depart="68.0" departSpeed="5" departLane="2" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="35" depart="70.0" departSpeed="5" departLane="1" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="36" depart="72.0" departSpeed="5" departLane="0" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="37" depart="74.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="38" depart="76.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="39" depart="78.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="40" depart="80.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="41" depart="82.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E2 E1"/>
+    </vehicle>
+    <vehicle id="42" depart="84.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="43" depart="86.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="44" depart="88.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="45" depart="90.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="46" depart="92.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="47" depart="94.0" departSpeed="5" departLane="1" arrivalLane="1">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="48" depart="96.0" departSpeed="5" departLane="0" arrivalLane="0">
+        <route edges="E0 E1"/>
+    </vehicle>
+    <vehicle id="49" depart="98.0" departSpeed="5" departLane="2" arrivalLane="2">
+        <route edges="E0 E1"/>
+    </vehicle>
+</routes>

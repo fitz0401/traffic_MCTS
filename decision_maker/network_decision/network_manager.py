@@ -322,7 +322,7 @@ class NetworkManager:
                             config=config,
                         )
 
-    def routing(self):
+    def routing(self, T, routing_time_record):
         for scenario_id, local_flows in self.scenario_flows.items():
             if scenario_id == "E5":
                 for veh in local_flows:
@@ -331,6 +331,7 @@ class NetworkManager:
                     lane_id = int((veh.current_state.d + LANE_WIDTH / 2) / LANE_WIDTH)
                     grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                          keep_lane_rate=0.6, overtake_rate=0.8, is_shrink_road=True)
+                    routing_time_record[veh.id] = T
             else:
                 for veh in local_flows:
                     if not scenario_change[veh.id]:
@@ -357,6 +358,7 @@ class NetworkManager:
                         grouping.veh_routing(veh, lane_id, self.roads[scenario_id],
                                              keep_lane_rate=0.2, overtake_rate=0.6,
                                              turn_right_rate=0, merge_out_rate=0.2)
+                    routing_time_record[veh.id] = T
             # 如有超车指令，查找超车目标
             grouping.find_overtake_aim(local_flows, self.roads[scenario_id])
 

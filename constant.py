@@ -10,7 +10,10 @@ with open(file_path + "/config.yaml", "r", encoding='utf-8') as f:
 
 # Road network param
 LANE_WIDTH = 4
+# vehicles_num = {"E1_1": 2, "E1_2": 2, "E1_3": 2, "E2": 4, "E3": 4, "E4": 3, "E5": 3}
+# vehicles_num = {"E1_1": 4, "E1_2": 4, "E1_3": 4, "E2": 8, "E3": 6, "E4": 7, "E5": 7}
 vehicles_num = {"E1_1": 6, "E1_2": 6, "E1_3": 6, "E2": 10, "E3": 8, "E4": 12, "E5": 12}
+# vehicles_num = {"E1_1": 8, "E1_2": 8, "E1_3": 8, "E2": 12, "E3": 10, "E4": 17, "E5": 17}
 scenario_num = len(vehicles_num.keys())
 
 # Decision Information
@@ -19,7 +22,7 @@ KL_ACTION_LIST = ['KS', 'AC', 'DC']
 LCR_ACTION_LIST = ['KS', 'AC', 'DC', 'LCR']
 LCL_ACTION_LIST = ['KS', 'AC', 'DC', 'LCL']
 len_flow = sum(vehicles_num.values()) \
-    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 10
+    if config["ROAD_PATH"] == "roadgraph_network.yaml" else 5
 
 # Global vars
 TARGET_LANE = {}

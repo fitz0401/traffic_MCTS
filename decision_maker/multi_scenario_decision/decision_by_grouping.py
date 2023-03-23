@@ -424,13 +424,15 @@ def group_decision(flow, road_info, decision_info_ori, is_multi_processing=False
                     if veh.id == decision_info_ori[veh_idx][1]:
                         aim_veh = veh
                         break
-                # 重规划下的超车动作：完成换道 / 完成纵坐标超越即视为成功
-                if (
-                    veh_state[0] > aim_veh.current_state.s + aim_veh.length or
-                    abs(veh_state[1] - aim_veh.current_state.d) > aim_veh.width
-                ):
-                    continue
-                success_info[veh_idx] = 0
+                if aim_veh:
+                    # 重规划下的超车动作：完成换道 / 完成纵坐标超越即视为成功
+                    if (
+                        aim_veh and
+                        veh_state[0] > aim_veh.current_state.s + aim_veh.length or
+                        abs(veh_state[1] - aim_veh.current_state.d) > aim_veh.width
+                    ):
+                        continue
+                    success_info[veh_idx] = 0
             # 是否抵达目标车道
             elif abs(veh_state[1] - TARGET_LANE[veh_idx] * road_info.lane_width) > 0.5:
                 success_info[veh_idx] = 0
