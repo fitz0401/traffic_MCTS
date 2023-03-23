@@ -61,7 +61,7 @@ def main():
         for veh in group:
             if decision_info[veh.id][0] == "cruise":
                 continue
-            if decision_info[veh.id][0] == "decision":
+            if decision_info[veh.id][0] == "keep_lane":
                 lane_keep_veh_num += 1
             veh_lane_id = get_lane_id(veh, road_info)
             mcts_init_state[veh.id] = \
@@ -378,7 +378,7 @@ def group_decision(flow, road_info, decision_info_ori, is_multi_processing=False
         for veh in group:
             if decision_info[veh.id][0] == "cruise":
                 continue
-            if decision_info[veh.id][0] == "decision":
+            if decision_info[veh.id][0] == "keep_lane":
                 lane_keep_veh_num += 1
             veh_lane_id = get_lane_id(veh, road_info)
             mcts_init_state[veh.id] = \

@@ -77,7 +77,7 @@ def main():
             for veh in group:
                 if decision_info[veh.id][0] == "cruise":
                     continue
-                if decision_info[veh.id][0] == "decision":
+                if decision_info[veh.id][0] == "keep_lane":
                     lane_keep_veh_num += 1
                 veh_lane_id = get_lane_id(veh, road_info)
                 mcts_init_state[veh.id] = \

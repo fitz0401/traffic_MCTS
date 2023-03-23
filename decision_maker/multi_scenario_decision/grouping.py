@@ -246,25 +246,25 @@ def judge_interaction(flow, road_info):
                 interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                 continue
             # 无交互：前车直行，左后方车直行或左变道 / 右后方车直行或右变道
-            if decision_info[veh_i.id][0] in {"cruise", "decision"}:
+            if decision_info[veh_i.id][0] in {"cruise", "keep_lane"}:
                 if (veh_j_lane_id - veh_i_lane_id == 1 and
-                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_left"}):
+                        decision_info[veh_j.id][0] in {"cruise", "keep_lane", "change_lane_left"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
                 elif (veh_j_lane_id - veh_i_lane_id == -1 and
-                      decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_right"}):
+                      decision_info[veh_j.id][0] in {"cruise", "keep_lane", "change_lane_right"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 无交互：前车左变道，右后方车直行或右变道
             if decision_info[veh_i.id][0] == "change_lane_left":
                 if (veh_j_lane_id - veh_i_lane_id == -1 and
-                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_right"}):
+                        decision_info[veh_j.id][0] in {"cruise", "keep_lane", "change_lane_right"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 无交互：前车右变道，左后方车直行或左变道
             if decision_info[veh_i.id][0] in {"change_lane_right", "merge_out"}:
                 if (veh_j_lane_id - veh_i_lane_id == 1 and
-                        decision_info[veh_j.id][0] in {"cruise", "decision", "change_lane_left"}):
+                        decision_info[veh_j.id][0] in {"cruise", "keep_lane", "change_lane_left"}):
                     interaction_info[veh_i.id][veh_j.id] = interaction_info[veh_j.id][veh_i.id] = 0
                     continue
             # 上述情况都不满足，i和j存在交互
@@ -429,7 +429,7 @@ def plot_flow(ax, flow, road_info, pause_t, target_decision=None):
             rotation=yaw / math.pi * 180,
         )
         if target_decision:
-            if target_decision[vehicle.id][0] in {"cruise", "decision", "merge_in"}:
+            if target_decision[vehicle.id][0] in {"cruise", "keep_lane", "merge_in"}:
                 ax.arrow(x, y, 5 * math.cos(yaw), 5 * math.sin(yaw),
                          length_includes_head=True, head_width=0.25, head_length=0.5, fc='r', ec='b')
             elif target_decision[vehicle.id][0] == "overtake":
@@ -464,7 +464,7 @@ def find_overtake_aim(flow, road_info):
                 # 超车对象只能是邻近的直行车
                 if veh_i_lane_id == veh_j_lane_id:
                     if (
-                        decision_info[veh_j.id][0] in {"cruise", "decision"} and
+                        decision_info[veh_j.id][0] in {"cruise", "keep_lane"} and
                         veh_j.current_state.s - veh_i.current_state.s <= 30 and
                         veh_j.target_speed < veh_i.target_speed
                     ):
@@ -472,7 +472,7 @@ def find_overtake_aim(flow, road_info):
                     break
             # 没有超车对象，无需超车
             if len(decision_info[veh_i.id]) == 1:
-                decision_info[veh_i.id][0] = "decision"
+                decision_info[veh_i.id][0] = "keep_lane"
 
 
 def get_lane_id(vehicle, road_info):
@@ -521,7 +521,7 @@ def veh_routing(vehicle, lane_id, road_info,
                                                      else (-1 if random.uniform(0, 1) < turn_right_rate else 1))
         if TARGET_LANE[vehicle.id] == lane_id:
             decision_info[vehicle.id] = ["cruise"] if random.uniform(0, 1) < human_veh_rate \
-                else (["overtake"] if random.uniform(0, 1) < overtake_rate else ["decision"])
+                else (["overtake"] if random.uniform(0, 1) < overtake_rate else ["keep_lane"])
         elif TARGET_LANE[vehicle.id] > lane_id:
             decision_info[vehicle.id] = ["change_lane_left"]
         else:

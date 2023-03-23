@@ -307,7 +307,7 @@ class FlowState:
                     # 速度奖励
                     if 0 < self.states[i][veh_id][2] <= 10:
                         self_reward += 0.1 * self.states[i][veh_id][2] / 10.0 / total_action_num
-                elif decision_info[veh_id][0] == "decision":
+                elif decision_info[veh_id][0] == "keep_lane":
                     # 速度奖励
                     if 0 < self.states[i][veh_id][2] <= 8:
                         self_reward += 0.1 * self.states[i][veh_id][2] / 8.0 / total_action_num

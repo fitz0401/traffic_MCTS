@@ -53,7 +53,7 @@ def update_decision_behaviour(planning_flow, road_info, decision_info_ori, T, fi
                 next_lanes, road_info.lanes[next_lanes].course_spline
             )
             planning_flow[vehicle_id] = vehicle
-            decision_info_ori[vehicle.id][0] = "decision"
+            decision_info_ori[vehicle.id][0] = "keep_lane"
             finish_time[vehicle.id] = T
             logging.info("Vehicle {} finish merge in/ out action, now drives in {}".format(vehicle_id, next_lanes))
         # Lane Change behaviour
@@ -61,7 +61,7 @@ def update_decision_behaviour(planning_flow, road_info, decision_info_ori, T, fi
             decision_info_ori[vehicle.id][0] in {"change_lane_left", "change_lane_right"} and
             int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
-            decision_info_ori[vehicle.id][0] = "decision"
+            decision_info_ori[vehicle.id][0] = "keep_lane"
             finish_time[vehicle.id] = T
             logging.info("Vehicle {} finish lane change action".format(vehicle_id))
         # Overtake behaviour
@@ -71,7 +71,7 @@ def update_decision_behaviour(planning_flow, road_info, decision_info_ori, T, fi
                 planning_flow[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length and
                 int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
-            decision_info_ori[vehicle.id][0] = "decision"
+            decision_info_ori[vehicle.id][0] = "keep_lane"
             finish_time[vehicle.id] = T
             logging.info("Vehicle {} finish overtake action".format(vehicle_id))
         # When all vehicles finish decision, turn into KL mode.

@@ -22,4 +22,7 @@
     [Network]:
         Nums: 20 / 40 / 60 / 80
         random.seed(4 / 1 / 2 / 2) for experiment indicators
-        random.seed( /  /  / 4) for videos
+        random.seed( /  / 4 / 4) for videos
+        check_collision:
+            4 * vehicle_length for experiment indicators
+            4 / 4 / 5 / 4 * vehicle_length for videos

@@ -16,7 +16,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori,
     for vehicle_id, vehicle in gol_flows.items():
         # Check Lane Change
         if (
-            decision_info_ori[vehicle_id][0] not in {"cruise", "decision", "merge_in", "merge_out"}
+            decision_info_ori[vehicle_id][0] not in {"cruise", "keep_lane", "merge_in", "merge_out"}
             and abs(vehicle.current_state.d) > gol_road.lanes[vehicle.lane_id].width / 2
         ):
             if vehicle.current_state.d > 0:
@@ -51,7 +51,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori,
                 lanes=gol_road.lanes,
                 config=config,
             )
-            decision_info_ori[vehicle.id] = ["cruise"] if decision_info_ori[vehicle.id][0] == "cruise" else ["decision"]
+            decision_info_ori[vehicle.id] = ["cruise"] if decision_info_ori[vehicle.id][0] == "cruise" else ["keep_lane"]
             scenario_change[vehicle.id] = False if decision_info_ori[vehicle.id][0] == "cruise" else True
             logging.info("Vehicle {} changes scenario, now drives in {}".format(vehicle_id, next_lanes))
         if (
@@ -60,13 +60,13 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori,
         ):
             gol_flows[vehicle_id].current_state.s -= gol_road.lanes[vehicle.lane_id].next_s[-1]
             gol_flows[vehicle_id].target_speed = random.uniform(6, 9)
-            decision_info_ori[vehicle.id] = ["cruise"] if decision_info_ori[vehicle.id][0] == "cruise" else ["decision"]
+            decision_info_ori[vehicle.id] = ["cruise"] if decision_info_ori[vehicle.id][0] == "cruise" else ["keep_lane"]
             scenario_change[vehicle.id] = False if decision_info_ori[vehicle.id][0] == "cruise" else True
             logging.info("Vehicle {} changes scenario, now drives in {}".format(vehicle_id, vehicle.lane_id))
         if (
             vehicle.lane_id == "E1_0" and
             (140 <= vehicle.current_state.s < 141 or 240 <= vehicle.current_state.s < 241) and
-            decision_info_ori[vehicle.id][0] in {"decision", "cruise"} and
+            decision_info_ori[vehicle.id][0] in {"keep_lane", "cruise"} and
             random.uniform(0, 1) < 0.5
         ):
             decision_info_ori[vehicle.id] = ["merge_out"]
@@ -82,7 +82,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori,
                 next_lanes, gol_road.lanes[next_lanes].course_spline
             )
             gol_flows[vehicle_id] = vehicle
-            decision_info_ori[vehicle.id] = ["decision"]
+            decision_info_ori[vehicle.id] = ["keep_lane"]
             scenario_change[vehicle.id] = True
             finish_decision_duration.append(T - routing_time_record[vehicle_id])
             logging.info("Vehicle {} finish merge in action, now drives in {}".format(vehicle_id, next_lanes))
@@ -117,7 +117,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori,
                 decision_info_ori[vehicle.id][0] in {"change_lane_left", "change_lane_right"} and
                 int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
-            decision_info_ori[vehicle.id] = ["decision"]
+            decision_info_ori[vehicle.id] = ["keep_lane"]
             finish_decision_duration.append(T - routing_time_record[vehicle_id])
             logging.info("Vehicle {} finish lane change action".format(vehicle_id))
 
@@ -127,7 +127,7 @@ def update_decision_behaviour(gol_flows, gol_road, decision_info_ori,
             vehicle.current_state.s > gol_flows[decision_info_ori[vehicle.id][1]].current_state.s + vehicle.length
             and int(vehicle.lane_id[vehicle.lane_id.find('_') + 1:]) == TARGET_LANE[vehicle_id]
         ):
-            decision_info_ori[vehicle.id] = ["decision"]
+            decision_info_ori[vehicle.id] = ["keep_lane"]
             gol_flows[vehicle_id].target_speed = 10
             finish_decision_duration.append(T - routing_time_record[vehicle_id])
             logging.info("Vehicle {} finish overtake action".format(vehicle_id))

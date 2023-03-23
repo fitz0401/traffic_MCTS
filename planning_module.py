@@ -123,9 +123,9 @@ def plot_trajectory(vehicles, static_obs_list, best_paths, lanes, edges, plot_T,
 
     for vehicle_id in vehicles:
         vehicle = vehicles[vehicle_id]
-        if vehicle.behaviour == "Decision" and decision_info_ori[vehicle_id][0] != "decision":
+        if vehicle.behaviour == "Decision" and decision_info_ori[vehicle_id][0] != "keep_lane":
             vehicle_color = "orangered"
-        elif vehicle.behaviour == "Decision" and decision_info_ori[vehicle_id][0] == "decision":
+        elif vehicle.behaviour == "Decision" and decision_info_ori[vehicle_id][0] == "keep_lane":
             vehicle_color = "blue"
         else:
             vehicle_color = "green"
@@ -460,7 +460,7 @@ def planner(
             if t <= plan_T:
                 continue
             # 已完成换道动作，不再执行决策下发的换道指令点
-            if decision_info == "decision" and abs(decision_state[1][1]) > LANE_WIDTH / 4:
+            if decision_info == "keep_lane" and abs(decision_state[1][1]) > LANE_WIDTH / 4:
                 continue
             temp_decision_states.append((t - plan_T, decision_state[1]))
             if t - plan_T >= config["MIN_T"]:

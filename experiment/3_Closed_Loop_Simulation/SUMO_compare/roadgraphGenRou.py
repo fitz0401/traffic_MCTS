@@ -53,4 +53,5 @@ def genRou(period: float, keep_lane_rate: float, turn_right_rate: float) -> None
 
 
 if __name__ == '__main__':
+    # period = 2.0 / 1.5 / 1.0
     genRou(2.0, 0.8, 0.2)

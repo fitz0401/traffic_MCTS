@@ -19,7 +19,7 @@ track_id = 2
 decision_interval = 30
 iter_frame = 1
 
-experiment_index = 5
+experiment_index = 0
 X_LIMs = (
     [-150, 170],
     [0, 120], [0, 120],
