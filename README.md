@@ -1,24 +1,24 @@
-# grouping-decision功能说明
-## 文件结构
+# Group-based Decision
+## File Structure
 ```
 .
-# 全局变量和配置
+# Configuration
 ├── config.yaml
 ├── constant.py
 ├── init_state.yaml
-# 决策&规划闭环
+# Decision & planning
 ├── decision_and_planning.py
 ├── decision_maker
 │   ├── mcts.py
 │   ├── multi_scenario_decision
-|   |   |   # 决策算法
+|   |   |   # Decision Algorithm
 │   │   ├── decision_by_grouping.py
-|   |   |   # 分组算法
+|   |   |   # Grouping Algorithm
 │   │   ├── grouping.py
-# 记录随机生成的交通流信息和规划轨迹
+# Record
 ├── flow_record.csv
 ├── trajectories.csv
-# 地图
+# Map
 ├── roadgraph_freeway.yaml
 ├── roadgraph_intersect.yaml
 ├── roadgraph_ramp.yaml
@@ -26,26 +26,35 @@
 ├── roadgraph.yaml
 ```
 
-## 已开发功能 & 运行说明
+## Developed Features & Running Instructions
+### Straight Road, Ramp, Roundabout Grouping
 
-> 直道、匝道、环岛分组
+Global Information Modification:
 
-  **全局信息修改**：\
-  `constant.py`内修改`len_flow`来改变车辆数量；\
-  `config.yaml`内修改`ROAD_PATH`来更改地图；\
-  **车流生成**：\
-  调用`yaml_flow()`：生成`init_state.yaml`内自定义车流；\
-  调用`random_flow()`：生成由`len_flow`定义的车辆数；\
-  直接运行分组算法，可以展示分组结果。
-  
-> 各场景分组后的决策算法
-  
-  全局信息修改和车流生成同上,`main`调用的是`grouping.py`下的车流随机生成函数。\
-  直接运行决策算法，可以展示分组 & 决策结果。\
-  在`constant.py`内修改`prediction_time`可以提高单次决策的成功率。
+Modify ```len_flow``` in ```constant.py``` to change the number of vehicles;
 
-> 直道、匝道、换道决策规划闭环
-  
-  全局信息修改和车流生成同上,`main`调用的是`decision_by_grouping.py`下的车流决策函数。\
-  直接运行`decision_and_planning.py`，可以展示规划结果。\
-  结果信息存储在`flow_record.csv`和`trajectories.csv`中，分别是所有车辆的初始信息及决策意图、规划轨迹。
+Modify ```ROAD_PATH``` in ```config.yaml``` to change the map;
+
+### Traffic Flow Generation
+
+Call ```yaml_flow()```: Generate custom traffic flow in ```init_state.yaml```;
+
+Call ```random_flow()```: Generate the number of vehicles defined by ```len_flow```;
+
+Running the grouping algorithm directly will display the grouping results.
+
+### Decision Algorithms for Each Scenario
+
+Global information modification and traffic flow generation are the same as above. main calls the random traffic flow generation function in ```grouping.py```.
+
+Running the decision algorithm directly will display the grouping and decision results.
+
+Modifying prediction_time in ```constant.py``` can improve the success rate of a single decision.
+
+### Closed-loop Decision and Planning for Straight Road, Ramp, Lane Change
+
+Global information modification and traffic flow generation are the same as above. main calls the traffic decision function in ```decision_by_grouping.py```.
+
+Running ```decision_and_planning.py``` directly will display the planning results.
+
+The result information is stored in ```flow_record.csv``` and ```trajectories.csv```, which contain the initial information and decision intentions of all vehicles, as well as the planned trajectories, respectively.
